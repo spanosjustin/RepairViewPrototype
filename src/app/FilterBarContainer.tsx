@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import FilterBar, { FilterState } from "@/components/FilterBar";
+import DrilldownCard from "@/components/DrilldownCard";
 
 export default function FilterbarContainer() {
     // Replace DB Query later
@@ -23,6 +24,9 @@ export default function FilterbarContainer() {
         tag: "all",
     });
 
+    const [isOpen, setIsOpen] = useState(false);
+    const handleToggle = () => setIsOpen((prev) => !prev);
+
     return (
         <div className="border-b bg-white/70 p-2 dark:bg-zinc-900/70">
             <div className="mx-auto max-w-6xl">
@@ -31,9 +35,16 @@ export default function FilterbarContainer() {
                     turbines={turbines}
                     value={fitlers}
                     onChange={setFilters}
-                    onDrilldown={() => alert("Drilldown clicked")}
-                    onAddFilter={() => alert("Add filter clicked")}
+                    onDrilldown={handleToggle}
+                    isOpen={isOpen}
+                    onAddFilter={() => alert("Feature Coming Soon...")}
                 />
+
+                {isOpen && (
+                    <div id="drilldown-panel" className="mt-3">
+                        <DrilldownCard />
+                    </div>
+                )}
             </div>
         </div>
     )

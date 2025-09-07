@@ -15,9 +15,9 @@ import {
 type IdName = { id: string; name: string; };
 
 export type FilterState = {
-    powerPlantId?: string | null;
-    turbineId?: string | null;
-    tag?: "all" | "outages" | null;
+    powerPlantId: string | null;
+    turbineId: string | null;
+    tag?: "all" | "outages";
 };
 
 type FilterBarProps = {
@@ -27,6 +27,7 @@ type FilterBarProps = {
     onChange: (next: FilterState) => void;
     onDrilldown?: () => void;
     onAddFilter?: () => void;
+    isOpen?: boolean;
     className?: string;
 };
 
@@ -37,6 +38,7 @@ export default function FilterBar({
     onChange,
     onDrilldown,
     onAddFilter,
+    isOpen,
     className = "",
 }: FilterBarProps) {
     const set = (patch: Partial<FilterState>) => 
@@ -120,8 +122,11 @@ export default function FilterBar({
                     className="rounded-xl"
                     onClick={onDrilldown}
                     variant="secondary"
+                    aria-pressed={!!isOpen}
+                    aria-expanded={!!isOpen}
+                    aria-controls="drilldown-panel"
                 >
-                    Drilldown
+                    {isOpen ? "Close" : "More Filters"}
                 </Button>
             </div>
         </div>
