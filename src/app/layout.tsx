@@ -4,6 +4,7 @@ import "./globals.css";
 import Providers from "./providers";
 import NavBar from "../components/Nav";
 import FilterbarContainer from "./FilterBarContainer";
+import DrilldownCard from "../components/DrilldownCard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,6 +31,7 @@ export default function RootLayout({
       >
         <NavBar />
         <FilterbarContainer />
+        <DrilldownCard />
         <Providers>{children}</Providers>
       </body>
     </html>
