@@ -126,7 +126,7 @@ export default function FilterBar({
                     aria-expanded={!!isOpen}
                     aria-controls="drilldown-panel"
                 >
-                    {isOpen ? "Close" : "More Filters"}
+                    {isOpen ? "Close" : "Drill Down"}
                 </Button>
             </div>
         </div>

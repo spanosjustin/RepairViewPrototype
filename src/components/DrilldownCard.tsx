@@ -113,13 +113,18 @@ export default function DrilldownCard() {
                 </div>
 
                 {/* Actions */}
-                <div className="mt-6 flex items-center justify-end gap-3">
+                <div className="mt-6 flex items-center justify-between">
                     <Button variant="outline">
                         Reset
                     </Button>
-                    <Button>
-                        Save New View
-                    </Button>
+                    <div className="flex items-center gap-3">
+                        <Button>
+                            Apply Filters
+                        </Button>
+                        <Button>
+                            Save New View
+                        </Button>
+                    </div>
                 </div>
             </CardContent>
         </Card>
