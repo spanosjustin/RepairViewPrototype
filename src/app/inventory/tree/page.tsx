@@ -10,7 +10,7 @@ export default function TreePage() {
                 This will display a tree chart of your inventory items, below is an example
             </p>
             <p className="mb-6 flex justify-center">
-                You will be able to drill down on data, and select turbines, components and pieces for stats
+                You will be able to drill down on data, and select turbines, components and pieces for their various stats
             </p>
             <p className="mb-6 flex justify-center">
                 (more info below the picture)

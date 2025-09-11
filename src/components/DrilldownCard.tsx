@@ -13,9 +13,59 @@ const COMPONENT_ITEMS = [
     "S3S", "S1N", "S1B", "S2N", "S2B", "S3N", "S3B", "Rotor",
 ] as const;
 
+const STAT_CONFIG = {
+    Hours: "float",
+    Trips: "int",
+    Starts: "int",
+} as const;
+type StatKind = (typeof STAT_CONFIG)[keyof typeof STAT_CONFIG];
+
+function NumericToggleRow({
+    label,
+    kind,
+}: {
+    label: string,
+    kind: StatKind;
+}) {
+    const id = useId();
+    const [checked, setChecked] = useState(true);
+    const [value, setValue] = useState<string>("");
+
+    const onChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+        const v = e.target.value;
+        if (kind === "int") {
+            if (/^-?d*$/.test(v)) setValue(v);
+        } else {
+            if(/^-?d*(.d*)?$/.test(v)) setValue(v);
+        }
+    };
+
+    return (
+        <div className="flex items-center justify-between rounded-xl border border-transparent px-3 py-2 hover:border-zinc-200 hover:bg-white/70 dark:hover:border-zinc-800 dark:hover:bg-zinc-900/50">
+            <Label
+                htmlFor={id}
+                className="text-sm font-medium text-zinc-800 dark:text-zinc-200"
+            >
+                {label}
+            </Label>
+            <div className="flex items-center gap-3">
+                <Input
+                    id={id}
+                    type="text"
+                    inputMode={kind === "int" ? "numeric" : "decimal"}
+                    placeholder={kind === "int" ? "0" : "0.00"}
+                    value={value}
+                    onChange={onChange}
+                    className="h-9 w-24"
+                />
+            </div>
+        </div>
+    );
+}
+
 function DrilldownSwitch({ label }: { label: string }) {
     const id = useId();
-    const [checked, setChecked] = useState(false);
+    const [checked, setChecked] = useState(true);
     return  (
         <div className="flex items-center justify-between rounded-xl border border-transparent px-3 py-2 hover:border-zinc-200 hover:bg-white/70 dark:hover:border-zinc-800 dark:hover:bg-zinc-900/50">
             <Label
@@ -92,11 +142,17 @@ export default function DrilldownCard() {
                     <SectionShell icon={Gauge} title="Stats" tone="amber">
                         <div className="grid grid-cols-2 gap-2">
                             {STAT_ITEMS.map((item) => {
-                                if (item === "From") {
-                                    return <DateFilterRow key={item} mainLabel={item} />;
-                                }
-                                if (item === "Before") {
-                                    return <DateFilterRow key={item} mainLabel={item} />;
+                                if (item === "From") { return <DateFilterRow key={item} mainLabel={item} />; }
+                                if (item === "Before") { return <DateFilterRow key={item} mainLabel={item} />; }
+
+                                if(item in STAT_CONFIG) {
+                                    return (
+                                        <NumericToggleRow
+                                            key={item}
+                                            label={item}
+                                            kind={STAT_CONFIG[item as keyof typeof STAT_CONFIG]}
+                                        />
+                                    );
                                 }
                                 return <DrilldownSwitch key={item} label={item} />;
                             })}
