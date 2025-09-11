@@ -34,9 +34,9 @@ function NumericToggleRow({
     const onChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
         const v = e.target.value;
         if (kind === "int") {
-            if (/^-?d*$/.test(v)) setValue(v);
+            if (/^-?\d*$/.test(v)) setValue(v);
         } else {
-            if(/^-?d*(.d*)?$/.test(v)) setValue(v);
+            if (/^-?\d*(\.\d*)?$/.test(v)) setValue(v);
         }
     };
 
@@ -58,6 +58,7 @@ function NumericToggleRow({
                     onChange={onChange}
                     className="h-9 w-24"
                 />
+                <Switch id={id} checked={checked} onCheckedChange={setChecked} />
             </div>
         </div>
     );
@@ -152,6 +153,7 @@ export default function DrilldownCard() {
                                             label={item}
                                             kind={STAT_CONFIG[item as keyof typeof STAT_CONFIG]}
                                         />
+                                        
                                     );
                                 }
                                 return <DrilldownSwitch key={item} label={item} />;
