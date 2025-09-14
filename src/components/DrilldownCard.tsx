@@ -6,11 +6,18 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Layers3, Gauge } from "lucide-react";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 const STAT_ITEMS = ["Hours", "Trips", "Starts", "Notes", "Set In", "Set Out", "From", "Before"] as const;
 const COMPONENT_ITEMS = [
-    "Liner Caps", "S1S", "Comb Liners", "S2S", "Tran PRC", 
-    "S3S", "S1N", "S1B", "S2N", "S2B", "S3N", "S3B", "Rotor",
+    "Liner Caps", "S1S", "Comb Liners", "S2S", "Tran PRC",
+    "S3S", "S1N", "S1B", "S2N", "S2B", "S3N", "S3B", "Rotor", "All",
 ] as const;
 
 const STAT_CONFIG = {
@@ -19,6 +26,9 @@ const STAT_CONFIG = {
     Starts: "int",
 } as const;
 type StatKind = (typeof STAT_CONFIG)[keyof typeof STAT_CONFIG];
+
+const OPERATORS = [">", "<", "=", "≥", "≤"] as const;
+type Operator = typeof OPERATORS[number];
 
 function NumericToggleRow({
     label,
@@ -30,6 +40,7 @@ function NumericToggleRow({
     const id = useId();
     const [checked, setChecked] = useState(true);
     const [value, setValue] = useState<string>("");
+    const [op, setOp] = useState<Operator>("=");
 
     const onChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
         const v = e.target.value;
@@ -48,7 +59,27 @@ function NumericToggleRow({
             >
                 {label}
             </Label>
-            <div className="flex items-center gap-3">
+
+            <div className="ml-4 flex items-center gap-2 justify-end w-full max-w-[260px] md:max-w-[300px] min-w-0">
+                <Select
+                    value={op}
+                    onValueChange={(v) => setOp(v as Operator)}
+                >
+                    <SelectTrigger
+                        className="h-9 w-12 md:w-14 justify-center px-0"
+                        aria-label={`${label} comparator`}
+                    >
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="end">
+                        {OPERATORS.map(sym => (
+                            <SelectItem key={sym} value={sym}>
+                                {sym}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+
                 <Input
                     id={id}
                     type="text"
@@ -56,7 +87,7 @@ function NumericToggleRow({
                     placeholder={kind === "int" ? "0" : "0.00"}
                     value={value}
                     onChange={onChange}
-                    className="h-9 w-24"
+                    className="h-9 w-16 md:w-20"
                 />
                 <Switch id={id} checked={checked} onCheckedChange={setChecked} />
             </div>
