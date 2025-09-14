@@ -1,11 +1,11 @@
 "use client";
 import { Card, CardContent } from "@/components/ui/card";
-import { useState, useId, type ComponentType, type ReactNode } from "react";
+import React, { useState, useId, type ComponentType, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Layers3, Gauge } from "lucide-react";
+import { Layers3, Gauge, CalendarDays } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -117,7 +117,27 @@ function DateFilterRow({
     mainLabel: string;
 }) {
     const id = useId();
-    const [value, setValue] = useState<string>("");
+    const [text, setText] = useState<string>("");
+    const pickerRef = React.useRef<HTMLInputElement>(null);
+
+    const PARTIAL_YMD = /^\d{0,4}(-\d{0,2})?(-\d{0,2})?$/;
+
+    const onTextChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+        const v = e.target.value;
+        if (PARTIAL_YMD.test(v)) setText(v);
+    }
+
+    const onPickChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+        setText(e.target.value);
+    };
+
+    const openPicker = () => {
+        const el = pickerRef.current;
+        if(!el) return;
+        el.focus();
+        if(typeof el.showPicker === "function") el.showPicker();
+        else el.click();
+    }
 
     return(
         <div className="flex items-start justify-between rounded-xl border border-transparent px-3 py-2 hover:border-zinc-200 hover:bg-white/70 dark:hover:border-zinc-800 dark:hover:bg-zinc-900/50">
@@ -126,13 +146,42 @@ function DateFilterRow({
                     {mainLabel}
                 </span>
             </div>
-            <Input
-                id={id}
+            <div className="ml-4 flex items-center gap-2 pr-2">
+                <div className="relative">
+                    <Input
+                        id={id}
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="YYYY-MM-DD"
+                        value={text}
+                        onChange={onTextChange}
+                        className="h-9 w-40 pr-10"
+                        aria-label={`${mainLabel} date input`}
+                    />
+
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="absolute right-1 top-1 h-7 w-7 rounded-md"
+                        onClick={openPicker}
+                        aria-label={`Open ${mainLabel} date picker`}
+                    >
+                        <CalendarDays className="h-4 w-4" />
+                    </Button>
+                </div>
+
+                {/* Hidden native date input (drives the picker, syncs back to text) */}
+                <input
+                ref={pickerRef}
                 type="date"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                className="ml-4 h-9 w-40"
-            />
+                value={/^\d{4}-\d{2}-\d{2}$/.test(text) ? text : ""}
+                onChange={onPickChange}
+                className="sr-only"
+                aria-hidden
+                tabIndex={-1}
+                />
+            </div>
         </div>
     );
 }
@@ -172,7 +221,7 @@ export default function DrilldownCard() {
             <CardContent className="p-4 md:p-6">
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                     <SectionShell icon={Gauge} title="Stats" tone="amber">
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-2 gap-3 md:gap-4">
                             {STAT_ITEMS.map((item) => {
                                 if (item === "From") { return <DateFilterRow key={item} mainLabel={item} />; }
                                 if (item === "Before") { return <DateFilterRow key={item} mainLabel={item} />; }
