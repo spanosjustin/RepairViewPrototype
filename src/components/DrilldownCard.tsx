@@ -123,8 +123,20 @@ function DateFilterRow({
     const PARTIAL_YMD = /^\d{0,4}(-\d{0,2})?(-\d{0,2})?$/;
 
     const onTextChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-        const v = e.target.value;
-        if (PARTIAL_YMD.test(v)) setText(v);
+        let v = e.target.value.replace(/\D/g, "");
+        
+        let formatted = v;
+        if(v.length >= 5) {
+            formatted = v.slice(0, 4) + "-" + v.slice(4);
+        }
+        if(formatted.length >= 8) {
+            formatted = formatted.slice(0, 7) + "-" + formatted.slice(7);
+        }
+        if(formatted.length > 10) {
+            formatted = formatted.slice(0, 10);
+        }
+
+        setText(formatted);
     }
 
     const onPickChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
