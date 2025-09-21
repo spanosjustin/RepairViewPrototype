@@ -1,9 +1,13 @@
+// repairview-prototype/src/components/matrix/MatrixGrid.tsx
 "use client";
 
 import * as React from "react";
 import MatrixCell from "@/components/matrix/MatrixCell";
 import type { Column, MatrixRow, MatrixProps } from "@/lib/matrix/types";
 import { GRID_SIZING } from "@/lib/matrix/constants";
+
+/** tiny class combiner */
+const cx = (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(" ");
 
 /** Build a CSS grid template from column widths/minWidths */
 function useTemplate(columns: Column[]) {
@@ -14,11 +18,20 @@ function useTemplate(columns: Column[]) {
   }, [columns]);
 }
 
+type GridProps<Row extends MatrixRow> = MatrixProps<Row> & {
+  /** e.g., "hover:bg-muted/40 transition-colors" */
+  rowHoverClass?: string;
+  /** e.g., "group-hover:bg-muted/40" to sync pinned cell background */
+  pinnedHoverClass?: string;
+};
+
 export default function MatrixGrid<Row extends MatrixRow>({
   columns,
   rows,
   emptyLabel = "No data",
-}: MatrixProps<Row>) {
+  rowHoverClass,
+  pinnedHoverClass,
+}: GridProps<Row>) {
   const template = useTemplate(columns);
   const headerHeight = GRID_SIZING.headerHeight;
   const rowHeight = GRID_SIZING.rowHeight;
@@ -46,11 +59,11 @@ export default function MatrixGrid<Row extends MatrixRow>({
           {columns.map((col, i) => (
             <div
               key={col.id}
-              className={[
+              className={cx(
                 "px-2 flex items-center text-xs font-medium uppercase tracking-wide text-muted-foreground",
-                i < columns.length - 1 ? "border-r" : "",
-                firstPinnedLeft && i === 0 ? "sticky left-0 z-30 bg-background" : "",
-              ].join(" ")}
+                i < columns.length - 1 && "border-r",
+                firstPinnedLeft && i === 0 && "sticky left-0 z-30 bg-background"
+              )}
               title={col.title}
             >
               {col.title}
@@ -63,7 +76,10 @@ export default function MatrixGrid<Row extends MatrixRow>({
           {rows.map((row) => (
             <div
               key={row.id}
-              className="grid border-b"
+              className={cx(
+                "grid border-b group", // group enables group-hover on pinned cell
+                rowHoverClass
+              )}
               style={{ gridTemplateColumns: template, minHeight: rowHeight, alignItems: "center" }}
             >
               {columns.map((col, i) => {
@@ -72,11 +88,12 @@ export default function MatrixGrid<Row extends MatrixRow>({
                 return (
                   <div
                     key={`${row.id}-${col.id}`}
-                    className={[
-                      "min-w-0", // allow ellipsis inside
-                      i < columns.length - 1 ? "border-r" : "",
-                      isPinned ? "sticky left-0 z-10 bg-background" : "",
-                    ].join(" ")}
+                    className={cx(
+                      "min-w-0",
+                      i < columns.length - 1 && "border-r",
+                      isPinned && "sticky left-0 z-10",
+                      isPinned && pinnedHoverClass // sync pinned cell on row hover
+                    )}
                     style={{ height: rowHeight }}
                   >
                     <MatrixCell cell={cell} align={col.align ?? "left"} />
