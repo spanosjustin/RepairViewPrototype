@@ -1,7 +1,7 @@
+// src/app/repair/page.tsx
+import RepairLayout from "@/components/repair/RepairLayout";
+import { MOCK_COMPONENTS, MOCK_REPAIR_ROWS } from "@/lib/repair/mock";
+
 export default function RepairPage() {
-    return (
-        <div className="p-6 text-xl font-bold">
-            Hello World, from the Repair Page!
-        </div>
-    );
+  return <RepairLayout components={MOCK_COMPONENTS} repairRows={MOCK_REPAIR_ROWS} />;
 }
