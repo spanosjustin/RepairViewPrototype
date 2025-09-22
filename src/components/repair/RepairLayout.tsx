@@ -3,18 +3,17 @@
 "use client";
 
 import * as React from "react";
-import type { Component, Event, RepairRow } from "@/lib/repair/types";
+import type { Component as RepairComponent, Event as RepairEvent, RepairRow } from "@/lib/repair/types";
 
 import { MOCK_COMPONENTS, MOCK_REPAIR_ROWS } from "@/lib/repair/mock";
 
-// (Later you’ll import these real components instead of divs)
 import ComponentList from "./ComponentList";
 import EventList from "./EventList";
-import EventDetails from "./EventDetails";
+import PreEventCard from "./PreEventDetails";
 import RepairMatrix from "./RepairMatrix";
 
 type RepairLayoutProps = {
-  components?: Component[];
+  components?: RepairComponent[];
   repairRows?: RepairRow[];
 };
 
@@ -22,48 +21,43 @@ export default function RepairLayout({
   components = MOCK_COMPONENTS,
   repairRows = MOCK_REPAIR_ROWS,
 }: RepairLayoutProps) {
-  // Track selected component + event
-  const [selectedComponent, setSelectedComponent] = React.useState<Component | null>(
+  const [selectedComponent, setSelectedComponent] = React.useState<RepairComponent | null>(
     components.length > 0 ? components[0] : null
   );
-  const [selectedEvent, setSelectedEvent] = React.useState<Event | null>(
-    selectedComponent?.events[0] ?? null
+  const [selectedEvent, setSelectedEvent] = React.useState<RepairEvent | null>(
+    components.length > 0 && components[0].events.length > 0 ? components[0].events[0] : null
   );
 
-  // When component changes, reset selected event
+  // When the component changes, default to its first event (or null)
   React.useEffect(() => {
-    if (selectedComponent) {
-      setSelectedEvent(selectedComponent.events[0] ?? null);
+    if (selectedComponent && selectedComponent.events.length > 0) {
+      setSelectedEvent(selectedComponent.events[0]);
+    } else {
+      setSelectedEvent(null);
     }
   }, [selectedComponent]);
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      {/* --- Top Row: Components + Events --- */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* --- Top Row: Components | Events | Pre-Event --- */}
+      <div className="grid gap-4 md:grid-cols-3">
         <ComponentList
           components={components}
           selected={selectedComponent}
           onSelect={setSelectedComponent}
         />
-        {selectedComponent && (
+
+        {selectedComponent ? (
           <EventList
             events={selectedComponent.events}
             selected={selectedEvent}
             onSelect={setSelectedEvent}
           />
-        )}
-      </div>
-
-      {/* --- Middle Row: Event Details --- */}
-      <div>
-        {selectedEvent ? (
-          <EventDetails event={selectedEvent} />
         ) : (
-          <div className="p-4 border rounded text-sm text-gray-500">
-            No event selected
-          </div>
+          <div className="border rounded-lg p-3 text-sm text-gray-500">No component selected</div>
         )}
+
+        <PreEventCard event={selectedEvent} />
       </div>
 
       {/* --- Bottom Row: Repair Matrix --- */}
