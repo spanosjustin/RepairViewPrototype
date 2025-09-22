@@ -23,6 +23,8 @@ type GridProps<Row extends MatrixRow> = MatrixProps<Row> & {
   rowHoverClass?: string;
   /** e.g., "group-hover:bg-muted/40" to sync pinned cell background */
   pinnedHoverClass?: string;
+  /** Called when a row is clicked (or Enter/Space pressed) */
+  onRowClick?: (row: Row) => void;
 };
 
 export default function MatrixGrid<Row extends MatrixRow>({
@@ -31,6 +33,7 @@ export default function MatrixGrid<Row extends MatrixRow>({
   emptyLabel = "No data",
   rowHoverClass,
   pinnedHoverClass,
+  onRowClick,
 }: GridProps<Row>) {
   const template = useTemplate(columns);
   const headerHeight = GRID_SIZING.headerHeight;
@@ -73,35 +76,52 @@ export default function MatrixGrid<Row extends MatrixRow>({
 
         {/* Body rows */}
         <div>
-          {rows.map((row) => (
-            <div
-              key={row.id}
-              className={cx(
-                "grid border-b group", // group enables group-hover on pinned cell
-                rowHoverClass
-              )}
-              style={{ gridTemplateColumns: template, minHeight: rowHeight, alignItems: "center" }}
-            >
-              {columns.map((col, i) => {
-                const cell = row.cells[i] ?? { kind: "text", value: "—" };
-                const isPinned = firstPinnedLeft && i === 0;
-                return (
-                  <div
-                    key={`${row.id}-${col.id}`}
-                    className={cx(
-                      "min-w-0",
-                      i < columns.length - 1 && "border-r",
-                      isPinned && "sticky left-0 z-10",
-                      isPinned && pinnedHoverClass // sync pinned cell on row hover
-                    )}
-                    style={{ height: rowHeight }}
-                  >
-                    <MatrixCell cell={cell} align={col.align ?? "left"} />
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+          {rows.map((row) => {
+            const clickable = typeof onRowClick === "function";
+            const handleKeyDown: React.KeyboardEventHandler<HTMLDivElement> = (e) => {
+              if (!clickable) return;
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onRowClick?.(row);
+              }
+            };
+
+            return (
+              <div
+                key={row.id}
+                className={cx(
+                  "grid border-b group",
+                  rowHoverClass,
+                  clickable && "cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
+                )}
+                style={{ gridTemplateColumns: template, minHeight: rowHeight, alignItems: "center" }}
+                role={clickable ? "button" : undefined}
+                tabIndex={clickable ? 0 : undefined}
+                onClick={clickable ? () => onRowClick?.(row) : undefined}
+                onKeyDown={handleKeyDown}
+                aria-label={clickable ? row.label ?? "Row" : undefined}
+              >
+                {columns.map((col, i) => {
+                  const cell = row.cells[i] ?? { kind: "text", value: "—" };
+                  const isPinned = firstPinnedLeft && i === 0;
+                  return (
+                    <div
+                      key={`${row.id}-${col.id}`}
+                      className={cx(
+                        "min-w-0",
+                        i < columns.length - 1 && "border-r",
+                        isPinned && "sticky left-0 z-10",
+                        isPinned && pinnedHoverClass
+                      )}
+                      style={{ height: rowHeight }}
+                    >
+                      <MatrixCell cell={cell} align={col.align ?? "left"} />
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
