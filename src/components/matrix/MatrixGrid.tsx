@@ -1,4 +1,4 @@
-// repairview-prototype/src/components/matrix/MatrixGrid.tsx
+// src/components/matrix/MatrixGrid.tsx
 "use client";
 
 import * as React from "react";
@@ -7,123 +7,129 @@ import type { Column, MatrixRow, MatrixProps } from "@/lib/matrix/types";
 import { GRID_SIZING } from "@/lib/matrix/constants";
 
 /** tiny class combiner */
-const cx = (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(" ");
+const cx = (...parts: Array<string | false | null | undefined>) =>
+  parts.filter(Boolean).join(" ");
 
-/** Build a CSS grid template from column widths/minWidths */
+/** Safe accessors with sensible fallbacks */
+const LABEL_COL_PX =
+  (GRID_SIZING as any)?.labelColPx ??
+  (GRID_SIZING as any)?.labelWidth ??
+  160;
+const MIN_COL_PX = (GRID_SIZING as any)?.min ?? 120;
+
+/** Build a CSS grid template from column widths/minWidths + sticky label col */
 function useTemplate(columns: Column[]) {
   return React.useMemo(() => {
-    return columns
-      .map((c) => (c.width ? `${c.width}px` : `minmax(${c.minWidth ?? 120}px, 1fr)`))
+    const label = `${LABEL_COL_PX}px`;
+    const rest = columns
+      .map((c) =>
+        typeof c.width === "number"
+          ? `${c.width}px`
+          : `minmax(${c.minWidth ?? MIN_COL_PX}px, 1fr)`
+      )
       .join(" ");
+    return `${label} ${rest}`;
   }, [columns]);
 }
 
-type GridProps<Row extends MatrixRow> = MatrixProps<Row> & {
-  /** e.g., "hover:bg-muted/40 transition-colors" */
-  rowHoverClass?: string;
-  /** e.g., "group-hover:bg-muted/40" to sync pinned cell background */
-  pinnedHoverClass?: string;
-  /** Called when a row is clicked (or Enter/Space pressed) */
-  onRowClick?: (row: Row) => void;
+type Props = MatrixProps & {
+  /** Optional row hover/extra classes (e.g., "hover:bg-gray-100 cursor-pointer") */
+  rowClassName?: string;
+  /** Called when a row is clicked */
+  onRowClick?: (row: MatrixRow) => void;
+  /** Optional header className override */
+  headerClassName?: string;
+  /** Optional body className override */
+  bodyClassName?: string;
 };
 
-export default function MatrixGrid<Row extends MatrixRow>({
+/**
+ * Generic, presentational matrix grid with a sticky first column (row labels).
+ * Renders a header row from `columns` and body rows from `rows`.
+ */
+export default function MatrixGrid({
   columns,
   rows,
   emptyLabel = "No data",
-  rowHoverClass,
-  pinnedHoverClass,
+  rowClassName,
   onRowClick,
-}: GridProps<Row>) {
+  headerClassName,
+  bodyClassName,
+}: Props) {
   const template = useTemplate(columns);
-  const headerHeight = GRID_SIZING.headerHeight;
-  const rowHeight = GRID_SIZING.rowHeight;
-  const maxBodyHeight = GRID_SIZING.maxBodyHeight;
-
-  const firstPinnedLeft = columns[0]?.pinned === "left";
-
-  if (!rows?.length) {
-    return (
-      <div className="rounded-xl border">
-        <div className="p-4 text-sm text-muted-foreground">{emptyLabel}</div>
-      </div>
-    );
-  }
 
   return (
-    <div className="rounded-xl border overflow-hidden">
-      {/* Scroll container so the header can be sticky */}
-      <div className="overflow-auto" style={{ maxHeight: maxBodyHeight + headerHeight + 8 }}>
-        {/* Header row */}
-        <div
-          className="grid sticky top-0 z-20 bg-background border-b"
-          style={{ gridTemplateColumns: template, height: headerHeight }}
-        >
-          {columns.map((col, i) => (
+    <div className="rounded-2xl border bg-card">
+      {/* Header */}
+      <div
+        className={cx(
+          "sticky top-0 z-10 grid items-center border-b px-2 py-2 text-xs font-semibold uppercase tracking-wide",
+          headerClassName
+        )}
+        style={{ gridTemplateColumns: template }}
+      >
+        {/* sticky label header cell (blank / could show a section title) */}
+        <div className="px-2 text-muted-foreground">Label</div>
+
+        {columns.map((c) => (
+          <div
+            key={c.id}
+            className={cx(
+              "px-2",
+              c.align === "center" && "text-center",
+              c.align === "right" && "text-right"
+            )}
+            title={c.title}
+          >
+            {c.title}
+          </div>
+        ))}
+      </div>
+
+      {/* Body */}
+      {rows.length === 0 ? (
+        <div className="p-4 text-sm text-muted-foreground">{emptyLabel}</div>
+      ) : (
+        <div className={cx("divide-y", bodyClassName)}>
+          {rows.map((row) => (
             <div
-              key={col.id}
+              key={row.id}
               className={cx(
-                "px-2 flex items-center text-xs font-medium uppercase tracking-wide text-muted-foreground",
-                i < columns.length - 1 && "border-r",
-                firstPinnedLeft && i === 0 && "sticky left-0 z-30 bg-background"
+                "grid items-stretch px-2",
+                // base row spacing
+                "py-2",
+                // allow caller to add hover/pointer, etc.
+                rowClassName
               )}
-              title={col.title}
+              style={{ gridTemplateColumns: template }}
+              onClick={() => onRowClick?.(row)}
+              role={onRowClick ? "button" : undefined}
             >
-              {col.title}
+              {/* sticky label cell */}
+              <div className="sticky left-0 z-[1] bg-card px-2 font-medium">
+                {row.label}
+              </div>
+
+              {/* data cells */}
+              {row.cells.map((cell, i) => {
+                const col = columns[i];
+                return (
+                  <div
+                    key={i}
+                    className={cx(
+                      "px-2",
+                      col?.align === "center" && "text-center",
+                      col?.align === "right" && "text-right"
+                    )}
+                  >
+                    <MatrixCell cell={cell} align={col?.align ?? "left"} />
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
-
-        {/* Body rows */}
-        <div>
-          {rows.map((row) => {
-            const clickable = typeof onRowClick === "function";
-            const handleKeyDown: React.KeyboardEventHandler<HTMLDivElement> = (e) => {
-              if (!clickable) return;
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onRowClick?.(row);
-              }
-            };
-
-            return (
-              <div
-                key={row.id}
-                className={cx(
-                  "grid border-b group",
-                  rowHoverClass,
-                  clickable && "cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
-                )}
-                style={{ gridTemplateColumns: template, minHeight: rowHeight, alignItems: "center" }}
-                role={clickable ? "button" : undefined}
-                tabIndex={clickable ? 0 : undefined}
-                onClick={clickable ? () => onRowClick?.(row) : undefined}
-                onKeyDown={handleKeyDown}
-                aria-label={clickable ? row.label ?? "Row" : undefined}
-              >
-                {columns.map((col, i) => {
-                  const cell = row.cells[i] ?? { kind: "text", value: "—" };
-                  const isPinned = firstPinnedLeft && i === 0;
-                  return (
-                    <div
-                      key={`${row.id}-${col.id}`}
-                      className={cx(
-                        "min-w-0",
-                        i < columns.length - 1 && "border-r",
-                        isPinned && "sticky left-0 z-10",
-                        isPinned && pinnedHoverClass
-                      )}
-                      style={{ height: rowHeight }}
-                    >
-                      <MatrixCell cell={cell} align={col.align ?? "left"} />
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
