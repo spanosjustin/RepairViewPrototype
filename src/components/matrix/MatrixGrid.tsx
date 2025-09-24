@@ -33,20 +33,12 @@ function useTemplate(columns: Column[]) {
 }
 
 type Props = MatrixProps & {
-  /** Optional row hover/extra classes (e.g., "hover:bg-gray-100 cursor-pointer") */
-  rowClassName?: string;
-  /** Called when a row is clicked */
+  rowClassName?: string;                // optional extra row classes (can include hover:bg-…)
   onRowClick?: (row: MatrixRow) => void;
-  /** Optional header className override */
   headerClassName?: string;
-  /** Optional body className override */
   bodyClassName?: string;
 };
 
-/**
- * Generic, presentational matrix grid with a sticky first column (row labels).
- * Renders a header row from `columns` and body rows from `rows`.
- */
 export default function MatrixGrid({
   columns,
   rows,
@@ -68,9 +60,7 @@ export default function MatrixGrid({
         )}
         style={{ gridTemplateColumns: template }}
       >
-        {/* sticky label header cell (blank / could show a section title) */}
         <div className="px-2 text-muted-foreground">Label</div>
-
         {columns.map((c) => (
           <div
             key={c.id}
@@ -91,43 +81,60 @@ export default function MatrixGrid({
         <div className="p-4 text-sm text-muted-foreground">{emptyLabel}</div>
       ) : (
         <div className={cx("divide-y", bodyClassName)}>
-          {rows.map((row) => (
-            <div
-              key={row.id}
-              className={cx(
-                "grid items-stretch px-2",
-                // base row spacing
-                "py-2",
-                // allow caller to add hover/pointer, etc.
-                rowClassName
-              )}
-              style={{ gridTemplateColumns: template }}
-              onClick={() => onRowClick?.(row)}
-              role={onRowClick ? "button" : undefined}
-            >
-              {/* sticky label cell */}
-              <div className="sticky left-0 z-[1] bg-card px-2 font-medium">
-                {row.label}
-              </div>
+          {rows.map((row) => {
+            // Detect if caller already supplies a hover class
+            const callerHasHover = !!rowClassName && /\bhover:bg-/.test(rowClassName);
+            // Interactive if clickable OR caller provided an explicit hover class
+            const interactive = !!onRowClick || callerHasHover;
+            // Provide a *default* hover if interactive but caller didn't specify one
+            const defaultHover = interactive && !callerHasHover ? "hover:bg-gray-100" : "";
 
-              {/* data cells */}
-              {row.cells.map((cell, i) => {
-                const col = columns[i];
-                return (
-                  <div
-                    key={i}
-                    className={cx(
-                      "px-2",
-                      col?.align === "center" && "text-center",
-                      col?.align === "right" && "text-right"
-                    )}
-                  >
-                    <MatrixCell cell={cell} align={col?.align ?? "left"} />
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+            return (
+              <div
+                key={row.id}
+                className={cx(
+                  "grid items-stretch px-2 py-2",
+                  interactive && "group cursor-pointer",
+                  defaultHover,
+                  rowClassName
+                )}
+                style={{ gridTemplateColumns: template }}
+                onClick={() => onRowClick?.(row)}
+                role={onRowClick ? "button" : undefined}
+              >
+                {/* sticky label cell */}
+                <div
+                  className={cx(
+                    "sticky left-0 z-[1] px-2 font-medium",
+                    // Inventory (non-interactive): keep solid card background like before
+                    !interactive && "bg-card",
+                    // Interactive (Repair / Inventory with clicks or explicit hover):
+                    // let row hover show and mirror the same hover color on the sticky cell
+                    interactive && "bg-transparent group-hover:bg-gray-100"
+                  )}
+                >
+                  {row.label}
+                </div>
+
+                {/* data cells */}
+                {row.cells.map((cell, i) => {
+                  const col = columns[i];
+                  return (
+                    <div
+                      key={i}
+                      className={cx(
+                        "px-2",
+                        col?.align === "center" && "text-center",
+                        col?.align === "right" && "text-right"
+                      )}
+                    >
+                      <MatrixCell cell={cell} align={col?.align ?? "left"} />
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
