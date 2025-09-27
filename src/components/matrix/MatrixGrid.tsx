@@ -1,4 +1,3 @@
-// src/components/matrix/MatrixGrid.tsx
 "use client";
 
 import * as React from "react";
@@ -33,7 +32,7 @@ function useTemplate(columns: Column[]) {
 }
 
 type Props = MatrixProps & {
-  rowClassName?: string;                // optional extra row classes (can include hover:bg-…)
+  rowClassName?: string;                // optional extra row classes
   onRowClick?: (row: MatrixRow) => void;
   headerClassName?: string;
   bodyClassName?: string;
@@ -81,60 +80,45 @@ export default function MatrixGrid({
         <div className="p-4 text-sm text-muted-foreground">{emptyLabel}</div>
       ) : (
         <div className={cx("divide-y", bodyClassName)}>
-          {rows.map((row) => {
-            // Detect if caller already supplies a hover class
-            const callerHasHover = !!rowClassName && /\bhover:bg-/.test(rowClassName);
-            // Interactive if clickable OR caller provided an explicit hover class
-            const interactive = !!onRowClick || callerHasHover;
-            // Provide a *default* hover if interactive but caller didn't specify one
-            const defaultHover = interactive && !callerHasHover ? "hover:bg-gray-100" : "";
-
-            return (
+          {rows.map((row) => (
+            <div
+              key={row.id}
+              className={cx(
+                "grid items-stretch px-2 py-2 transition-colors hover:bg-muted/50",
+                onRowClick && "cursor-pointer",
+                rowClassName
+              )}
+              style={{ gridTemplateColumns: template }}
+              onClick={() => onRowClick?.(row)}
+              role={onRowClick ? "button" : undefined}
+            >
+              {/* sticky label cell */}
               <div
-                key={row.id}
                 className={cx(
-                  "grid items-stretch px-2 py-2",
-                  interactive && "group cursor-pointer",
-                  defaultHover,
-                  rowClassName
+                  "sticky left-0 z-[1] px-2 font-medium bg-inherit"
                 )}
-                style={{ gridTemplateColumns: template }}
-                onClick={() => onRowClick?.(row)}
-                role={onRowClick ? "button" : undefined}
               >
-                {/* sticky label cell */}
-                <div
-                  className={cx(
-                    "sticky left-0 z-[1] px-2 font-medium",
-                    // Inventory (non-interactive): keep solid card background like before
-                    !interactive && "bg-card",
-                    // Interactive (Repair / Inventory with clicks or explicit hover):
-                    // let row hover show and mirror the same hover color on the sticky cell
-                    interactive && "bg-transparent group-hover:bg-gray-100"
-                  )}
-                >
-                  {row.label}
-                </div>
-
-                {/* data cells */}
-                {row.cells.map((cell, i) => {
-                  const col = columns[i];
-                  return (
-                    <div
-                      key={i}
-                      className={cx(
-                        "px-2",
-                        col?.align === "center" && "text-center",
-                        col?.align === "right" && "text-right"
-                      )}
-                    >
-                      <MatrixCell cell={cell} align={col?.align ?? "left"} />
-                    </div>
-                  );
-                })}
+                {row.label}
               </div>
-            );
-          })}
+
+              {/* data cells */}
+              {row.cells.map((cell, i) => {
+                const col = columns[i];
+                return (
+                  <div
+                    key={i}
+                    className={cx(
+                      "px-2",
+                      col?.align === "center" && "text-center",
+                      col?.align === "right" && "text-right"
+                    )}
+                  >
+                    <MatrixCell cell={cell} align={col?.align ?? "left"} />
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
       )}
     </div>
