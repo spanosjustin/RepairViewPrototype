@@ -47,7 +47,11 @@ export default function TurbineCard({
 
                 <div>
                     <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Pieces</div>
-                    <PiecesMatrix rows={turbine.pieces} emptyLabel="No pieces available" />
+                    <PiecesMatrix 
+                        rows={turbine.pieces} 
+                        emptyLabel="No pieces available" 
+                        turbineName={turbine.name}
+                    />
                 </div>
             </div>
         </section>

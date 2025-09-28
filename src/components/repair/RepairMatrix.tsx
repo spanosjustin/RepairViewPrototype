@@ -42,7 +42,6 @@ export default function RepairMatrix({
         cellNote(r.condition),             // condition
         cellNote(r.repair),                // repair
         cellBadge(r.status, toneForStatus(r.status)), // status
-        cellBadge(r.verified ? "✓" : "—", r.verified ? "success" : "muted"), // verified
       ],
     }));
   }, [rows]);
