@@ -26,7 +26,7 @@ export default function RepairMatrix({
 
   // Derive columns: show BOTH condition + repair note columns
   const derivedColumns = React.useMemo<Column[]>(() => {
-    const keepIds = new Set(["pos", "pn", "sn", "altSn", "condition", "repair", "status", "verified"]);
+    const keepIds = new Set(["pn", "sn", "condition", "repair", "status"]);
     return columns.filter((c) => keepIds.has(c.id));
   }, [columns]);
 
@@ -35,10 +35,8 @@ export default function RepairMatrix({
       id: `repair-${idx}-${r.pn}-${r.sn}`,
       label: `#${r.pos}`,
       cells: [
-        cellNumber(r.pos),                 // pos
         cellText(r.pn),                    // pn
         cellText(r.sn),                    // sn
-        cellText(r.altSn ?? ""),           // altSn
         cellNote(r.condition),             // condition
         cellNote(r.repair),                // repair
         cellBadge(r.status, toneForStatus(r.status)), // status

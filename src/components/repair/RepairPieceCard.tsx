@@ -15,13 +15,10 @@ export default function RepairPieceCard({ row }: { row: RepairRow }) {
     name: row.pn || "Unknown PN",
     pn: row.pn ?? "",
     sn: row.sn ?? "",
-    altSn: row.altSn ?? null,
     status: row.status ?? "Unknown",
     notes: row.repair || row.condition || "",
     condition: row.condition ?? "",
     repair: row.repair ?? "",
-    verified: !!row.verified,
-    pos: row.pos ?? null,
   };
 
   // IMPORTANT: prop name is `item`, just like Inventory uses.

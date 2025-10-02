@@ -29,13 +29,10 @@ export type Component = {
   
   /** A row in the repair matrix (bottom table) */
   export type RepairRow = {
-    pos: number;                // Position index
     pn: string;                 // Part Number
     sn: string;                 // Serial Number
-    altSn?: string;             // Optional secondary SN (your sketch shows 2 SNs)
     condition: string;          // Condition Details
     repair: string;             // Repair Details
     status: string;             // Status (e.g. Active, Removed)
-    verified: boolean;          // "V" column in your sketch
   };
   
