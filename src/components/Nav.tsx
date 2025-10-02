@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Menu, X, ChevronDown } from "lucide-react";
+import { Menu, X } from "lucide-react";
 
 const baseLink = "px-3 py-2 rounded-xl text-sm font-medium transition hover:bg-zinc-100/60 dark:hover:bg-zinc-800/60";
 const activeLink = "bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900 hover:opacity-90";
@@ -19,48 +19,6 @@ function NavItem({ href, label }: { href: string; label: string }) {
     );
 }
 
-function InventroyMenu() {
-    const pathname = usePathname();
-    const [open, setOpen ] = useState(false);
-    const parentActive = pathname?.startsWith("/inventory");
-
-    return (
-        <div className="relative">
-            <button
-                onClick={() => setOpen((s) => !s)}
-                className={`${baseLink} flex item-center gap-1 ${parentActive ? activeLink : ""}`}
-                aria-haspopup="menu"
-                aria-expanded={open}
-            >
-                Inventory <ChevronDown className="h-4 w-4`" />
-            </button>
-            {open ? (
-                <div
-                    role="menu"
-                    className="absolute left-0 mt-2 w-44 rounded-xl border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-800 dark:bg-zinc-900"
-                    onMouseLeave={() => setOpen(false)}
-                >
-                    <Link
-                        role="menuitem"
-                        href="/inventory/list"
-                        className={`${baseLink} block w-full text-left ${pathname === '/inventory/list' ? activeLink : ""}`}
-                        onClick={() => setOpen(false)}
-                    >
-                        List
-                    </Link>
-                    <Link
-                        role="menuitem"
-                        href="/inventory/tree"
-                        className={`${baseLink} block w-full text-left ${pathname === '/inventory/tree' ? activeLink : ""}`}
-                        onClick={() => setOpen(false)}
-                    >
-                        Tree
-                    </Link>
-                </div>
-            ) : null}
-        </div>
-    )
-}
 
 export default function NavBar() {
     const [mobileOpen, setMobileOpen] = useState(false);
@@ -78,7 +36,7 @@ export default function NavBar() {
                 </div>
                 <div className="hidden items-center gap-1 sm:flex">
                     <NavItem href="/matrix" label="Matrix" />
-                    <InventroyMenu />
+                    <NavItem href="/inventory/list" label="Inventory" />
                     <NavItem href="/repair" label="Repair" />
                 </div>
                 <div className="hidden items-center gap-2 sm:flex">
@@ -101,22 +59,12 @@ export default function NavBar() {
                 {mobileOpen ? (
                     <div className="border-t border-zinc-200 bg-white px-4 py-2 dark:border-zinc-800 dark:bg-zinc-950 sm:hidden">
                         <div className="flex flex-col gap-1 py-2">
-                            <Link href="/matrix" className="{baseLink}" onClick={() => setMobileOpen(false)}>
+                            <Link href="/matrix" className={baseLink} onClick={() => setMobileOpen(false)}>
                                 Matrix
                             </Link>
-                            <details className="[&_summary::-webkit-details-marker]:hidden">
-                                <summary className={`${baseLink} flex items-center gap-1`}>
-                                    Inventory <ChevronDown className="inline h-4 w-4" />
-                                </summary>
-                                <div className="ml-3 mt-1 flex flex-col gap-1">
-                                    <Link href="/inventory/list" className={baseLink} onClick={() => setMobileOpen(false)}>
-                                        List
-                                    </Link>
-                                    <Link href="/inventory/tree" className={baseLink} onClick={() => setMobileOpen(false)}>
-                                        Tree
-                                    </Link>
-                                </div>
-                            </details>
+                            <Link href="/inventory/list" className={baseLink} onClick={() => setMobileOpen(false)}>
+                                Inventory
+                            </Link>
                             <Link href="/repair" className={baseLink} onClick={() => setMobileOpen(false)}>
                                 Repair
                             </Link>
