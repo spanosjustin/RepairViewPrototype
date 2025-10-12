@@ -112,19 +112,33 @@ export default function InventoryListPage() {
           </div>
         </header>
 
-        {/* Matrix */}
-        {entityKind === "pieces" ? (
-          <InventoryMatrix
-            dataset="pieces"
-            items={MOCK_INVENTORY}
-            onSelectPiece={openPieceCard} // <-- wire click to open card
-          />
+        {/* Content based on view mode */}
+        {viewMode === "list" ? (
+          /* Matrix/Table View */
+          entityKind === "pieces" ? (
+            <InventoryMatrix
+              dataset="pieces"
+              items={MOCK_INVENTORY}
+              onSelectPiece={openPieceCard} // <-- wire click to open card
+            />
+          ) : (
+            <InventoryMatrix
+              dataset="components"
+              componentStats={componentStats}
+              onSelectComponent={openComponentCard}
+            />
+          )
         ) : (
-          <InventoryMatrix
-            dataset="components"
-            componentStats={componentStats}
-            onSelectComponent={openComponentCard}
-          />
+          /* Tree View */
+          <div className="p-6 text-center">
+            <h2 className="text-lg font-semibold mb-4">Tree View</h2>
+            <p className="text-muted-foreground mb-4">
+              Tree view is coming soon. This will display a hierarchical view of your inventory items.
+            </p>
+            <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground">
+              <p>You will be able to drill down on data and select turbines, components, and pieces for their various stats.</p>
+            </div>
+          </div>
         )}
       </div>
 
