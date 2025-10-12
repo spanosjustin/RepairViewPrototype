@@ -25,6 +25,76 @@ import {
   Search,
   Plus
 } from "lucide-react";
+import VisualTreeView from "@/components/VisualTreeView";
+import type { InventoryItem } from "@/lib/inventory/types";
+
+// Mock inventory data for turbines
+const MOCK_TURBINE_INVENTORY: Record<string, InventoryItem[]> = {
+  "T-101": [
+    { sn: "SN-00123", pn: "PN-AX45", hours: 18520, trips: 182, starts: 980, status: "OK", state: "In Service", component: "Comb Liner" },
+    { sn: "SN-00456", pn: "PN-QZ19", hours: 23270, trips: 201, starts: 1165, status: "Replace Now", state: "Repair", component: "Comb Liner" },
+    { sn: "SN-00789", pn: "PN-TX88", hours: 7400, trips: 12, starts: 180, status: "OK", state: "In Service", component: "Tran PRC" },
+    { sn: "SN-01011", pn: "PN-S1N1", hours: 9240, trips: 33, starts: 402, status: "Monitor", state: "In Service", component: "S1N" },
+    { sn: "SN-01314", pn: "PN-S2N2", hours: 15410, trips: 77, starts: 605, status: "Replace Soon", state: "In Service", component: "S2N" },
+    { sn: "SN-01617", pn: "PN-RTR1", hours: 28100, trips: 15, starts: 220, status: "OK", state: "Standby", component: "Rotor" }
+  ],
+  "T-102": [
+    { sn: "SN-00234", pn: "PN-BX56", hours: 15200, trips: 145, starts: 750, status: "OK", state: "In Service", component: "Comb Liner" },
+    { sn: "SN-00567", pn: "PN-RZ20", hours: 19800, trips: 165, starts: 890, status: "Monitor", state: "In Service", component: "Comb Liner" },
+    { sn: "SN-00890", pn: "PN-UX99", hours: 8200, trips: 18, starts: 210, status: "OK", state: "In Service", component: "Tran PRC" },
+    { sn: "SN-01112", pn: "PN-T2N2", hours: 11200, trips: 45, starts: 520, status: "OK", state: "In Service", component: "S1N" },
+    { sn: "SN-01425", pn: "PN-T3N3", hours: 16800, trips: 89, starts: 720, status: "Replace Soon", state: "In Service", component: "S2N" },
+    { sn: "SN-01728", pn: "PN-STR2", hours: 24500, trips: 22, starts: 180, status: "OK", state: "Standby", component: "Rotor" }
+  ],
+  "T-103": [
+    { sn: "SN-00345", pn: "PN-CX67", hours: 22100, trips: 198, starts: 1100, status: "OK", state: "In Service", component: "Comb Liner" },
+    { sn: "SN-00678", pn: "PN-SZ21", hours: 18700, trips: 156, starts: 820, status: "OK", state: "In Service", component: "Comb Liner" },
+    { sn: "SN-00901", pn: "PN-VX00", hours: 6800, trips: 8, starts: 150, status: "OK", state: "In Service", component: "Tran PRC" },
+    { sn: "SN-01213", pn: "PN-U3N3", hours: 13400, trips: 67, starts: 680, status: "OK", state: "In Service", component: "S1N" },
+    { sn: "SN-01536", pn: "PN-U4N4", hours: 19200, trips: 95, starts: 850, status: "OK", state: "In Service", component: "S2N" },
+    { sn: "SN-01839", pn: "PN-TTR3", hours: 31200, trips: 28, starts: 250, status: "OK", state: "Standby", component: "Rotor" }
+  ],
+  "T-201": [
+    { sn: "SN-00456", pn: "PN-DX78", hours: 16800, trips: 142, starts: 780, status: "OK", state: "In Service", component: "Comb Liner" },
+    { sn: "SN-00789", pn: "PN-TZ22", hours: 20300, trips: 178, starts: 950, status: "OK", state: "In Service", component: "Comb Liner" },
+    { sn: "SN-01012", pn: "PN-WX11", hours: 9200, trips: 15, starts: 190, status: "OK", state: "In Service", component: "Tran PRC" },
+    { sn: "SN-01324", pn: "PN-V4N4", hours: 15600, trips: 78, starts: 750, status: "OK", state: "In Service", component: "S1N" },
+    { sn: "SN-01647", pn: "PN-V5N5", hours: 21400, trips: 108, starts: 920, status: "OK", state: "In Service", component: "S2N" },
+    { sn: "SN-01950", pn: "PN-UUR4", hours: 26800, trips: 35, starts: 280, status: "OK", state: "Standby", component: "Rotor" }
+  ],
+  "T-202": [
+    { sn: "SN-00567", pn: "PN-EX89", hours: 14200, trips: 128, starts: 720, status: "OK", state: "In Service", component: "Comb Liner" },
+    { sn: "SN-00890", pn: "PN-UZ23", hours: 18900, trips: 167, starts: 880, status: "OK", state: "In Service", component: "Comb Liner" },
+    { sn: "SN-01123", pn: "PN-XX22", hours: 7800, trips: 12, starts: 170, status: "OK", state: "In Service", component: "Tran PRC" },
+    { sn: "SN-01435", pn: "PN-W5N5", hours: 13800, trips: 69, starts: 680, status: "OK", state: "In Service", component: "S1N" },
+    { sn: "SN-01758", pn: "PN-W6N6", hours: 19600, trips: 98, starts: 850, status: "OK", state: "In Service", component: "S2N" },
+    { sn: "SN-02061", pn: "PN-VVR5", hours: 25200, trips: 32, starts: 260, status: "OK", state: "Standby", component: "Rotor" }
+  ],
+  "T-301": [
+    { sn: "SN-00678", pn: "PN-FX90", hours: 19800, trips: 175, starts: 920, status: "Replace Now", state: "Repair", component: "Comb Liner" },
+    { sn: "SN-00901", pn: "PN-VZ24", hours: 22500, trips: 198, starts: 1050, status: "OK", state: "In Service", component: "Comb Liner" },
+    { sn: "SN-01234", pn: "PN-YX33", hours: 8600, trips: 18, starts: 210, status: "OK", state: "In Service", component: "Tran PRC" },
+    { sn: "SN-01546", pn: "PN-X6N6", hours: 17200, trips: 85, starts: 820, status: "OK", state: "In Service", component: "S1N" },
+    { sn: "SN-01869", pn: "PN-X7N7", hours: 22800, trips: 115, starts: 980, status: "OK", state: "In Service", component: "S2N" },
+    { sn: "SN-02172", pn: "PN-WWR6", hours: 28400, trips: 38, starts: 300, status: "OK", state: "Standby", component: "Rotor" }
+  ],
+  "T-302": [
+    { sn: "SN-00789", pn: "PN-GX01", hours: 17600, trips: 158, starts: 850, status: "OK", state: "In Service", component: "Comb Liner" },
+    { sn: "SN-01012", pn: "PN-WZ25", hours: 21100, trips: 186, starts: 980, status: "OK", state: "In Service", component: "Comb Liner" },
+    { sn: "SN-01345", pn: "PN-ZX44", hours: 9400, trips: 16, starts: 190, status: "OK", state: "In Service", component: "Tran PRC" },
+    { sn: "SN-01657", pn: "PN-Y7N7", hours: 15800, trips: 78, starts: 750, status: "OK", state: "In Service", component: "S1N" },
+    { sn: "SN-01980", pn: "PN-Y8N8", hours: 21600, trips: 108, starts: 920, status: "OK", state: "In Service", component: "S2N" },
+    { sn: "SN-02283", pn: "PN-XXR7", hours: 27200, trips: 35, starts: 280, status: "OK", state: "Standby", component: "Rotor" }
+  ],
+  "T-303": [
+    { sn: "SN-00890", pn: "PN-HX12", hours: 16400, trips: 148, starts: 800, status: "OK", state: "In Service", component: "Comb Liner" },
+    { sn: "SN-01123", pn: "PN-XZ26", hours: 19700, trips: 174, starts: 920, status: "OK", state: "In Service", component: "Comb Liner" },
+    { sn: "SN-01456", pn: "PN-AX55", hours: 8200, trips: 14, starts: 180, status: "OK", state: "In Service", component: "Tran PRC" },
+    { sn: "SN-01768", pn: "PN-Z8N8", hours: 14400, trips: 71, starts: 690, status: "OK", state: "In Service", component: "S1N" },
+    { sn: "SN-02091", pn: "PN-Z9N9", hours: 20400, trips: 102, starts: 870, status: "OK", state: "In Service", component: "S2N" },
+    { sn: "SN-02394", pn: "PN-YYR8", hours: 26000, trips: 33, starts: 270, status: "OK", state: "Standby", component: "Rotor" }
+  ]
+};
 
 // Mock data for sites and turbines
 const MOCK_SITES = [
@@ -89,9 +159,10 @@ type StatusFilter = "all" | "operational" | "maintenance" | "outage";
 interface SiteCardProps {
   site: typeof MOCK_SITES[0];
   onTurbineClick?: (turbineId: string) => void;
+  expandedTurbines: Set<string>;
 }
 
-function SiteCard({ site, onTurbineClick }: SiteCardProps) {
+function SiteCard({ site, onTurbineClick, expandedTurbines }: SiteCardProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "operational": return "bg-green-100 text-green-800 border-green-200";
@@ -168,21 +239,45 @@ function SiteCard({ site, onTurbineClick }: SiteCardProps) {
         <div className="space-y-2">
           <h4 className="font-medium text-sm text-gray-700">Turbines</h4>
           <div className="space-y-2">
-            {site.turbines.map((turbine) => (
-              <div 
-                key={turbine.id}
-                className="flex items-center justify-between p-2 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
-                onClick={() => onTurbineClick?.(turbine.id)}
-              >
-                <div className="flex items-center gap-2">
-                  {getStatusIcon(turbine.status)}
-                  <span className="font-medium text-sm">{turbine.name}</span>
+            {site.turbines.map((turbine) => {
+              const isExpanded = expandedTurbines.has(turbine.id);
+              return (
+                <div key={turbine.id} className="space-y-2">
+                  <div 
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                    onClick={() => onTurbineClick?.(turbine.id)}
+                  >
+                    <div className="flex items-center gap-2">
+                      {getStatusIcon(turbine.status)}
+                      <span className="font-medium text-sm">{turbine.name}</span>
+                    </div>
+                    <Badge className={`${getStatusColor(turbine.status)} border text-xs`}>
+                      {turbine.status}
+                    </Badge>
+                  </div>
+                  
+                  {/* Expanded Content for Site View */}
+                  {isExpanded && (
+                    <div className="ml-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <h5 className="font-medium text-sm text-gray-800 mb-3">Components & Inventory</h5>
+                      <div className="max-h-64 overflow-auto">
+                        <VisualTreeView 
+                          items={MOCK_TURBINE_INVENTORY[turbine.id] || []}
+                          onSelectPiece={(item) => {
+                            console.log('Selected piece:', item);
+                            // Handle piece selection - could open a modal or navigate to details
+                          }}
+                          onSelectComponent={(componentName, pieces) => {
+                            console.log('Selected component:', componentName, pieces);
+                            // Handle component selection - could show component details
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <Badge className={`${getStatusColor(turbine.status)} border text-xs`}>
-                  {turbine.status}
-                </Badge>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </CardContent>
@@ -259,11 +354,21 @@ function TurbineOverview({ turbines, expandedTurbines, onTurbineClick }: Turbine
               {/* Expanded Content */}
               {isExpanded && (
                 <div className="mt-4 pt-4 border-t border-gray-200">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h4 className="font-semibold text-blue-800 mb-2">Expanded</h4>
-                    <p className="text-blue-700 text-sm">
-                      This turbine section has been expanded. Additional details and controls would be displayed here.
-                    </p>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h4 className="font-semibold text-gray-800 mb-4">Turbine Components & Inventory</h4>
+                    <div className="max-h-96 overflow-auto">
+                      <VisualTreeView 
+                        items={MOCK_TURBINE_INVENTORY[turbine.id] || []}
+                        onSelectPiece={(item) => {
+                          console.log('Selected piece:', item);
+                          // Handle piece selection - could open a modal or navigate to details
+                        }}
+                        onSelectComponent={(componentName, pieces) => {
+                          console.log('Selected component:', componentName, pieces);
+                          // Handle component selection - could show component details
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               )}
@@ -401,6 +506,7 @@ export default function SitesAndTurbinesPage() {
               key={site.id} 
               site={site} 
               onTurbineClick={handleTurbineClick}
+              expandedTurbines={expandedTurbines}
             />
           ))}
         </div>
