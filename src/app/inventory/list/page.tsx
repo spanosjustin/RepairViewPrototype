@@ -26,7 +26,7 @@ import PieceInfoCard from "@/components/inventory/PieceInfoCard";
 import ComponentInfoCard from "@/components/inventory/ComponentInfoCard";
 import TreeView from "@/components/TreeView";
 
-type ViewMode = "list" | "turbine";
+type ViewMode = "list" | "turbine" | "tree";
 type EntityKind = "components" | "pieces";
 
 type ComponentRow = {
@@ -98,6 +98,7 @@ export default function InventoryListPage() {
               <SelectContent align="end">
                 <SelectItem value="list">List</SelectItem>
                 <SelectItem value="turbine">Turbine</SelectItem>
+                <SelectItem value="tree">Tree</SelectItem>
               </SelectContent>
             </Select>
 
@@ -129,7 +130,7 @@ export default function InventoryListPage() {
               onSelectComponent={openComponentCard}
             />
           )
-        ) : (
+        ) : viewMode === "turbine" ? (
           /* Turbine View (Tree View) */
           <div className="p-4">
             <TreeView
@@ -137,6 +138,16 @@ export default function InventoryListPage() {
               onSelectPiece={openPieceCard}
               onSelectComponent={openComponentCard}
             />
+          </div>
+        ) : (
+          /* Tree View - Coming Soon */
+          <div className="p-8 text-center">
+            <div className="text-lg font-medium text-muted-foreground">
+              Tree View - Coming Soon
+            </div>
+            <div className="text-sm text-muted-foreground mt-2">
+              This feature is currently in development.
+            </div>
           </div>
         )}
       </div>
