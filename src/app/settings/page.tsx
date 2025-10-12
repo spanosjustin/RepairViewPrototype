@@ -55,6 +55,11 @@ export default function SettingsPage() {
         selectedPosition: ""
     })
 
+    // State for turbine/site form
+    const [turbineSiteForm, setTurbineSiteForm] = useState({
+        type: "turbine" as "turbine" | "site",
+    })
+
     // State for event form
     const [eventForm, setEventForm] = useState({
         type: "outage" as "outage" | "repair",
@@ -279,6 +284,13 @@ export default function SettingsPage() {
             selectedPosition: ""
         })
         setOpenDialog(null)
+    }
+
+    const handleTurbineSiteFormChange = (field: string, value: string | number) => {
+        setTurbineSiteForm(prev => ({
+            ...prev,
+            [field]: value
+        }))
     }
 
     const handleEventFormChange = (field: string, value: string | number) => {
@@ -1573,11 +1585,67 @@ export default function SettingsPage() {
 
             {/* Dialog for Add a Turbine or Site */}
             <Dialog open={openDialog === 'turbine'} onOpenChange={() => setOpenDialog(null)}>
-                <DialogContent>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Add a Turbine or Site</DialogTitle>
                     </DialogHeader>
-                    <p>Add a Turbine or Site</p>
+                    <form className="space-y-6">
+                        {/* Type Toggle */}
+                        <div className="space-y-4">
+                            <Label className="text-lg font-semibold">Type</Label>
+                            <div className="flex gap-4">
+                                <Button
+                                    type="button"
+                                    variant={turbineSiteForm.type === "turbine" ? "default" : "outline"}
+                                    onClick={() => handleTurbineSiteFormChange('type', 'turbine')}
+                                    className="flex-1"
+                                >
+                                    Add a Turbine
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant={turbineSiteForm.type === "site" ? "default" : "outline"}
+                                    onClick={() => handleTurbineSiteFormChange('type', 'site')}
+                                    className="flex-1"
+                                >
+                                    Add a Site
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Form Content Based on Type */}
+                        <div className="min-h-[300px] p-6 border border-gray-200 rounded-lg bg-gray-50">
+                            {turbineSiteForm.type === "turbine" ? (
+                                <div className="space-y-6">
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-4">Add a Turbine</h3>
+                                    <div className="text-center text-gray-500 py-12">
+                                        Turbine form fields will be added here
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-4">Add a Site</h3>
+                                    <div className="text-center text-gray-500 py-12">
+                                        Site form fields will be added here
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Form Actions */}
+                        <div className="flex justify-end gap-3 pt-4 border-t">
+                            <Button 
+                                type="button" 
+                                variant="outline" 
+                                onClick={() => setOpenDialog(null)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button type="submit">
+                                Add {turbineSiteForm.type === "turbine" ? "Turbine" : "Site"}
+                            </Button>
+                        </div>
+                    </form>
                 </DialogContent>
             </Dialog>
         </div>
