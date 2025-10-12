@@ -38,6 +38,7 @@ export default function NavBar() {
                     <NavItem href="/matrix" label="Matrix" />
                     <NavItem href="/inventory/list" label="Inventory" />
                     <NavItem href="/repair" label="Repair" />
+                    <NavItem href="/sitesAndTurbines" label="Sites & Turbines" />
                 </div>
                 <div className="hidden items-center gap-2 sm:flex">
                     <Link href="/settings" className={baseLink}>
@@ -67,6 +68,9 @@ export default function NavBar() {
                             </Link>
                             <Link href="/repair" className={baseLink} onClick={() => setMobileOpen(false)}>
                                 Repair
+                            </Link>
+                            <Link href="/sitesAndTurbines" className={baseLink} onClick={() => setMobileOpen(false)}>
+                                Sites & Turbines
                             </Link>
                             <Link href="/settings" className={baseLink} onClick={() => setMobileOpen(false)}>
                                 Settings
