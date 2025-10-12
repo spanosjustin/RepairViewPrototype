@@ -199,9 +199,11 @@ interface TurbineOverviewProps {
     lastMaintenance: string;
     nextMaintenance: string;
   }>;
+  expandedTurbines: Set<string>;
+  onTurbineClick: (turbineId: string) => void;
 }
 
-function TurbineOverview({ turbines }: TurbineOverviewProps) {
+function TurbineOverview({ turbines, expandedTurbines, onTurbineClick }: TurbineOverviewProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "operational": return "bg-green-100 text-green-800 border-green-200";
@@ -222,34 +224,53 @@ function TurbineOverview({ turbines }: TurbineOverviewProps) {
 
   return (
     <div className="space-y-4">
-      {turbines.map((turbine) => (
-        <Card key={turbine.id} className="hover:shadow-md transition-shadow">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {getStatusIcon(turbine.status)}
-                <div>
-                  <h3 className="font-semibold">{turbine.name}</h3>
-                  <p className="text-sm text-gray-600">{turbine.site}</p>
+      {turbines.map((turbine) => {
+        const isExpanded = expandedTurbines.has(turbine.id);
+        
+        return (
+          <Card key={turbine.id} className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div 
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() => onTurbineClick(turbine.id)}
+              >
+                <div className="flex items-center gap-3">
+                  {getStatusIcon(turbine.status)}
+                  <div>
+                    <h3 className="font-semibold">{turbine.name}</h3>
+                    <p className="text-sm text-gray-600">{turbine.site}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-right text-sm">
+                    <div className="text-gray-600">Last Maintenance</div>
+                    <div className="font-medium">{turbine.lastMaintenance}</div>
+                  </div>
+                  <div className="text-right text-sm">
+                    <div className="text-gray-600">Next Maintenance</div>
+                    <div className="font-medium">{turbine.nextMaintenance}</div>
+                  </div>
+                  <Badge className={`${getStatusColor(turbine.status)} border`}>
+                    {turbine.status}
+                  </Badge>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right text-sm">
-                  <div className="text-gray-600">Last Maintenance</div>
-                  <div className="font-medium">{turbine.lastMaintenance}</div>
+              
+              {/* Expanded Content */}
+              {isExpanded && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <h4 className="font-semibold text-blue-800 mb-2">Expanded</h4>
+                    <p className="text-blue-700 text-sm">
+                      This turbine section has been expanded. Additional details and controls would be displayed here.
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right text-sm">
-                  <div className="text-gray-600">Next Maintenance</div>
-                  <div className="font-medium">{turbine.nextMaintenance}</div>
-                </div>
-                <Badge className={`${getStatusColor(turbine.status)} border`}>
-                  {turbine.status}
-                </Badge>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }
@@ -258,6 +279,7 @@ export default function SitesAndTurbinesPage() {
   const [viewMode, setViewMode] = React.useState<ViewMode>("sites");
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [expandedTurbines, setExpandedTurbines] = React.useState<Set<string>>(new Set());
 
   // Flatten turbines for turbine view
   const allTurbines = React.useMemo(() => {
@@ -294,8 +316,16 @@ export default function SitesAndTurbinesPage() {
   }, [allTurbines, searchQuery, statusFilter]);
 
   const handleTurbineClick = (turbineId: string) => {
-    // Navigate to turbine details or matrix view
-    console.log("Navigate to turbine:", turbineId);
+    // Toggle turbine expansion
+    setExpandedTurbines(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(turbineId)) {
+        newSet.delete(turbineId);
+      } else {
+        newSet.add(turbineId);
+      }
+      return newSet;
+    });
   };
 
   return (
@@ -379,7 +409,11 @@ export default function SitesAndTurbinesPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">All Turbines ({filteredTurbines.length})</h2>
           </div>
-          <TurbineOverview turbines={filteredTurbines} />
+          <TurbineOverview 
+            turbines={filteredTurbines} 
+            expandedTurbines={expandedTurbines}
+            onTurbineClick={handleTurbineClick}
+          />
         </div>
       )}
 
