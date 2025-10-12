@@ -55,6 +55,34 @@ export default function SettingsPage() {
         selectedPosition: ""
     })
 
+    // State for event form
+    const [eventForm, setEventForm] = useState({
+        type: "outage" as "outage" | "repair",
+        // Outage form fields
+        turbine: "",
+        eventName: "",
+        date: "",
+        hours: 0,
+        target: 0,
+        intFh: 0,
+        starts: 0,
+        trips: 0,
+        intFh2: 0,
+        intTrips: 0,
+        notes: "",
+        setIn: [] as string[],
+        setOut: [] as string[]
+    })
+
+    // State for set in/out assignment forms
+    const [setInAssignmentForm, setSetInAssignmentForm] = useState({
+        selectedComponent: ""
+    })
+
+    const [setOutAssignmentForm, setSetOutAssignmentForm] = useState({
+        selectedComponent: ""
+    })
+
     // Available components from mock data
     const availableComponents = [
         "Comb Liner",
@@ -62,7 +90,10 @@ export default function SettingsPage() {
         "S1N",
         "S2N",
         "Rotor",
-        "S3S"
+        "S3S",
+        "Liner Caps",
+        "Comb Liners",
+        "S3N"
     ]
 
     // Available positions (you can customize this based on your needs)
@@ -106,6 +137,15 @@ export default function SettingsPage() {
         "Generator Overhaul",
         "Auxiliary System Check",
         "Emergency Repair"
+    ]
+
+    // Available turbines
+    const availableTurbines = [
+        "Turbine A",
+        "Turbine B", 
+        "Turbine C",
+        "Turbine D",
+        "Turbine E"
     ]
 
     const handleColorChange = (status: keyof typeof statusColors, color: string) => {
@@ -218,6 +258,101 @@ export default function SettingsPage() {
         setPieceAssignmentForm({
             selectedPiece: "",
             selectedPosition: ""
+        })
+        setOpenDialog(null)
+    }
+
+    const handleEventFormChange = (field: string, value: string | number) => {
+        setEventForm(prev => ({
+            ...prev,
+            [field]: value
+        }))
+    }
+
+    const handleAddSetInComponent = () => {
+        if (setInAssignmentForm.selectedComponent) {
+            setEventForm(prev => ({
+                ...prev,
+                setIn: [...prev.setIn, setInAssignmentForm.selectedComponent]
+            }))
+            setSetInAssignmentForm({
+                selectedComponent: ""
+            })
+        }
+    }
+
+    const handleRemoveSetInComponent = (component: string) => {
+        setEventForm(prev => ({
+            ...prev,
+            setIn: prev.setIn.filter(item => item !== component)
+        }))
+    }
+
+    const handleAddSetOutComponent = () => {
+        if (setOutAssignmentForm.selectedComponent) {
+            setEventForm(prev => ({
+                ...prev,
+                setOut: [...prev.setOut, setOutAssignmentForm.selectedComponent]
+            }))
+            setSetOutAssignmentForm({
+                selectedComponent: ""
+            })
+        }
+    }
+
+    const handleAddBothComponents = () => {
+        const setInComponent = setInAssignmentForm.selectedComponent
+        const setOutComponent = setOutAssignmentForm.selectedComponent
+        
+        if (setInComponent || setOutComponent) {
+            setEventForm(prev => ({
+                ...prev,
+                setIn: setInComponent ? [...prev.setIn, setInComponent] : prev.setIn,
+                setOut: setOutComponent ? [...prev.setOut, setOutComponent] : prev.setOut
+            }))
+            
+            setSetInAssignmentForm({
+                selectedComponent: ""
+            })
+            setSetOutAssignmentForm({
+                selectedComponent: ""
+            })
+        }
+    }
+
+    const handleRemoveSetOutComponent = (component: string) => {
+        setEventForm(prev => ({
+            ...prev,
+            setOut: prev.setOut.filter(item => item !== component)
+        }))
+    }
+
+    const handleEventFormSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        // Here you would typically save the event data to your backend/database
+        console.log("Event form submitted:", eventForm)
+        // Reset form
+        setEventForm({
+            type: "outage",
+            turbine: "",
+            eventName: "",
+            date: "",
+            hours: 0,
+            target: 0,
+            intFh: 0,
+            starts: 0,
+            trips: 0,
+            intFh2: 0,
+            intTrips: 0,
+            notes: "",
+            setIn: [],
+            setOut: []
+        })
+        setSetInAssignmentForm({
+            selectedComponent: ""
+        })
+        setSetOutAssignmentForm({
+            selectedComponent: ""
         })
         setOpenDialog(null)
     }
@@ -827,11 +962,347 @@ export default function SettingsPage() {
 
             {/* Dialog for Add an event */}
             <Dialog open={openDialog === 'event'} onOpenChange={() => setOpenDialog(null)}>
-                <DialogContent>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle>Add an event</DialogTitle>
+                        <DialogTitle>Add an Event</DialogTitle>
                     </DialogHeader>
-                    <p>Add an event</p>
+                    <form onSubmit={handleEventFormSubmit} className="space-y-6">
+                        {/* Event Type Toggle */}
+                        <div className="space-y-4">
+                            <Label className="text-lg font-semibold">Event Type</Label>
+                            <div className="flex gap-4">
+                                <Button
+                                    type="button"
+                                    variant={eventForm.type === "outage" ? "default" : "outline"}
+                                    onClick={() => handleEventFormChange('type', 'outage')}
+                                    className="flex-1"
+                                >
+                                    Outage
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant={eventForm.type === "repair" ? "default" : "outline"}
+                                    onClick={() => handleEventFormChange('type', 'repair')}
+                                    className="flex-1"
+                                >
+                                    Repair
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Form Content Based on Type */}
+                        <div className="min-h-[300px] p-6 border border-gray-200 rounded-lg bg-gray-50">
+                            {eventForm.type === "outage" ? (
+                                <div className="space-y-6">
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-4">Outage Form</h3>
+                                    
+                                    {/* Basic Information */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="turbine">Turbine</Label>
+                                            <Select value={eventForm.turbine} onValueChange={(value) => handleEventFormChange('turbine', value)}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select turbine" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {availableTurbines.map((turbine) => (
+                                                        <SelectItem key={turbine} value={turbine}>
+                                                            {turbine}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="eventName">Event Name</Label>
+                                            <Input
+                                                id="eventName"
+                                                value={eventForm.eventName}
+                                                onChange={(e) => handleEventFormChange('eventName', e.target.value)}
+                                                placeholder="Enter event name"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="date">Date</Label>
+                                            <Input
+                                                id="date"
+                                                type="date"
+                                                value={eventForm.date}
+                                                onChange={(e) => handleEventFormChange('date', e.target.value)}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="hours">Hours</Label>
+                                            <Input
+                                                id="hours"
+                                                type="number"
+                                                value={eventForm.hours}
+                                                onChange={(e) => handleEventFormChange('hours', parseInt(e.target.value) || 0)}
+                                                placeholder="0"
+                                                min="0"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="target">Target</Label>
+                                        <Input
+                                            id="target"
+                                            type="number"
+                                            value={eventForm.target}
+                                            onChange={(e) => handleEventFormChange('target', parseInt(e.target.value) || 0)}
+                                            placeholder="0"
+                                            min="0"
+                                        />
+                                    </div>
+
+                                    {/* Interval Fields */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="intFh">Int FH</Label>
+                                            <Input
+                                                id="intFh"
+                                                type="number"
+                                                value={eventForm.intFh}
+                                                onChange={(e) => handleEventFormChange('intFh', parseInt(e.target.value) || 0)}
+                                                placeholder="0"
+                                                min="0"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="starts">Starts</Label>
+                                            <Input
+                                                id="starts"
+                                                type="number"
+                                                value={eventForm.starts}
+                                                onChange={(e) => handleEventFormChange('starts', parseInt(e.target.value) || 0)}
+                                                placeholder="0"
+                                                min="0"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="trips">Trips</Label>
+                                            <Input
+                                                id="trips"
+                                                type="number"
+                                                value={eventForm.trips}
+                                                onChange={(e) => handleEventFormChange('trips', parseInt(e.target.value) || 0)}
+                                                placeholder="0"
+                                                min="0"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="intFh2">Int FH</Label>
+                                            <Input
+                                                id="intFh2"
+                                                type="number"
+                                                value={eventForm.intFh2}
+                                                onChange={(e) => handleEventFormChange('intFh2', parseInt(e.target.value) || 0)}
+                                                placeholder="0"
+                                                min="0"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="intTrips">Int Trips</Label>
+                                        <Input
+                                            id="intTrips"
+                                            type="number"
+                                            value={eventForm.intTrips}
+                                            onChange={(e) => handleEventFormChange('intTrips', parseInt(e.target.value) || 0)}
+                                            placeholder="0"
+                                            min="0"
+                                        />
+                                    </div>
+
+                                    {/* Set In/Set Out Components */}
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <h4 className="text-lg font-semibold">Component Replacement</h4>
+                                            <div className="text-sm text-gray-600">
+                                                Components being set in will replace components being set out
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Current Assignments */}
+                                        <div className="grid grid-cols-2 gap-6">
+                                            {/* Set In Components */}
+                                            <div className="space-y-3">
+                                                <h5 className="font-medium text-green-600 flex items-center gap-2">
+                                                    <span className="w-3 h-3 bg-green-500 rounded-full"></span>
+                                                    Set In (New Components)
+                                                </h5>
+                                                {eventForm.setIn.length > 0 ? (
+                                                    <div className="space-y-2">
+                                                        {eventForm.setIn.map((component, index) => (
+                                                            <div key={index} className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                                                                <span className="text-sm font-medium">{component}</span>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => handleRemoveSetInComponent(component)}
+                                                                    className="h-4 w-4 p-0 text-green-600 hover:text-green-800"
+                                                                >
+                                                                    ×
+                                                                </Button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-sm text-gray-400 italic">No components selected</div>
+                                                )}
+                                            </div>
+
+                                            {/* Set Out Components */}
+                                            <div className="space-y-3">
+                                                <h5 className="font-medium text-red-600 flex items-center gap-2">
+                                                    <span className="w-3 h-3 bg-red-500 rounded-full"></span>
+                                                    Set Out (Removed Components)
+                                                </h5>
+                                                {eventForm.setOut.length > 0 ? (
+                                                    <div className="space-y-2">
+                                                        {eventForm.setOut.map((component, index) => (
+                                                            <div key={index} className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+                                                                <span className="text-sm font-medium">{component}</span>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => handleRemoveSetOutComponent(component)}
+                                                                    className="h-4 w-4 p-0 text-red-600 hover:text-red-800"
+                                                                >
+                                                                    ×
+                                                                </Button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-sm text-gray-400 italic">No components selected</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Add Components */}
+                                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                            <div className="space-y-4">
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <Label>Select Component</Label>
+                                                        <Select 
+                                                            value={setInAssignmentForm.selectedComponent}
+                                                            onValueChange={(component) => {
+                                                                setSetInAssignmentForm(prev => ({
+                                                                    ...prev,
+                                                                    selectedComponent: component
+                                                                }))
+                                                            }}
+                                                        >
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Choose a component" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {availableComponents
+                                                                    .filter(component => 
+                                                                        !eventForm.setIn.includes(component) && 
+                                                                        !eventForm.setOut.includes(component)
+                                                                    )
+                                                                    .map((component) => (
+                                                                        <SelectItem key={component} value={component}>
+                                                                            {component}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Select Component</Label>
+                                                        <Select 
+                                                            value={setOutAssignmentForm.selectedComponent}
+                                                            onValueChange={(component) => {
+                                                                setSetOutAssignmentForm(prev => ({
+                                                                    ...prev,
+                                                                    selectedComponent: component
+                                                                }))
+                                                            }}
+                                                        >
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Choose a component" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {availableComponents
+                                                                    .filter(component => 
+                                                                        !eventForm.setIn.includes(component) && 
+                                                                        !eventForm.setOut.includes(component)
+                                                                    )
+                                                                    .map((component) => (
+                                                                        <SelectItem key={component} value={component}>
+                                                                            {component}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                </div>
+                                                <div className="flex justify-center">
+                                                    <Button
+                                                        type="button"
+                                                        onClick={handleAddBothComponents}
+                                                        disabled={!setInAssignmentForm.selectedComponent && !setOutAssignmentForm.selectedComponent}
+                                                        size="sm"
+                                                        className="bg-slate-600 hover:bg-slate-700"
+                                                    >
+                                                        Add Components
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Notes */}
+                                    <div className="space-y-2">
+                                        <Label htmlFor="notes">Notes</Label>
+                                        <textarea
+                                            id="notes"
+                                            value={eventForm.notes}
+                                            onChange={(e) => handleEventFormChange('notes', e.target.value)}
+                                            placeholder="Enter notes..."
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                                            rows={3}
+                                        />
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center">
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-4">Repair Form</h3>
+                                    <p className="text-gray-600">This is the repair form</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Form Actions */}
+                        <div className="flex justify-end gap-3 pt-4 border-t">
+                            <Button 
+                                type="button" 
+                                variant="outline" 
+                                onClick={() => setOpenDialog(null)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button type="submit">
+                                Add Event
+                            </Button>
+                        </div>
+                    </form>
                 </DialogContent>
             </Dialog>
 
