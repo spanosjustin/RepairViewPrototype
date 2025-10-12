@@ -1,4 +1,26 @@
+"use client"
+
+import { useState } from "react"
+import { ColorPicker } from "@/components/ColorPicker"
+
 export default function SettingsPage() {
+    // State for managing colors for each status
+    const [statusColors, setStatusColors] = useState({
+        good: "green",
+        monitor: "yellow", 
+        replaceSoon: "orange",
+        replaceNow: "red",
+        spare: "slate",
+        degraded: "gray"
+    })
+
+    const handleColorChange = (status: keyof typeof statusColors, color: string) => {
+        setStatusColors(prev => ({
+            ...prev,
+            [status]: color
+        }))
+    }
+
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-start py-12">
             <div className="w-full max-w-6xl space-y-8">
@@ -46,7 +68,11 @@ export default function SettingsPage() {
                                 <input type="number" placeholder="From" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
                                 <input type="number" placeholder="To" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
                             </div>
-                            <div className="w-6 h-6 bg-green-400 rounded-full border-2 border-green-500"></div>
+                            <ColorPicker 
+                                currentColor={statusColors.good}
+                                onColorChange={(color) => handleColorChange('good', color)}
+                                statusName="Good"
+                            />
                         </div>
 
                         {/* Monitor */}
@@ -64,7 +90,11 @@ export default function SettingsPage() {
                                 <input type="number" placeholder="From" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
                                 <input type="number" placeholder="To" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
                             </div>
-                            <div className="w-6 h-6 bg-yellow-400 rounded-full border-2 border-yellow-500"></div>
+                            <ColorPicker 
+                                currentColor={statusColors.monitor}
+                                onColorChange={(color) => handleColorChange('monitor', color)}
+                                statusName="Monitor"
+                            />
                         </div>
 
                         {/* Replace Soon */}
@@ -82,7 +112,11 @@ export default function SettingsPage() {
                                 <input type="number" placeholder="From" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
                                 <input type="number" placeholder="To" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
                             </div>
-                            <div className="w-6 h-6 bg-orange-400 rounded-full border-2 border-orange-500"></div>
+                            <ColorPicker 
+                                currentColor={statusColors.replaceSoon}
+                                onColorChange={(color) => handleColorChange('replaceSoon', color)}
+                                statusName="Replace Soon"
+                            />
                         </div>
 
                         {/* Replace Now */}
@@ -100,7 +134,11 @@ export default function SettingsPage() {
                                 <input type="number" placeholder="From" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
                                 <input type="number" placeholder="To" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
                             </div>
-                            <div className="w-6 h-6 bg-red-400 rounded-full border-2 border-red-500"></div>
+                            <ColorPicker 
+                                currentColor={statusColors.replaceNow}
+                                onColorChange={(color) => handleColorChange('replaceNow', color)}
+                                statusName="Replace Now"
+                            />
                         </div>
 
                         {/* Separator line */}
@@ -112,7 +150,11 @@ export default function SettingsPage() {
                             <div></div>
                             <div></div>
                             <div></div>
-                            <div className="w-6 h-6 bg-slate-300 rounded-full border-2 border-slate-400"></div>
+                            <ColorPicker 
+                                currentColor={statusColors.spare}
+                                onColorChange={(color) => handleColorChange('spare', color)}
+                                statusName="Spare"
+                            />
                         </div>
 
                         {/* Degraded */}
@@ -121,7 +163,11 @@ export default function SettingsPage() {
                             <div></div>
                             <div></div>
                             <div></div>
-                            <div className="w-6 h-6 bg-gray-300 rounded-full border-2 border-gray-400"></div>
+                            <ColorPicker 
+                                currentColor={statusColors.degraded}
+                                onColorChange={(color) => handleColorChange('degraded', color)}
+                                statusName="Degraded"
+                            />
                         </div>
                     </div>
                 </div>
