@@ -79,31 +79,56 @@ function TurbineBox({ turbine, onSelectPiece, onSelectComponent }: TurbineBoxPro
       {/* Components and Pieces Container */}
       <div className="flex justify-center">
         {turbine.components.map((component, index) => (
-          <div key={component.id} className="flex flex-col items-center mx-8 group">
+          <div key={component.id} className="flex flex-col items-center mx-8 group relative">
+            {/* Background highlight for the entire column */}
+            <div className="absolute inset-0 bg-blue-50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 -mx-4 -my-2 px-4 py-2"></div>
+            
             {/* Component Box */}
             <div 
-              className="bg-gray-200 transform -skew-x-12 rounded px-4 py-3 min-w-[100px] text-center cursor-pointer transition-colors mb-6 group-hover:bg-blue-200"
+              className="bg-gray-200 transform -skew-x-12 rounded px-4 py-3 min-w-[100px] text-center cursor-pointer hover:bg-gray-300 transition-colors mb-6 relative z-10"
               onClick={() => onSelectComponent?.(component.name, component.pieces.map(p => p.item))}
             >
-              <div className="font-medium text-gray-800 text-sm transform skew-x-12 group-hover:text-blue-800 transition-colors">{component.name}</div>
+              <div className="font-medium text-gray-800 text-sm transform skew-x-12">{component.name}</div>
             </div>
 
             {/* Pieces under this component */}
-            <div className="flex flex-col items-center space-y-2">
-              {component.pieces.map((piece) => (
-                <div
-                  key={piece.id}
-                  className="bg-gray-200 rounded-full px-4 py-2 min-w-[80px] text-center cursor-pointer transition-colors group-hover:bg-blue-200"
-                  onClick={() => onSelectPiece?.(piece.item)}
-                >
-                  <div className="text-xs font-medium text-gray-800 group-hover:text-blue-800 transition-colors">
-                    {piece.item.sn}
+            <div className="flex flex-col items-center space-y-2 relative z-10">
+              {component.pieces.map((piece) => {
+                // Get status-based colors
+                const getStatusColors = (status: string) => {
+                  switch (status) {
+                    case "OK":
+                      return "bg-green-100 text-green-800 hover:bg-green-200";
+                    case "Monitor":
+                      return "bg-yellow-100 text-yellow-800 hover:bg-yellow-200";
+                    case "Replace Soon":
+                      return "bg-orange-100 text-orange-800 hover:bg-orange-200";
+                    case "Replace Now":
+                      return "bg-red-100 text-red-800 hover:bg-red-200";
+                    case "Spare":
+                      return "bg-blue-100 text-blue-800 hover:bg-blue-200";
+                    case "Unknown":
+                      return "bg-gray-100 text-gray-800 hover:bg-gray-200";
+                    default:
+                      return "bg-gray-200 text-gray-800 hover:bg-gray-300";
+                  }
+                };
+
+                return (
+                  <div
+                    key={piece.id}
+                    className={`rounded-full px-4 py-2 min-w-[80px] text-center cursor-pointer transition-colors ${getStatusColors(piece.item.status)}`}
+                    onClick={() => onSelectPiece?.(piece.item)}
+                  >
+                    <div className="text-xs font-medium">
+                      {piece.item.sn}
+                    </div>
+                    <div className="text-xs opacity-75">
+                      {piece.item.pn}
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-600 group-hover:text-blue-600 transition-colors">
-                    {piece.item.pn}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}
