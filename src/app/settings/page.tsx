@@ -38,6 +38,24 @@ export default function SettingsPage() {
         notes: ""
     })
 
+    // State for edit piece form
+    const [editPieceForm, setEditPieceForm] = useState({
+        id: "",
+        sn: "",
+        pn: "",
+        component: "",
+        position: "",
+        status: "OK" as "OK" | "Monitor" | "Replace Soon" | "Replace Now" | "Spare" | "Degraded" | "Unknown",
+        state: "In Service" as "In Service" | "Out of Service" | "Standby" | "Repair" | "On Order",
+        hours: 0,
+        starts: 0,
+        trips: 0,
+        repairJob: "",
+        repairDetails: "",
+        conditionDetails: "",
+        notes: ""
+    })
+
     // State for component form
     const [componentForm, setComponentForm] = useState({
         name: "",
@@ -183,6 +201,58 @@ export default function SettingsPage() {
         "Emergency Repair"
     ]
 
+    // Available repair jobs with associated details
+    const availableRepairJobs = [
+        {
+            id: "RJ-001",
+            name: "Hot Section Inspection",
+            repairDetails: "Complete hot section inspection including combustor liner, transition piece, and first stage nozzle. Check for cracks, erosion, and thermal fatigue. Replace any damaged components as needed.",
+            conditionDetails: "Combustor liner shows minor erosion on inner surface. Transition piece has small crack at weld joint. First stage nozzle vanes are in good condition with minimal wear."
+        },
+        {
+            id: "RJ-002", 
+            name: "Combustor Overhaul",
+            repairDetails: "Full combustor overhaul including liner replacement, fuel nozzle cleaning and calibration, and igniter system maintenance. Rebuild fuel distribution system and test all components.",
+            conditionDetails: "Combustor liner severely eroded with multiple burn-through points. Fuel nozzles partially clogged with carbon deposits. Igniter system functioning but showing signs of wear."
+        },
+        {
+            id: "RJ-003",
+            name: "Compressor Cleaning",
+            repairDetails: "Online compressor cleaning using detergent and water wash. Clean inlet filters and check compressor blade condition. Perform vibration analysis and balance check.",
+            conditionDetails: "Compressor blades heavily fouled with dirt and oil deposits. Inlet filters 80% clogged. Vibration levels elevated but within acceptable limits. No blade damage detected."
+        },
+        {
+            id: "RJ-004",
+            name: "Turbine Blade Replacement",
+            repairDetails: "Replace all first and second stage turbine blades. Check blade root condition and perform dimensional inspection. Balance rotor assembly and perform overspeed test.",
+            conditionDetails: "First stage blades show severe erosion and tip rub. Second stage blades have stress cracks at root. Blade root condition acceptable. Rotor balance within specifications."
+        },
+        {
+            id: "RJ-005",
+            name: "Fuel System Maintenance",
+            repairDetails: "Complete fuel system overhaul including pump rebuild, valve replacement, and line cleaning. Calibrate fuel flow meters and test emergency shutdown systems.",
+            conditionDetails: "Fuel pump showing reduced efficiency and increased vibration. Control valves sticking intermittently. Fuel lines have minor corrosion. Emergency systems functional."
+        },
+        {
+            id: "RJ-006",
+            name: "Generator Overhaul",
+            repairDetails: "Generator stator and rotor inspection. Replace worn bearings and check winding insulation. Perform electrical tests and recalibrate protection systems.",
+            conditionDetails: "Generator bearings showing excessive wear and increased temperature. Stator windings in good condition with minor insulation degradation. Rotor balance acceptable."
+        },
+        {
+            id: "RJ-007",
+            name: "Auxiliary System Check",
+            repairDetails: "Comprehensive auxiliary system inspection including lube oil system, cooling system, and control systems. Replace filters and check all sensors and actuators.",
+            conditionDetails: "Lube oil system functioning normally with clean oil. Cooling system has minor leaks at connections. Control system sensors need calibration. All actuators operational."
+        },
+        {
+            id: "RJ-008",
+            name: "Emergency Repair",
+            repairDetails: "Emergency repair due to unexpected failure. Immediate assessment and temporary fix to restore operation. Schedule follow-up comprehensive repair.",
+            conditionDetails: "Critical component failure requiring immediate attention. System operating in degraded mode. Safety systems activated. Temporary repair implemented to maintain operation."
+        }
+    ]
+
     // Available turbines
     const availableTurbines = [
         "Turbine A",
@@ -217,6 +287,25 @@ export default function SettingsPage() {
                 selectedPosition: ""
             })
         }
+        // Reset edit piece form when opening edit piece dialog
+        if (cardType === 'editPiece') {
+            setEditPieceForm({
+                id: "",
+                sn: "",
+                pn: "",
+                component: "",
+                position: "",
+                status: "OK",
+                state: "In Service",
+                hours: 0,
+                starts: 0,
+                trips: 0,
+                repairJob: "",
+                repairDetails: "",
+                conditionDetails: "",
+                notes: ""
+            })
+        }
     }
 
     const handlePieceFormChange = (field: string, value: string | number) => {
@@ -246,6 +335,72 @@ export default function SettingsPage() {
             notes: ""
         })
         setOpenDialog(null)
+    }
+
+    const handleEditPieceFormChange = (field: string, value: string | number) => {
+        setEditPieceForm(prev => ({
+            ...prev,
+            [field]: value
+        }))
+    }
+
+    const handleEditPieceFormSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        // Here you would typically update the piece data in your backend/database
+        console.log("Edit piece form submitted:", editPieceForm)
+        // Reset form
+        setEditPieceForm({
+            id: "",
+            sn: "",
+            pn: "",
+            component: "",
+            position: "",
+            status: "OK",
+            state: "In Service",
+            hours: 0,
+            starts: 0,
+            trips: 0,
+            repairJob: "",
+            repairDetails: "",
+            conditionDetails: "",
+            notes: ""
+        })
+        setOpenDialog(null)
+    }
+
+    const handleSelectPieceToEdit = (pieceId: string) => {
+        // Find the piece in available pieces and populate the form
+        const piece = availablePieces.find(p => p.id === pieceId)
+        if (piece) {
+            setEditPieceForm({
+                id: piece.id,
+                sn: piece.id, // Using ID as SN for demo
+                pn: piece.pn,
+                component: piece.name,
+                position: "Position 1", // Default position
+                status: "OK",
+                state: "In Service",
+                hours: 0,
+                starts: 0,
+                trips: 0,
+                repairJob: "",
+                repairDetails: "",
+                conditionDetails: "",
+                notes: ""
+            })
+        }
+    }
+
+    const handleRepairJobChange = (repairJobId: string) => {
+        const selectedRepairJob = availableRepairJobs.find(job => job.id === repairJobId)
+        if (selectedRepairJob) {
+            setEditPieceForm(prev => ({
+                ...prev,
+                repairJob: repairJobId,
+                repairDetails: selectedRepairJob.repairDetails,
+                conditionDetails: selectedRepairJob.conditionDetails
+            }))
+        }
     }
 
     const handleComponentFormChange = (field: string, value: string | number) => {
@@ -558,6 +713,34 @@ export default function SettingsPage() {
                         onClick={() => handleCardClick('turbine')}
                     >
                         Add a Turbine or Site
+                    </div>
+                </div>
+
+                {/* Edit boxes */}
+                <div className="flex gap-6">
+                    <div 
+                        className="flex-1 h-32 bg-blue-100 border border-blue-200 flex items-center justify-center text-lg font-bold text-blue-700 rounded-lg shadow-sm cursor-pointer hover:bg-blue-200 transition-colors"
+                        onClick={() => handleCardClick('editPiece')}
+                    >
+                        Edit a piece
+                    </div>
+                    <div 
+                        className="flex-1 h-32 bg-green-100 border border-green-200 flex items-center justify-center text-lg font-bold text-green-700 rounded-lg shadow-sm cursor-pointer hover:bg-green-200 transition-colors"
+                        onClick={() => handleCardClick('editComponent')}
+                    >
+                        Edit a Component
+                    </div>
+                    <div 
+                        className="flex-1 h-32 bg-yellow-100 border border-yellow-200 flex items-center justify-center text-lg font-bold text-yellow-700 rounded-lg shadow-sm cursor-pointer hover:bg-yellow-200 transition-colors"
+                        onClick={() => handleCardClick('editEvent')}
+                    >
+                        Edit an event
+                    </div>
+                    <div 
+                        className="flex-1 h-32 bg-purple-100 border border-purple-200 flex items-center justify-center text-lg font-bold text-purple-700 rounded-lg shadow-sm cursor-pointer hover:bg-purple-200 transition-colors"
+                        onClick={() => handleCardClick('editTurbine')}
+                    >
+                        Edit a Turbine or Site
                     </div>
                 </div>
 
@@ -894,6 +1077,245 @@ export default function SettingsPage() {
                             </Button>
                             <Button type="submit">
                                 Add Piece
+                            </Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Dialog for Edit a piece */}
+            <Dialog open={openDialog === 'editPiece'} onOpenChange={() => setOpenDialog(null)}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit a Piece</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleEditPieceFormSubmit} className="space-y-6">
+                        {/* Piece Selection */}
+                        <div className="space-y-2">
+                            <Label htmlFor="selectPiece">Select Piece to Edit</Label>
+                            <Select 
+                                value={editPieceForm.id} 
+                                onValueChange={(pieceId) => handleSelectPieceToEdit(pieceId)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Choose a piece to edit" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {availablePieces.map((piece) => (
+                                        <SelectItem key={piece.id} value={piece.id}>
+                                            {piece.name} ({piece.pn}) - {piece.id}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Basic Information */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="editSn">Serial Number (SN)</Label>
+                                <Input
+                                    id="editSn"
+                                    value={editPieceForm.sn}
+                                    onChange={(e) => handleEditPieceFormChange('sn', e.target.value)}
+                                    placeholder="Enter serial number"
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editPn">Part Number (PN)</Label>
+                                <Input
+                                    id="editPn"
+                                    value={editPieceForm.pn}
+                                    onChange={(e) => handleEditPieceFormChange('pn', e.target.value)}
+                                    placeholder="Enter part number"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        {/* Component and Position */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="editComponent">Component</Label>
+                                <Select value={editPieceForm.component} onValueChange={(value) => handleEditPieceFormChange('component', value)}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select component" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableComponents.map((component) => (
+                                            <SelectItem key={component} value={component}>
+                                                {component}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editPosition">Position</Label>
+                                <Select 
+                                    value={editPieceForm.position} 
+                                    onValueChange={(value) => {
+                                        handleEditPieceFormChange('position', value)
+                                        handleEditPieceFormChange('state', 'In Service')
+                                    }}
+                                    disabled={!editPieceForm.component}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select position" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availablePositions.map((position) => (
+                                            <SelectItem key={position} value={position}>
+                                                {position}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        {/* Status and State */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="editStatus">Status</Label>
+                                <Select value={editPieceForm.status} onValueChange={(value) => handleEditPieceFormChange('status', value)}>
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="OK">OK</SelectItem>
+                                        <SelectItem value="Monitor">Monitor</SelectItem>
+                                        <SelectItem value="Replace Soon">Replace Soon</SelectItem>
+                                        <SelectItem value="Replace Now">Replace Now</SelectItem>
+                                        <SelectItem value="Spare">Spare</SelectItem>
+                                        <SelectItem value="Degraded">Degraded</SelectItem>
+                                        <SelectItem value="Unknown">Unknown</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editState">State</Label>
+                                <Select value={editPieceForm.state} onValueChange={(value) => handleEditPieceFormChange('state', value)}>
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="In Service">In Service</SelectItem>
+                                        <SelectItem value="Out of Service">Out of Service</SelectItem>
+                                        <SelectItem value="Standby">Standby</SelectItem>
+                                        <SelectItem value="Repair">Repair</SelectItem>
+                                        <SelectItem value="On Order">On Order</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        {/* Hours, Starts, Trips */}
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="editHours">Hours</Label>
+                                <Input
+                                    id="editHours"
+                                    type="number"
+                                    value={editPieceForm.hours}
+                                    onChange={(e) => handleEditPieceFormChange('hours', parseInt(e.target.value) || 0)}
+                                    placeholder="0"
+                                    min="0"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editStarts">Starts</Label>
+                                <Input
+                                    id="editStarts"
+                                    type="number"
+                                    value={editPieceForm.starts}
+                                    onChange={(e) => handleEditPieceFormChange('starts', parseInt(e.target.value) || 0)}
+                                    placeholder="0"
+                                    min="0"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editTrips">Trips</Label>
+                                <Input
+                                    id="editTrips"
+                                    type="number"
+                                    value={editPieceForm.trips}
+                                    onChange={(e) => handleEditPieceFormChange('trips', parseInt(e.target.value) || 0)}
+                                    placeholder="0"
+                                    min="0"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Repair Job Selection */}
+                        <div className="space-y-2">
+                            <Label htmlFor="editRepairJob">Repair Job</Label>
+                            <Select 
+                                value={editPieceForm.repairJob} 
+                                onValueChange={handleRepairJobChange}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a repair job" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {availableRepairJobs.map((job) => (
+                                        <SelectItem key={job.id} value={job.id}>
+                                            {job.name} ({job.id})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Text Areas for Details */}
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="editRepairDetails">Repair Details</Label>
+                                <textarea
+                                    id="editRepairDetails"
+                                    value={editPieceForm.repairDetails}
+                                    onChange={(e) => handleEditPieceFormChange('repairDetails', e.target.value)}
+                                    placeholder="Enter repair details..."
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                                    rows={3}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editConditionDetails">Condition Details</Label>
+                                <textarea
+                                    id="editConditionDetails"
+                                    value={editPieceForm.conditionDetails}
+                                    onChange={(e) => handleEditPieceFormChange('conditionDetails', e.target.value)}
+                                    placeholder="Enter condition details..."
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                                    rows={3}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editNotes">Notes</Label>
+                                <textarea
+                                    id="editNotes"
+                                    value={editPieceForm.notes}
+                                    onChange={(e) => handleEditPieceFormChange('notes', e.target.value)}
+                                    placeholder="Enter additional notes..."
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                                    rows={3}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Form Actions */}
+                        <div className="flex justify-end gap-3 pt-4 border-t">
+                            <Button 
+                                type="button" 
+                                variant="outline" 
+                                onClick={() => setOpenDialog(null)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={!editPieceForm.id}>
+                                Update Piece
                             </Button>
                         </div>
                     </form>
