@@ -24,8 +24,10 @@ import {
 // ← import your card
 import PieceInfoCard from "@/components/inventory/PieceInfoCard";
 import ComponentInfoCard from "@/components/inventory/ComponentInfoCard";
+import TreeView from "@/components/TreeView";
+import VisualTreeView from "@/components/VisualTreeView";
 
-type ViewMode = "list" | "tree";
+type ViewMode = "list" | "turbine" | "tree";
 type EntityKind = "components" | "pieces";
 
 type ComponentRow = {
@@ -96,6 +98,7 @@ export default function InventoryListPage() {
               </SelectTrigger>
               <SelectContent align="end">
                 <SelectItem value="list">List</SelectItem>
+                <SelectItem value="turbine">Turbine</SelectItem>
                 <SelectItem value="tree">Tree</SelectItem>
               </SelectContent>
             </Select>
@@ -112,19 +115,40 @@ export default function InventoryListPage() {
           </div>
         </header>
 
-        {/* Matrix */}
-        {entityKind === "pieces" ? (
-          <InventoryMatrix
-            dataset="pieces"
-            items={MOCK_INVENTORY}
-            onSelectPiece={openPieceCard} // <-- wire click to open card
-          />
+        {/* Content based on view mode */}
+        {viewMode === "list" ? (
+          /* Matrix/Table View */
+          entityKind === "pieces" ? (
+            <InventoryMatrix
+              dataset="pieces"
+              items={MOCK_INVENTORY}
+              onSelectPiece={openPieceCard} // <-- wire click to open card
+            />
+          ) : (
+            <InventoryMatrix
+              dataset="components"
+              componentStats={componentStats}
+              onSelectComponent={openComponentCard}
+            />
+          )
+        ) : viewMode === "turbine" ? (
+          /* Turbine View (Tree View) */
+          <div className="p-4">
+            <TreeView
+              items={MOCK_INVENTORY}
+              onSelectPiece={openPieceCard}
+              onSelectComponent={openComponentCard}
+            />
+          </div>
         ) : (
-          <InventoryMatrix
-            dataset="components"
-            componentStats={componentStats}
-            onSelectComponent={openComponentCard}
-          />
+          /* Visual Tree View */
+          <div className="p-4">
+            <VisualTreeView
+              items={MOCK_INVENTORY}
+              onSelectPiece={openPieceCard}
+              onSelectComponent={openComponentCard}
+            />
+          </div>
         )}
       </div>
 
