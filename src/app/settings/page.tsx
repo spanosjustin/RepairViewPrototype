@@ -38,6 +38,23 @@ export default function SettingsPage() {
         notes: ""
     })
 
+    // State for component form
+    const [componentForm, setComponentForm] = useState({
+        name: "",
+        type: "" as "fuel" | "comb" | "turbine" | "compressor" | "generator" | "auxiliary",
+        intervalFH: 0,
+        intervalFS: 0,
+        intervalTrips: 0,
+        assignedPieces: [] as Array<{pieceId: string, position: string}>,
+        pastEvents: [] as string[]
+    })
+
+    // State for piece assignment form
+    const [pieceAssignmentForm, setPieceAssignmentForm] = useState({
+        selectedPiece: "",
+        selectedPosition: ""
+    })
+
     // Available components from mock data
     const availableComponents = [
         "Comb Liner",
@@ -57,6 +74,40 @@ export default function SettingsPage() {
         "Position 5"
     ]
 
+    // Available component types
+    const availableComponentTypes = [
+        "fuel",
+        "comb", 
+        "turbine",
+        "compressor",
+        "generator",
+        "auxiliary"
+    ]
+
+    // Available pieces from mock data (for component assignment)
+    const availablePieces = [
+        { id: "SN-00123", name: "Liner Caps", pn: "PN-AX45" },
+        { id: "SN-00456", name: "Comb Liners", pn: "PN-QZ19" },
+        { id: "SN-00789", name: "Tran PRC", pn: "PN-TX88" },
+        { id: "SN-01011", name: "S1N", pn: "PN-S1N1" },
+        { id: "SN-01314", name: "S2N", pn: "PN-S2N2" },
+        { id: "SN-01617", name: "Rotor", pn: "PN-RTR1" },
+        { id: "SN-01920", name: "Spare Liner", pn: "PN-SPR1" },
+        { id: "SN-02122", name: "S3S", pn: "PN-UNK1" }
+    ]
+
+    // Available past events
+    const availablePastEvents = [
+        "Hot Section Inspection",
+        "Combustor Overhaul", 
+        "Compressor Cleaning",
+        "Turbine Blade Replacement",
+        "Fuel System Maintenance",
+        "Generator Overhaul",
+        "Auxiliary System Check",
+        "Emergency Repair"
+    ]
+
     const handleColorChange = (status: keyof typeof statusColors, color: string) => {
         setStatusColors(prev => ({
             ...prev,
@@ -66,6 +117,13 @@ export default function SettingsPage() {
 
     const handleCardClick = (cardType: string) => {
         setOpenDialog(cardType)
+        // Reset piece assignment form when opening component dialog
+        if (cardType === 'component') {
+            setPieceAssignmentForm({
+                selectedPiece: "",
+                selectedPosition: ""
+            })
+        }
     }
 
     const handlePieceFormChange = (field: string, value: string | number) => {
@@ -93,6 +151,73 @@ export default function SettingsPage() {
             repairDetails: "",
             conditionDetails: "",
             notes: ""
+        })
+        setOpenDialog(null)
+    }
+
+    const handleComponentFormChange = (field: string, value: string | number) => {
+        setComponentForm(prev => ({
+            ...prev,
+            [field]: value
+        }))
+    }
+
+    const handleAddPieceToComponent = (pieceId: string, position: string) => {
+        setComponentForm(prev => ({
+            ...prev,
+            assignedPieces: [...prev.assignedPieces, { pieceId, position }]
+        }))
+        // Reset the assignment form
+        setPieceAssignmentForm({
+            selectedPiece: "",
+            selectedPosition: ""
+        })
+    }
+
+    const handleAddPieceAssignment = () => {
+        if (pieceAssignmentForm.selectedPiece && pieceAssignmentForm.selectedPosition) {
+            handleAddPieceToComponent(pieceAssignmentForm.selectedPiece, pieceAssignmentForm.selectedPosition)
+        }
+    }
+
+    const handleRemovePieceFromComponent = (pieceId: string) => {
+        setComponentForm(prev => ({
+            ...prev,
+            assignedPieces: prev.assignedPieces.filter(p => p.pieceId !== pieceId)
+        }))
+    }
+
+    const handleAddPastEvent = (eventName: string) => {
+        setComponentForm(prev => ({
+            ...prev,
+            pastEvents: [...prev.pastEvents, eventName]
+        }))
+    }
+
+    const handleRemovePastEvent = (eventName: string) => {
+        setComponentForm(prev => ({
+            ...prev,
+            pastEvents: prev.pastEvents.filter(e => e !== eventName)
+        }))
+    }
+
+    const handleComponentFormSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        // Here you would typically save the component data to your backend/database
+        console.log("Component form submitted:", componentForm)
+        // Reset forms
+        setComponentForm({
+            name: "",
+            type: "" as "fuel" | "comb" | "turbine" | "compressor" | "generator" | "auxiliary",
+            intervalFH: 0,
+            intervalFS: 0,
+            intervalTrips: 0,
+            assignedPieces: [],
+            pastEvents: []
+        })
+        setPieceAssignmentForm({
+            selectedPiece: "",
+            selectedPosition: ""
         })
         setOpenDialog(null)
     }
@@ -469,11 +594,234 @@ export default function SettingsPage() {
 
             {/* Dialog for Add a Component */}
             <Dialog open={openDialog === 'component'} onOpenChange={() => setOpenDialog(null)}>
-                <DialogContent>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Add a Component</DialogTitle>
                     </DialogHeader>
-                    <p>Add a Component</p>
+                    <form onSubmit={handleComponentFormSubmit} className="space-y-6">
+                        {/* Basic Information */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="componentName">Component Name</Label>
+                                <Input
+                                    id="componentName"
+                                    value={componentForm.name}
+                                    onChange={(e) => handleComponentFormChange('name', e.target.value)}
+                                    placeholder="Enter component name"
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="componentType">Component Type</Label>
+                                <Select value={componentForm.type} onValueChange={(value) => handleComponentFormChange('type', value)}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select component type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableComponentTypes.map((type) => (
+                                            <SelectItem key={type} value={type}>
+                                                {type.charAt(0).toUpperCase() + type.slice(1)}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        {/* Interval Fields */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-semibold">Intervals</h3>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="intervalFH">Interval FH (Flight Hours)</Label>
+                                    <Input
+                                        id="intervalFH"
+                                        type="number"
+                                        value={componentForm.intervalFH}
+                                        onChange={(e) => handleComponentFormChange('intervalFH', parseInt(e.target.value) || 0)}
+                                        placeholder="0"
+                                        min="0"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="intervalFS">Interval FS (Flight Starts)</Label>
+                                    <Input
+                                        id="intervalFS"
+                                        type="number"
+                                        value={componentForm.intervalFS}
+                                        onChange={(e) => handleComponentFormChange('intervalFS', parseInt(e.target.value) || 0)}
+                                        placeholder="0"
+                                        min="0"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="intervalTrips">Interval Trips</Label>
+                                    <Input
+                                        id="intervalTrips"
+                                        type="number"
+                                        value={componentForm.intervalTrips}
+                                        onChange={(e) => handleComponentFormChange('intervalTrips', parseInt(e.target.value) || 0)}
+                                        placeholder="0"
+                                        min="0"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Piece Assignment */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-semibold">Assign Pieces to Positions</h3>
+                            <div className="space-y-3">
+                                {componentForm.assignedPieces.map((assignment, index) => {
+                                    const piece = availablePieces.find(p => p.id === assignment.pieceId)
+                                    return (
+                                        <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                                            <div className="flex-1">
+                                                <span className="font-medium">{piece?.name}</span>
+                                                <span className="text-gray-500 ml-2">({piece?.pn})</span>
+                                                <span className="text-blue-600 ml-2">→ {assignment.position}</span>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleRemovePieceFromComponent(assignment.pieceId)}
+                                            >
+                                                Remove
+                                            </Button>
+                                        </div>
+                                    )
+                                })}
+                                
+                                {/* Add new piece assignment */}
+                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                    <div className="space-y-3">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-2">
+                                                <Label>Select Piece</Label>
+                                                <Select 
+                                                    value={pieceAssignmentForm.selectedPiece}
+                                                    onValueChange={(pieceId) => {
+                                                        setPieceAssignmentForm(prev => ({
+                                                            ...prev,
+                                                            selectedPiece: pieceId
+                                                        }))
+                                                    }}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Choose a piece" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {availablePieces
+                                                            .filter(piece => !componentForm.assignedPieces.some(ap => ap.pieceId === piece.id))
+                                                            .map((piece) => (
+                                                                <SelectItem key={piece.id} value={piece.id}>
+                                                                    {piece.name} ({piece.pn})
+                                                                </SelectItem>
+                                                            ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Position</Label>
+                                                <Select 
+                                                    value={pieceAssignmentForm.selectedPosition}
+                                                    onValueChange={(position) => {
+                                                        setPieceAssignmentForm(prev => ({
+                                                            ...prev,
+                                                            selectedPosition: position
+                                                        }))
+                                                    }}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select position" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {availablePositions.map((position) => (
+                                                            <SelectItem key={position} value={position}>
+                                                                {position}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-end">
+                                            <Button
+                                                type="button"
+                                                onClick={handleAddPieceAssignment}
+                                                disabled={!pieceAssignmentForm.selectedPiece || !pieceAssignmentForm.selectedPosition}
+                                                size="sm"
+                                            >
+                                                Add Assignment
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Past Events */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-semibold">Past Events</h3>
+                            <div className="space-y-3">
+                                {componentForm.pastEvents.map((event, index) => (
+                                    <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                                        <div className="flex-1">
+                                            <span className="font-medium">{event}</span>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleRemovePastEvent(event)}
+                                        >
+                                            Remove
+                                        </Button>
+                                    </div>
+                                ))}
+                                
+                                {/* Add new past event */}
+                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                    <div className="space-y-2">
+                                        <Label>Add Past Event</Label>
+                                        <Select onValueChange={(eventName) => {
+                                            if (!componentForm.pastEvents.includes(eventName)) {
+                                                handleAddPastEvent(eventName)
+                                            }
+                                        }}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Choose a past event" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {availablePastEvents
+                                                    .filter(event => !componentForm.pastEvents.includes(event))
+                                                    .map((event) => (
+                                                        <SelectItem key={event} value={event}>
+                                                            {event}
+                                                        </SelectItem>
+                                                    ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Form Actions */}
+                        <div className="flex justify-end gap-3 pt-4 border-t">
+                            <Button 
+                                type="button" 
+                                variant="outline" 
+                                onClick={() => setOpenDialog(null)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button type="submit">
+                                Add Component
+                            </Button>
+                        </div>
+                    </form>
                 </DialogContent>
             </Dialog>
 
