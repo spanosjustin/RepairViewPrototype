@@ -71,7 +71,19 @@ export default function SettingsPage() {
         intTrips: 0,
         notes: "",
         setIn: [] as string[],
-        setOut: [] as string[]
+        setOut: [] as string[],
+        // Repair form fields
+        repairNumber: "",
+        repairComponent: "",
+        preEventTitle: "",
+        repairIntHours: 0,
+        repairIntFS: 0,
+        repairIntTrips: 0,
+        repairPieces: [] as Array<{
+            pieceId: string;
+            conditionDetails: string;
+            repairDetails: string;
+        }>
     })
 
     // State for set in/out assignment forms
@@ -81,6 +93,13 @@ export default function SettingsPage() {
 
     const [setOutAssignmentForm, setSetOutAssignmentForm] = useState({
         selectedComponent: ""
+    })
+
+    // State for repair piece assignment form
+    const [repairPieceForm, setRepairPieceForm] = useState({
+        selectedPiece: "",
+        conditionDetails: "",
+        repairDetails: ""
     })
 
     // Available components from mock data
@@ -327,6 +346,32 @@ export default function SettingsPage() {
         }))
     }
 
+    const handleAddRepairPiece = () => {
+        if (repairPieceForm.selectedPiece && repairPieceForm.conditionDetails && repairPieceForm.repairDetails) {
+            setEventForm(prev => ({
+                ...prev,
+                repairPieces: [...prev.repairPieces, {
+                    pieceId: repairPieceForm.selectedPiece,
+                    conditionDetails: repairPieceForm.conditionDetails,
+                    repairDetails: repairPieceForm.repairDetails
+                }]
+            }))
+            // Reset the repair piece form
+            setRepairPieceForm({
+                selectedPiece: "",
+                conditionDetails: "",
+                repairDetails: ""
+            })
+        }
+    }
+
+    const handleRemoveRepairPiece = (pieceId: string) => {
+        setEventForm(prev => ({
+            ...prev,
+            repairPieces: prev.repairPieces.filter(p => p.pieceId !== pieceId)
+        }))
+    }
+
     const handleEventFormSubmit = (e: React.FormEvent) => {
         e.preventDefault()
         // Here you would typically save the event data to your backend/database
@@ -346,13 +391,26 @@ export default function SettingsPage() {
             intTrips: 0,
             notes: "",
             setIn: [],
-            setOut: []
+            setOut: [],
+            // Reset repair fields
+            repairNumber: "",
+            repairComponent: "",
+            preEventTitle: "",
+            repairIntHours: 0,
+            repairIntFS: 0,
+            repairIntTrips: 0,
+            repairPieces: []
         })
         setSetInAssignmentForm({
             selectedComponent: ""
         })
         setSetOutAssignmentForm({
             selectedComponent: ""
+        })
+        setRepairPieceForm({
+            selectedPiece: "",
+            conditionDetails: "",
+            repairDetails: ""
         })
         setOpenDialog(null)
     }
@@ -1282,9 +1340,216 @@ export default function SettingsPage() {
                                     </div>
                                 </div>
                             ) : (
-                                <div className="text-center">
+                                <div className="space-y-6">
                                     <h3 className="text-xl font-semibold text-gray-700 mb-4">Repair Form</h3>
-                                    <p className="text-gray-600">This is the repair form</p>
+                                    
+                                    {/* Basic Information */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="repairNumber">Repair #</Label>
+                                            <Input
+                                                id="repairNumber"
+                                                value={eventForm.repairNumber}
+                                                onChange={(e) => handleEventFormChange('repairNumber', e.target.value)}
+                                                placeholder="Enter repair number"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="repairComponent">Component</Label>
+                                            <Select value={eventForm.repairComponent} onValueChange={(value) => handleEventFormChange('repairComponent', value)}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select component" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {availableComponents.map((component) => (
+                                                        <SelectItem key={component} value={component}>
+                                                            {component}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="preEventTitle">Pre-Event Title</Label>
+                                        <Input
+                                            id="preEventTitle"
+                                            value={eventForm.preEventTitle}
+                                            onChange={(e) => handleEventFormChange('preEventTitle', e.target.value)}
+                                            placeholder="Enter pre-event title"
+                                            required
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="repairDate">Date</Label>
+                                        <Input
+                                            id="repairDate"
+                                            type="date"
+                                            value={eventForm.date}
+                                            onChange={(e) => handleEventFormChange('date', e.target.value)}
+                                            required
+                                        />
+                                    </div>
+
+                                    {/* Interval Fields */}
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="repairIntHours">Int Hours</Label>
+                                            <Input
+                                                id="repairIntHours"
+                                                type="number"
+                                                value={eventForm.repairIntHours}
+                                                onChange={(e) => handleEventFormChange('repairIntHours', parseInt(e.target.value) || 0)}
+                                                placeholder="0"
+                                                min="0"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="repairIntFS">Int FS</Label>
+                                            <Input
+                                                id="repairIntFS"
+                                                type="number"
+                                                value={eventForm.repairIntFS}
+                                                onChange={(e) => handleEventFormChange('repairIntFS', parseInt(e.target.value) || 0)}
+                                                placeholder="0"
+                                                min="0"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="repairIntTrips">Int Trips</Label>
+                                            <Input
+                                                id="repairIntTrips"
+                                                type="number"
+                                                value={eventForm.repairIntTrips}
+                                                onChange={(e) => handleEventFormChange('repairIntTrips', parseInt(e.target.value) || 0)}
+                                                placeholder="0"
+                                                min="0"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Pieces Section */}
+                                    <div className="space-y-4">
+                                        <h4 className="text-lg font-semibold">Pieces</h4>
+                                        
+                                        {/* Current Pieces */}
+                                        <div className="space-y-3">
+                                            {eventForm.repairPieces.map((repairPiece, index) => {
+                                                const piece = availablePieces.find(p => p.id === repairPiece.pieceId)
+                                                return (
+                                                    <div key={index} className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <div className="flex-1">
+                                                                <h5 className="font-medium text-gray-900">
+                                                                    {piece?.name} ({piece?.pn}) - {piece?.id}
+                                                                </h5>
+                                                            </div>
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => handleRemoveRepairPiece(repairPiece.pieceId)}
+                                                                className="text-red-600 hover:text-red-800"
+                                                            >
+                                                                Remove
+                                                            </Button>
+                                                        </div>
+                                                        <div className="space-y-3">
+                                                            <div>
+                                                                <Label className="text-sm font-medium text-gray-700">Condition Details</Label>
+                                                                <div className="mt-1 p-2 bg-white border border-gray-300 rounded text-sm">
+                                                                    {repairPiece.conditionDetails}
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <Label className="text-sm font-medium text-gray-700">Repair Details</Label>
+                                                                <div className="mt-1 p-2 bg-white border border-gray-300 rounded text-sm">
+                                                                    {repairPiece.repairDetails}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                        
+                                        {/* Add New Piece */}
+                                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                            <h5 className="font-medium text-gray-700 mb-3">Add New Piece</h5>
+                                            <div className="space-y-4">
+                                                <div className="space-y-2">
+                                                    <Label>Select Piece</Label>
+                                                    <Select 
+                                                        value={repairPieceForm.selectedPiece}
+                                                        onValueChange={(pieceId) => {
+                                                            setRepairPieceForm(prev => ({
+                                                                ...prev,
+                                                                selectedPiece: pieceId
+                                                            }))
+                                                        }}
+                                                    >
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Choose a piece" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {availablePieces
+                                                                .filter(piece => !eventForm.repairPieces.some(rp => rp.pieceId === piece.id))
+                                                                .map((piece) => (
+                                                                    <SelectItem key={piece.id} value={piece.id}>
+                                                                        {piece.name} ({piece.pn}) - {piece.id}
+                                                                    </SelectItem>
+                                                                ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="newConditionDetails">Condition Details</Label>
+                                                    <textarea
+                                                        id="newConditionDetails"
+                                                        value={repairPieceForm.conditionDetails}
+                                                        onChange={(e) => setRepairPieceForm(prev => ({
+                                                            ...prev,
+                                                            conditionDetails: e.target.value
+                                                        }))}
+                                                        placeholder="Enter condition details..."
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                                                        rows={3}
+                                                    />
+                                                </div>
+                                                
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="newRepairDetails">Repair Details</Label>
+                                                    <textarea
+                                                        id="newRepairDetails"
+                                                        value={repairPieceForm.repairDetails}
+                                                        onChange={(e) => setRepairPieceForm(prev => ({
+                                                            ...prev,
+                                                            repairDetails: e.target.value
+                                                        }))}
+                                                        placeholder="Enter repair details..."
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                                                        rows={3}
+                                                    />
+                                                </div>
+                                                
+                                                <div className="flex justify-end">
+                                                    <Button
+                                                        type="button"
+                                                        onClick={handleAddRepairPiece}
+                                                        disabled={!repairPieceForm.selectedPiece || !repairPieceForm.conditionDetails || !repairPieceForm.repairDetails}
+                                                        size="sm"
+                                                        className="bg-blue-600 hover:bg-blue-700"
+                                                    >
+                                                        Add Piece
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </div>
