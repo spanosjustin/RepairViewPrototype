@@ -23,7 +23,8 @@ import {
   CheckCircle,
   Clock,
   Search,
-  Plus
+  Plus,
+  Briefcase
 } from "lucide-react";
 import VisualTreeView from "@/components/VisualTreeView";
 import type { InventoryItem } from "@/lib/inventory/types";
@@ -105,6 +106,7 @@ const MOCK_SITES = [
     address: "1234 River Road, Riverside, CA 92501",
     contact: {
       name: "John Smith",
+      title: "Plant Manager",
       phone: "(555) 123-4567",
       email: "john.smith@riverbend.com"
     },
@@ -123,6 +125,7 @@ const MOCK_SITES = [
     address: "5678 Mountain View Drive, Denver, CO 80202",
     contact: {
       name: "Sarah Johnson",
+      title: "Operations Director",
       phone: "(555) 987-6543",
       email: "sarah.johnson@mountainview.com"
     },
@@ -140,6 +143,7 @@ const MOCK_SITES = [
     address: "9012 Lake Street, Seattle, WA 98101",
     contact: {
       name: "Mike Chen",
+      title: "Site Supervisor",
       phone: "(555) 456-7890",
       email: "mike.chen@lakeside.com"
     },
@@ -163,6 +167,7 @@ interface SiteCardProps {
 }
 
 function SiteCard({ site, onTurbineClick, expandedTurbines }: SiteCardProps) {
+  const [selectedContact, setSelectedContact] = React.useState(site.contact.name);
   const getStatusColor = (status: string) => {
     switch (status) {
       case "operational": return "bg-green-100 text-green-800 border-green-200";
@@ -207,20 +212,44 @@ function SiteCard({ site, onTurbineClick, expandedTurbines }: SiteCardProps) {
         {/* Contact Information */}
         <div className="space-y-2">
           <h4 className="font-medium text-sm text-gray-700">Contact Information</h4>
-          <div className="space-y-1 text-sm">
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-gray-500" />
-              {site.contact.name}
+          <Select value={selectedContact} onValueChange={setSelectedContact}>
+            <SelectTrigger className="w-full">
+              <SelectValue>
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-gray-500" />
+                  <span>{selectedContact}</span>
+                </div>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={site.contact.name}>
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-gray-500" />
+                  <span className="font-medium">{site.contact.name}</span>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          
+          {/* Contact Details Display */}
+          {selectedContact && (
+            <div className="mt-3 p-3 bg-gray-50 rounded-lg border">
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-gray-500" />
+                  <span className="text-gray-700">{site.contact.title}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-gray-500" />
+                  <span className="text-gray-700">{site.contact.phone}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-gray-500" />
+                  <span className="text-gray-700">{site.contact.email}</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-gray-500" />
-              {site.contact.phone}
-            </div>
-            <div className="flex items-center gap-2">
-              <Mail className="h-4 w-4 text-gray-500" />
-              {site.contact.email}
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Site Stats */}

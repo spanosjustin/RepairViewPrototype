@@ -64,7 +64,7 @@ export default function SettingsPage() {
         // Site-specific fields
         siteName: "",
         address: "",
-        contacts: [] as Array<{name: string, phone: string}>
+        contacts: [] as Array<{name: string, phone: string, title: string, email: string}>
     })
 
     // State for event form
@@ -122,7 +122,9 @@ export default function SettingsPage() {
     // State for site contact form
     const [siteContactForm, setSiteContactForm] = useState({
         name: "",
-        phone: ""
+        phone: "",
+        title: "",
+        email: ""
     })
 
     // Available components from mock data
@@ -345,13 +347,17 @@ export default function SettingsPage() {
                 ...prev,
                 contacts: [...prev.contacts, {
                     name: siteContactForm.name,
-                    phone: siteContactForm.phone
+                    phone: siteContactForm.phone,
+                    title: siteContactForm.title,
+                    email: siteContactForm.email
                 }]
             }))
             // Reset the contact form
             setSiteContactForm({
                 name: "",
-                phone: ""
+                phone: "",
+                title: "",
+                email: ""
             })
         }
     }
@@ -383,7 +389,9 @@ export default function SettingsPage() {
         })
         setSiteContactForm({
             name: "",
-            phone: ""
+            phone: "",
+            title: "",
+            email: ""
         })
         setOpenDialog(null)
     }
@@ -1847,7 +1855,9 @@ export default function SettingsPage() {
                                                 <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                                                     <div className="flex-1">
                                                         <div className="font-medium">{contact.name}</div>
+                                                        {contact.title && <div className="text-sm text-gray-500">{contact.title}</div>}
                                                         <div className="text-sm text-gray-600">{contact.phone}</div>
+                                                        {contact.email && <div className="text-sm text-gray-600">{contact.email}</div>}
                                                     </div>
                                                     <Button
                                                         type="button"
@@ -1888,6 +1898,33 @@ export default function SettingsPage() {
                                                                 }))}
                                                                 placeholder="Enter phone number"
                                                                 type="tel"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="newContactTitle">Title</Label>
+                                                            <Input
+                                                                id="newContactTitle"
+                                                                value={siteContactForm.title}
+                                                                onChange={(e) => setSiteContactForm(prev => ({
+                                                                    ...prev,
+                                                                    title: e.target.value
+                                                                }))}
+                                                                placeholder="Enter job title"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="newContactEmail">Email</Label>
+                                                            <Input
+                                                                id="newContactEmail"
+                                                                value={siteContactForm.email}
+                                                                onChange={(e) => setSiteContactForm(prev => ({
+                                                                    ...prev,
+                                                                    email: e.target.value
+                                                                }))}
+                                                                placeholder="Enter email address"
+                                                                type="email"
                                                             />
                                                         </div>
                                                     </div>
