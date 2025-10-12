@@ -25,6 +25,7 @@ import {
 import PieceInfoCard from "@/components/inventory/PieceInfoCard";
 import ComponentInfoCard from "@/components/inventory/ComponentInfoCard";
 import TreeView from "@/components/TreeView";
+import VisualTreeView from "@/components/VisualTreeView";
 
 type ViewMode = "list" | "turbine" | "tree";
 type EntityKind = "components" | "pieces";
@@ -140,14 +141,13 @@ export default function InventoryListPage() {
             />
           </div>
         ) : (
-          /* Tree View - Coming Soon */
-          <div className="p-8 text-center">
-            <div className="text-lg font-medium text-muted-foreground">
-              Tree View - Coming Soon
-            </div>
-            <div className="text-sm text-muted-foreground mt-2">
-              This feature is currently in development.
-            </div>
+          /* Visual Tree View */
+          <div className="p-4">
+            <VisualTreeView
+              items={MOCK_INVENTORY}
+              onSelectPiece={openPieceCard}
+              onSelectComponent={openComponentCard}
+            />
           </div>
         )}
       </div>
