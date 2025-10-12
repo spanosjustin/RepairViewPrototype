@@ -23,6 +23,7 @@ import {
 
 // ← import your card
 import PieceInfoCard from "@/components/inventory/PieceInfoCard";
+import ComponentInfoCard from "@/components/inventory/ComponentInfoCard";
 
 type ViewMode = "list" | "tree";
 type EntityKind = "components" | "pieces";
@@ -71,6 +72,15 @@ export default function InventoryListPage() {
     setPieceOpen(true);
   }, []);
 
+  // ---------- Component Details modal state ----------
+  const [componentOpen, setComponentOpen] = React.useState(false);
+  const [selectedComponent, setSelectedComponent] = React.useState<any | null>(null);
+
+  const openComponentCard = React.useCallback((item: any) => {
+    setSelectedComponent(item);
+    setComponentOpen(true);
+  }, []);
+
   return (
     <div className="p-6 space-y-4">
       <div className="rounded-2xl bg-card p-4 border space-y-4">
@@ -113,8 +123,7 @@ export default function InventoryListPage() {
           <InventoryMatrix
             dataset="components"
             componentStats={componentStats}
-            // If you later have a component detail card:
-            // onSelectComponent={(row) => console.log("open component card", row)}
+            onSelectComponent={openComponentCard}
           />
         )}
       </div>
@@ -142,6 +151,34 @@ export default function InventoryListPage() {
               </div>
             ) : (
               <div className="text-sm text-muted-foreground">No piece selected.</div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Component Details Modal */}
+      <Dialog open={componentOpen} onOpenChange={setComponentOpen}>
+        <DialogContent
+          className="
+            p-0
+            w-[95vw]
+            max-w-[1100px]
+            sm:max-w-[1100px]   /* override shadcn default */
+            md:max-w-[1100px]
+          "
+        >
+          <DialogHeader className="px-6 pt-6">
+            <DialogTitle>Component Details</DialogTitle>
+          </DialogHeader>
+
+          {/* scrollable body so tall cards don't overflow the screen */}
+          <div className="px-6 pb-6 max-h-[80vh] overflow-auto">
+            {selectedComponent ? (
+              <div className="w-full">
+                <ComponentInfoCard item={selectedComponent} />
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">No component selected.</div>
             )}
           </div>
         </DialogContent>
