@@ -58,6 +58,9 @@ export default function SettingsPage() {
     // State for turbine/site form
     const [turbineSiteForm, setTurbineSiteForm] = useState({
         type: "turbine" as "turbine" | "site",
+        turbineName: "",
+        plantLocation: "",
+        assignedComponents: [] as string[]
     })
 
     // State for event form
@@ -105,6 +108,11 @@ export default function SettingsPage() {
         selectedPiece: "",
         conditionDetails: "",
         repairDetails: ""
+    })
+
+    // State for turbine component assignment form
+    const [turbineComponentForm, setTurbineComponentForm] = useState({
+        selectedComponent: ""
     })
 
     // Available components from mock data
@@ -170,6 +178,15 @@ export default function SettingsPage() {
         "Turbine C",
         "Turbine D",
         "Turbine E"
+    ]
+
+    // Available plant locations
+    const availablePlantLocations = [
+        "Plant Alpha",
+        "Plant Beta",
+        "Plant Gamma",
+        "Plant Delta",
+        "Plant Epsilon"
     ]
 
     const handleColorChange = (status: keyof typeof statusColors, color: string) => {
@@ -291,6 +308,42 @@ export default function SettingsPage() {
             ...prev,
             [field]: value
         }))
+    }
+
+    const handleAddComponentToTurbine = () => {
+        if (turbineComponentForm.selectedComponent) {
+            setTurbineSiteForm(prev => ({
+                ...prev,
+                assignedComponents: [...prev.assignedComponents, turbineComponentForm.selectedComponent]
+            }))
+            setTurbineComponentForm({
+                selectedComponent: ""
+            })
+        }
+    }
+
+    const handleRemoveComponentFromTurbine = (component: string) => {
+        setTurbineSiteForm(prev => ({
+            ...prev,
+            assignedComponents: prev.assignedComponents.filter(c => c !== component)
+        }))
+    }
+
+    const handleTurbineSiteFormSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        // Here you would typically save the turbine/site data to your backend/database
+        console.log("Turbine/Site form submitted:", turbineSiteForm)
+        // Reset form
+        setTurbineSiteForm({
+            type: "turbine",
+            turbineName: "",
+            plantLocation: "",
+            assignedComponents: []
+        })
+        setTurbineComponentForm({
+            selectedComponent: ""
+        })
+        setOpenDialog(null)
     }
 
     const handleEventFormChange = (field: string, value: string | number) => {
@@ -1589,7 +1642,7 @@ export default function SettingsPage() {
                     <DialogHeader>
                         <DialogTitle>Add a Turbine or Site</DialogTitle>
                     </DialogHeader>
-                    <form className="space-y-6">
+                    <form onSubmit={handleTurbineSiteFormSubmit} className="space-y-6">
                         {/* Type Toggle */}
                         <div className="space-y-4">
                             <Label className="text-lg font-semibold">Type</Label>
@@ -1618,8 +1671,97 @@ export default function SettingsPage() {
                             {turbineSiteForm.type === "turbine" ? (
                                 <div className="space-y-6">
                                     <h3 className="text-xl font-semibold text-gray-700 mb-4">Add a Turbine</h3>
-                                    <div className="text-center text-gray-500 py-12">
-                                        Turbine form fields will be added here
+                                    
+                                    {/* Basic Information */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="turbineName">Turbine Name</Label>
+                                            <Input
+                                                id="turbineName"
+                                                value={turbineSiteForm.turbineName}
+                                                onChange={(e) => handleTurbineSiteFormChange('turbineName', e.target.value)}
+                                                placeholder="Enter turbine name"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="plantLocation">Plant Location</Label>
+                                            <Select value={turbineSiteForm.plantLocation} onValueChange={(value) => handleTurbineSiteFormChange('plantLocation', value)}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select plant location" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {availablePlantLocations.map((location) => (
+                                                        <SelectItem key={location} value={location}>
+                                                            {location}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    {/* Component Assignment */}
+                                    <div className="space-y-4">
+                                        <h4 className="text-lg font-semibold">Assigned Components</h4>
+                                        
+                                        {/* Current Components */}
+                                        <div className="space-y-3">
+                                            {turbineSiteForm.assignedComponents.map((component, index) => (
+                                                <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                                                    <div className="flex-1">
+                                                        <span className="font-medium">{component}</span>
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleRemoveComponentFromTurbine(component)}
+                                                    >
+                                                        Remove
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                            
+                                            {/* Add new component */}
+                                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                                <div className="space-y-3">
+                                                    <Label>Add Component</Label>
+                                                    <div className="flex gap-3">
+                                                        <Select 
+                                                            value={turbineComponentForm.selectedComponent}
+                                                            onValueChange={(component) => {
+                                                                setTurbineComponentForm(prev => ({
+                                                                    ...prev,
+                                                                    selectedComponent: component
+                                                                }))
+                                                            }}
+                                                        >
+                                                            <SelectTrigger className="flex-1">
+                                                                <SelectValue placeholder="Choose a component" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {availableComponents
+                                                                    .filter(component => !turbineSiteForm.assignedComponents.includes(component))
+                                                                    .map((component) => (
+                                                                        <SelectItem key={component} value={component}>
+                                                                            {component}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <Button
+                                                            type="button"
+                                                            onClick={handleAddComponentToTurbine}
+                                                            disabled={!turbineComponentForm.selectedComponent}
+                                                            size="sm"
+                                                        >
+                                                            Add Component
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             ) : (
