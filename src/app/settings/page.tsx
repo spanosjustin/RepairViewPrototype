@@ -933,7 +933,7 @@ export default function SettingsPage() {
                             <h3 className="text-lg font-semibold">Intervals</h3>
                             <div className="grid grid-cols-3 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="intervalFH">Interval FH (Flight Hours)</Label>
+                                    <Label htmlFor="intervalFH">Interval FH</Label>
                                     <Input
                                         id="intervalFH"
                                         type="number"
@@ -944,7 +944,7 @@ export default function SettingsPage() {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="intervalFS">Interval FS (Flight Starts)</Label>
+                                    <Label htmlFor="intervalFS">Interval FS</Label>
                                     <Input
                                         id="intervalFS"
                                         type="number"
