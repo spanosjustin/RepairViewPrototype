@@ -24,8 +24,9 @@ import {
 // ← import your card
 import PieceInfoCard from "@/components/inventory/PieceInfoCard";
 import ComponentInfoCard from "@/components/inventory/ComponentInfoCard";
+import TreeView from "@/components/TreeView";
 
-type ViewMode = "list" | "tree";
+type ViewMode = "list" | "turbine";
 type EntityKind = "components" | "pieces";
 
 type ComponentRow = {
@@ -96,7 +97,7 @@ export default function InventoryListPage() {
               </SelectTrigger>
               <SelectContent align="end">
                 <SelectItem value="list">List</SelectItem>
-                <SelectItem value="tree">Tree</SelectItem>
+                <SelectItem value="turbine">Turbine</SelectItem>
               </SelectContent>
             </Select>
 
@@ -129,15 +130,13 @@ export default function InventoryListPage() {
             />
           )
         ) : (
-          /* Tree View */
-          <div className="p-6 text-center">
-            <h2 className="text-lg font-semibold mb-4">Tree View</h2>
-            <p className="text-muted-foreground mb-4">
-              Tree view is coming soon. This will display a hierarchical view of your inventory items.
-            </p>
-            <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground">
-              <p>You will be able to drill down on data and select turbines, components, and pieces for their various stats.</p>
-            </div>
+          /* Turbine View (Tree View) */
+          <div className="p-4">
+            <TreeView
+              items={MOCK_INVENTORY}
+              onSelectPiece={openPieceCard}
+              onSelectComponent={openComponentCard}
+            />
           </div>
         )}
       </div>
