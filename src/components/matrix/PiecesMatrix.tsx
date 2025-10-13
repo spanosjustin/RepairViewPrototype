@@ -10,13 +10,25 @@ import MatrixPieceCard from "./MatrixPieceCard";
 type Props = Omit<MatrixProps<PieceRow>, "columns"> & {
     columns?: MatrixProps<PieceRow>["columns"];
     turbineName?: string;
+    onCellClick?: (row: PieceRow, cellIndex: number, cell: any) => void;
+    onCellEdit?: (row: PieceRow, cellIndex: number, newValue: string | number) => void;
+    editable?: boolean;
+    editingCell?: { rowId: string; cellIndex: number } | null;
+    onStartEdit?: (row: PieceRow, cellIndex: number) => void;
+    onStopEdit?: () => void;
 };
 
 export default function PiecesMatrix({ 
     rows, 
     columns = DEFAULT_PIECES_COLUMNS, 
     emptyLabel,
-    turbineName = "Unknown Turbine"
+    turbineName = "Unknown Turbine",
+    onCellClick,
+    onCellEdit,
+    editable = false,
+    editingCell,
+    onStartEdit,
+    onStopEdit,
 }: Props) {
     // Dialog state
     const [open, setOpen] = React.useState(false);
@@ -34,6 +46,12 @@ export default function PiecesMatrix({
                 rows={rows} 
                 emptyLabel={emptyLabel ?? "No pieces"}
                 onRowClick={onRowClick}
+                onCellClick={onCellClick}
+                onCellEdit={onCellEdit}
+                editable={editable}
+                editingCell={editingCell}
+                onStartEdit={onStartEdit}
+                onStopEdit={onStopEdit}
                 rowClassName="hover:bg-gray-100 cursor-pointer"
             />
 

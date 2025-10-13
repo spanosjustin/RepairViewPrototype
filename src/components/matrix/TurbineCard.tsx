@@ -13,13 +13,23 @@ type TurbineCardProps = {
     className?: string;
     onActionClick?: () => void;
     actionLabel?: string;
+    onCellEdit?: (turbineId: string, rowId: string, cellIndex: number, newValue: string | number) => void;
+    editable?: boolean;
+    editingCell?: { rowId: string; cellIndex: number } | null;
+    onStartEdit?: (turbineId: string, rowId: string, cellIndex: number) => void;
+    onStopEdit?: () => void;
 };
 
 export default function TurbineCard({
     turbine,
     className,
     onActionClick,
-    actionLabel = "Action",
+    actionLabel = "Edit",
+    onCellEdit,
+    editable = false,
+    editingCell,
+    onStartEdit,
+    onStopEdit,
 }: TurbineCardProps) {
     return (
         <section className={cx("rounded-2xl border bg-card p-4", className)}>
@@ -42,7 +52,15 @@ export default function TurbineCard({
             <div className="space-y-4">
                 <div>
                     <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Stats</div>
-                    <StatsMatrix rows={turbine.stats} />
+                    <StatsMatrix 
+                        rows={turbine.stats} 
+                        onCellClick={(row, cellIndex, cell) => onCellEdit?.(turbine.id, row.id, cellIndex, cell.value)}
+                        onCellEdit={(row, cellIndex, newValue) => onCellEdit?.(turbine.id, row.id, cellIndex, newValue)}
+                        editable={editable}
+                        editingCell={editingCell}
+                        onStartEdit={(row, cellIndex) => onStartEdit?.(turbine.id, row.id, cellIndex)}
+                        onStopEdit={onStopEdit}
+                    />
                 </div>
 
                 <div>
@@ -51,6 +69,12 @@ export default function TurbineCard({
                         rows={turbine.pieces} 
                         emptyLabel="No pieces available" 
                         turbineName={turbine.name}
+                        onCellClick={(row, cellIndex, cell) => onCellEdit?.(turbine.id, row.id, cellIndex, cell.value)}
+                        onCellEdit={(row, cellIndex, newValue) => onCellEdit?.(turbine.id, row.id, cellIndex, newValue)}
+                        editable={editable}
+                        editingCell={editingCell}
+                        onStartEdit={(row, cellIndex) => onStartEdit?.(turbine.id, row.id, cellIndex)}
+                        onStopEdit={onStopEdit}
                     />
                 </div>
             </div>

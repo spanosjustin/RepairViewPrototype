@@ -10,18 +10,46 @@ const cx = (...parts: Array<string | false  | undefined>) => parts.filter(Boolea
 type TurbineListProps = {
     turbines: Turbine[];
     className?: string;
+    onCellEdit?: (turbineId: string, rowId: string, cellIndex: number, newValue: string | number) => void;
+    editable?: boolean;
+    editingCell?: { turbineId: string; rowId: string; cellIndex: number } | null;
+    onStartEdit?: (turbineId: string, rowId: string, cellIndex: number) => void;
+    onStopEdit?: () => void;
 };
 
-export default function TurbineList({ turbines, className }: TurbineListProps) {
+export default function TurbineList({ 
+    turbines, 
+    className, 
+    onCellEdit, 
+    editable = false,
+    editingCell,
+    onStartEdit,
+    onStopEdit,
+}: TurbineListProps) {
     if(!turbines?.length) {
         return <EmptyState message="No turbines found" />;
     }
 
     return (
         <div className={cx("space-y-6", className)}>
-            {turbines.map((t) => (
-                <TurbineCard key={t.id} turbine={t} />
-            ))}
+            {turbines.map((t) => {
+                const isEditingThisTurbine = editingCell?.turbineId === t.id;
+                const turbineEditingCell = isEditingThisTurbine 
+                    ? { rowId: editingCell.rowId, cellIndex: editingCell.cellIndex }
+                    : null;
+
+                return (
+                    <TurbineCard 
+                        key={t.id} 
+                        turbine={t} 
+                        onCellEdit={onCellEdit}
+                        editable={editable}
+                        editingCell={turbineEditingCell}
+                        onStartEdit={onStartEdit}
+                        onStopEdit={onStopEdit}
+                    />
+                );
+            })}
         </div>
     );
 }

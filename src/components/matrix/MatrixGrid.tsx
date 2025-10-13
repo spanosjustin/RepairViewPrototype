@@ -36,6 +36,12 @@ type Props = MatrixProps & {
   onRowClick?: (row: MatrixRow) => void;
   headerClassName?: string;
   bodyClassName?: string;
+  onCellClick?: (row: MatrixRow, cellIndex: number, cell: any) => void;
+  onCellEdit?: (row: MatrixRow, cellIndex: number, newValue: string | number) => void;
+  editable?: boolean;
+  editingCell?: { rowId: string; cellIndex: number } | null;
+  onStartEdit?: (row: MatrixRow, cellIndex: number) => void;
+  onStopEdit?: () => void;
 };
 
 export default function MatrixGrid({
@@ -46,6 +52,12 @@ export default function MatrixGrid({
   onRowClick,
   headerClassName,
   bodyClassName,
+  onCellClick,
+  onCellEdit,
+  editable = false,
+  editingCell,
+  onStartEdit,
+  onStopEdit,
 }: Props) {
   const template = useTemplate(columns);
 
@@ -104,6 +116,21 @@ export default function MatrixGrid({
               {/* data cells */}
               {row.cells.map((cell, i) => {
                 const col = columns[i];
+                const isEditing = editingCell?.rowId === row.id && editingCell?.cellIndex === i;
+                
+                const handleCellClick = (e: React.MouseEvent) => {
+                  e.stopPropagation(); // Prevent row click
+                  onCellClick?.(row, i, cell);
+                };
+
+                const handleStartEdit = () => {
+                  onStartEdit?.(row, i);
+                };
+
+                const handleValueChange = (newValue: string | number) => {
+                  onCellEdit?.(row, i, newValue);
+                };
+
                 return (
                   <div
                     key={i}
@@ -113,7 +140,16 @@ export default function MatrixGrid({
                       col?.align === "right" && "text-right"
                     )}
                   >
-                    <MatrixCell cell={cell} align={col?.align ?? "left"} />
+                    <MatrixCell 
+                      cell={cell} 
+                      align={col?.align ?? "left"} 
+                      onClick={handleCellClick}
+                      editable={editable}
+                      isEditing={isEditing}
+                      onStartEdit={handleStartEdit}
+                      onStopEdit={onStopEdit}
+                      onValueChange={handleValueChange}
+                    />
                   </div>
                 );
               })}
