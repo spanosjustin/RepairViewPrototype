@@ -15,6 +15,7 @@ type TurbineListProps = {
     editingCell?: { turbineId: string; rowId: string; cellIndex: number } | null;
     onStartEdit?: (turbineId: string, rowId: string, cellIndex: number) => void;
     onStopEdit?: () => void;
+    actionLabel?: string;
 };
 
 export default function TurbineList({ 
@@ -25,6 +26,7 @@ export default function TurbineList({
     editingCell,
     onStartEdit,
     onStopEdit,
+    actionLabel = "Edit",
 }: TurbineListProps) {
     if(!turbines?.length) {
         return <EmptyState message="No turbines found" />;
@@ -47,6 +49,7 @@ export default function TurbineList({
                         editingCell={turbineEditingCell}
                         onStartEdit={onStartEdit}
                         onStopEdit={onStopEdit}
+                        actionLabel={actionLabel}
                     />
                 );
             })}
