@@ -38,6 +38,24 @@ export default function SettingsPage() {
         notes: ""
     })
 
+    // State for edit piece form
+    const [editPieceForm, setEditPieceForm] = useState({
+        id: "",
+        sn: "",
+        pn: "",
+        component: "",
+        position: "",
+        status: "OK" as "OK" | "Monitor" | "Replace Soon" | "Replace Now" | "Spare" | "Degraded" | "Unknown",
+        state: "In Service" as "In Service" | "Out of Service" | "Standby" | "Repair" | "On Order",
+        hours: 0,
+        starts: 0,
+        trips: 0,
+        repairJob: "",
+        repairDetails: "",
+        conditionDetails: "",
+        notes: ""
+    })
+
     // State for component form
     const [componentForm, setComponentForm] = useState({
         name: "",
@@ -49,8 +67,26 @@ export default function SettingsPage() {
         pastEvents: [] as string[]
     })
 
+    // State for edit component form
+    const [editComponentForm, setEditComponentForm] = useState({
+        id: "",
+        name: "",
+        type: "" as "fuel" | "comb" | "turbine" | "compressor" | "generator" | "auxiliary",
+        intervalFH: 0,
+        intervalFS: 0,
+        intervalTrips: 0,
+        assignedPieces: [] as Array<{pieceId: string, position: string}>,
+        pastEvents: [] as string[]
+    })
+
     // State for piece assignment form
     const [pieceAssignmentForm, setPieceAssignmentForm] = useState({
+        selectedPiece: "",
+        selectedPosition: ""
+    })
+
+    // State for edit component piece assignment form
+    const [editPieceAssignmentForm, setEditPieceAssignmentForm] = useState({
         selectedPiece: "",
         selectedPosition: ""
     })
@@ -127,6 +163,80 @@ export default function SettingsPage() {
         email: ""
     })
 
+    // State for edit turbine/site form
+    const [editTurbineSiteForm, setEditTurbineSiteForm] = useState({
+        id: "",
+        type: "turbine" as "turbine" | "site",
+        turbineName: "",
+        plantLocation: "",
+        assignedComponents: [] as string[],
+        // Site-specific fields
+        siteName: "",
+        address: "",
+        contacts: [] as Array<{name: string, phone: string, title: string, email: string}>
+    })
+
+    // State for edit turbine component assignment form
+    const [editTurbineComponentForm, setEditTurbineComponentForm] = useState({
+        selectedComponent: ""
+    })
+
+    // State for edit site contact form
+    const [editSiteContactForm, setEditSiteContactForm] = useState({
+        name: "",
+        phone: "",
+        title: "",
+        email: ""
+    })
+
+    // State for edit event form
+    const [editEventForm, setEditEventForm] = useState({
+        id: "",
+        type: "outage" as "outage" | "repair",
+        // Outage form fields
+        turbine: "",
+        eventName: "",
+        date: "",
+        hours: 0,
+        target: 0,
+        intFh: 0,
+        starts: 0,
+        trips: 0,
+        intFh2: 0,
+        intTrips: 0,
+        notes: "",
+        setIn: [] as string[],
+        setOut: [] as string[],
+        // Repair form fields
+        repairNumber: "",
+        repairComponent: "",
+        preEventTitle: "",
+        repairIntHours: 0,
+        repairIntFS: 0,
+        repairIntTrips: 0,
+        repairPieces: [] as Array<{
+            pieceId: string;
+            conditionDetails: string;
+            repairDetails: string;
+        }>
+    })
+
+    // State for edit event set in/out assignment forms
+    const [editSetInAssignmentForm, setEditSetInAssignmentForm] = useState({
+        selectedComponent: ""
+    })
+
+    const [editSetOutAssignmentForm, setEditSetOutAssignmentForm] = useState({
+        selectedComponent: ""
+    })
+
+    // State for edit event repair piece assignment form
+    const [editRepairPieceForm, setEditRepairPieceForm] = useState({
+        selectedPiece: "",
+        conditionDetails: "",
+        repairDetails: ""
+    })
+
     // Available components from mock data
     const availableComponents = [
         "Comb Liner",
@@ -138,6 +248,72 @@ export default function SettingsPage() {
         "Liner Caps",
         "Comb Liners",
         "S3N"
+    ]
+
+    // Available components for editing (with more detailed data)
+    const availableComponentsForEdit = [
+        {
+            id: "COMP-001",
+            name: "Comb Liner",
+            type: "comb" as const,
+            intervalFH: 8000,
+            intervalFS: 200,
+            intervalTrips: 50,
+            assignedPieces: [
+                { pieceId: "SN-00123", position: "Position 1" },
+                { pieceId: "SN-00456", position: "Position 2" }
+            ],
+            pastEvents: ["Hot Section Inspection", "Combustor Overhaul"]
+        },
+        {
+            id: "COMP-002",
+            name: "Tran PRC",
+            type: "turbine" as const,
+            intervalFH: 12000,
+            intervalFS: 300,
+            intervalTrips: 75,
+            assignedPieces: [
+                { pieceId: "SN-00789", position: "Position 1" }
+            ],
+            pastEvents: ["Turbine Blade Replacement"]
+        },
+        {
+            id: "COMP-003",
+            name: "S1N",
+            type: "turbine" as const,
+            intervalFH: 10000,
+            intervalFS: 250,
+            intervalTrips: 60,
+            assignedPieces: [
+                { pieceId: "SN-01011", position: "Position 1" },
+                { pieceId: "SN-01314", position: "Position 2" }
+            ],
+            pastEvents: ["Compressor Cleaning", "Turbine Blade Replacement"]
+        },
+        {
+            id: "COMP-004",
+            name: "Rotor",
+            type: "turbine" as const,
+            intervalFH: 15000,
+            intervalFS: 400,
+            intervalTrips: 100,
+            assignedPieces: [
+                { pieceId: "SN-01617", position: "Position 1" }
+            ],
+            pastEvents: ["Generator Overhaul"]
+        },
+        {
+            id: "COMP-005",
+            name: "S3S",
+            type: "turbine" as const,
+            intervalFH: 9000,
+            intervalFS: 225,
+            intervalTrips: 55,
+            assignedPieces: [
+                { pieceId: "SN-02122", position: "Position 1" }
+            ],
+            pastEvents: ["Auxiliary System Check"]
+        }
     ]
 
     // Available positions (you can customize this based on your needs)
@@ -183,6 +359,58 @@ export default function SettingsPage() {
         "Emergency Repair"
     ]
 
+    // Available repair jobs with associated details
+    const availableRepairJobs = [
+        {
+            id: "RJ-001",
+            name: "Hot Section Inspection",
+            repairDetails: "Complete hot section inspection including combustor liner, transition piece, and first stage nozzle. Check for cracks, erosion, and thermal fatigue. Replace any damaged components as needed.",
+            conditionDetails: "Combustor liner shows minor erosion on inner surface. Transition piece has small crack at weld joint. First stage nozzle vanes are in good condition with minimal wear."
+        },
+        {
+            id: "RJ-002", 
+            name: "Combustor Overhaul",
+            repairDetails: "Full combustor overhaul including liner replacement, fuel nozzle cleaning and calibration, and igniter system maintenance. Rebuild fuel distribution system and test all components.",
+            conditionDetails: "Combustor liner severely eroded with multiple burn-through points. Fuel nozzles partially clogged with carbon deposits. Igniter system functioning but showing signs of wear."
+        },
+        {
+            id: "RJ-003",
+            name: "Compressor Cleaning",
+            repairDetails: "Online compressor cleaning using detergent and water wash. Clean inlet filters and check compressor blade condition. Perform vibration analysis and balance check.",
+            conditionDetails: "Compressor blades heavily fouled with dirt and oil deposits. Inlet filters 80% clogged. Vibration levels elevated but within acceptable limits. No blade damage detected."
+        },
+        {
+            id: "RJ-004",
+            name: "Turbine Blade Replacement",
+            repairDetails: "Replace all first and second stage turbine blades. Check blade root condition and perform dimensional inspection. Balance rotor assembly and perform overspeed test.",
+            conditionDetails: "First stage blades show severe erosion and tip rub. Second stage blades have stress cracks at root. Blade root condition acceptable. Rotor balance within specifications."
+        },
+        {
+            id: "RJ-005",
+            name: "Fuel System Maintenance",
+            repairDetails: "Complete fuel system overhaul including pump rebuild, valve replacement, and line cleaning. Calibrate fuel flow meters and test emergency shutdown systems.",
+            conditionDetails: "Fuel pump showing reduced efficiency and increased vibration. Control valves sticking intermittently. Fuel lines have minor corrosion. Emergency systems functional."
+        },
+        {
+            id: "RJ-006",
+            name: "Generator Overhaul",
+            repairDetails: "Generator stator and rotor inspection. Replace worn bearings and check winding insulation. Perform electrical tests and recalibrate protection systems.",
+            conditionDetails: "Generator bearings showing excessive wear and increased temperature. Stator windings in good condition with minor insulation degradation. Rotor balance acceptable."
+        },
+        {
+            id: "RJ-007",
+            name: "Auxiliary System Check",
+            repairDetails: "Comprehensive auxiliary system inspection including lube oil system, cooling system, and control systems. Replace filters and check all sensors and actuators.",
+            conditionDetails: "Lube oil system functioning normally with clean oil. Cooling system has minor leaks at connections. Control system sensors need calibration. All actuators operational."
+        },
+        {
+            id: "RJ-008",
+            name: "Emergency Repair",
+            repairDetails: "Emergency repair due to unexpected failure. Immediate assessment and temporary fix to restore operation. Schedule follow-up comprehensive repair.",
+            conditionDetails: "Critical component failure requiring immediate attention. System operating in degraded mode. Safety systems activated. Temporary repair implemented to maintain operation."
+        }
+    ]
+
     // Available turbines
     const availableTurbines = [
         "Turbine A",
@@ -201,6 +429,161 @@ export default function SettingsPage() {
         "Plant Epsilon"
     ]
 
+    // Available turbines and sites for editing
+    const availableTurbinesAndSites = [
+        {
+            id: "TURB-001",
+            type: "turbine" as const,
+            turbineName: "Turbine A",
+            plantLocation: "Plant Alpha",
+            assignedComponents: ["Comb Liner", "S1N", "Tran PRC"]
+        },
+        {
+            id: "TURB-002", 
+            type: "turbine" as const,
+            turbineName: "Turbine B",
+            plantLocation: "Plant Beta",
+            assignedComponents: ["S2N", "Rotor", "S3S"]
+        },
+        {
+            id: "SITE-001",
+            type: "site" as const,
+            siteName: "Maintenance Site Alpha",
+            address: "123 Industrial Blvd, Alpha City, AC 12345",
+            contacts: [
+                {
+                    name: "John Smith",
+                    phone: "(555) 123-4567",
+                    title: "Site Manager",
+                    email: "john.smith@company.com"
+                },
+                {
+                    name: "Sarah Johnson",
+                    phone: "(555) 123-4568",
+                    title: "Maintenance Supervisor",
+                    email: "sarah.johnson@company.com"
+                }
+            ]
+        },
+        {
+            id: "SITE-002",
+            type: "site" as const,
+            siteName: "Operations Site Beta",
+            address: "456 Power Plant Rd, Beta City, BC 67890",
+            contacts: [
+                {
+                    name: "Mike Davis",
+                    phone: "(555) 987-6543",
+                    title: "Operations Manager",
+                    email: "mike.davis@company.com"
+                }
+            ]
+        },
+        {
+            id: "TURB-003",
+            type: "turbine" as const,
+            turbineName: "Turbine C",
+            plantLocation: "Plant Gamma",
+            assignedComponents: ["Liner Caps", "Comb Liners", "S3N"]
+        }
+    ]
+
+    // Available events for editing
+    const availableEvents = [
+        {
+            id: "EVT-001",
+            type: "outage" as const,
+            turbine: "Turbine A",
+            eventName: "Scheduled Maintenance",
+            date: "2024-01-15",
+            hours: 1200,
+            target: 1500,
+            intFh: 200,
+            starts: 45,
+            trips: 2,
+            intFh2: 150,
+            intTrips: 1,
+            notes: "Routine maintenance performed on schedule",
+            setIn: ["Comb Liner", "S1N"],
+            setOut: ["Tran PRC", "S2N"]
+        },
+        {
+            id: "EVT-002",
+            type: "repair" as const,
+            repairNumber: "REP-2024-001",
+            repairComponent: "Comb Liner",
+            preEventTitle: "Hot Section Inspection",
+            date: "2024-01-20",
+            repairIntHours: 800,
+            repairIntFS: 100,
+            repairIntTrips: 25,
+            repairPieces: [
+                {
+                    pieceId: "SN-00123",
+                    conditionDetails: "Minor erosion detected on inner surface",
+                    repairDetails: "Cleaned and inspected, no replacement needed"
+                }
+            ]
+        },
+        {
+            id: "EVT-003",
+            type: "outage" as const,
+            turbine: "Turbine B",
+            eventName: "Emergency Shutdown",
+            date: "2024-02-01",
+            hours: 800,
+            target: 1200,
+            intFh: 50,
+            starts: 12,
+            trips: 1,
+            intFh2: 30,
+            intTrips: 0,
+            notes: "Emergency shutdown due to sensor malfunction",
+            setIn: ["Rotor"],
+            setOut: ["S3S"]
+        },
+        {
+            id: "EVT-004",
+            type: "repair" as const,
+            repairNumber: "REP-2024-002",
+            repairComponent: "Tran PRC",
+            preEventTitle: "Turbine Blade Replacement",
+            date: "2024-02-10",
+            repairIntHours: 1200,
+            repairIntFS: 150,
+            repairIntTrips: 40,
+            repairPieces: [
+                {
+                    pieceId: "SN-00789",
+                    conditionDetails: "Blade erosion and stress cracks detected",
+                    repairDetails: "Replaced all first stage blades, balanced rotor"
+                },
+                {
+                    pieceId: "SN-01011",
+                    conditionDetails: "Minor wear on blade tips",
+                    repairDetails: "Cleaned and inspected, no replacement needed"
+                }
+            ]
+        },
+        {
+            id: "EVT-005",
+            type: "outage" as const,
+            turbine: "Turbine C",
+            eventName: "Planned Overhaul",
+            date: "2024-02-15",
+            hours: 2000,
+            target: 2500,
+            intFh: 300,
+            starts: 60,
+            trips: 3,
+            intFh2: 250,
+            intTrips: 2,
+            notes: "Major overhaul including all major components",
+            setIn: ["Comb Liner", "Tran PRC", "S1N", "S2N"],
+            setOut: ["Rotor", "S3S", "Liner Caps"]
+        }
+    ]
+
     const handleColorChange = (status: keyof typeof statusColors, color: string) => {
         setStatusColors(prev => ({
             ...prev,
@@ -215,6 +598,102 @@ export default function SettingsPage() {
             setPieceAssignmentForm({
                 selectedPiece: "",
                 selectedPosition: ""
+            })
+        }
+        // Reset edit piece form when opening edit piece dialog
+        if (cardType === 'editPiece') {
+            setEditPieceForm({
+                id: "",
+                sn: "",
+                pn: "",
+                component: "",
+                position: "",
+                status: "OK",
+                state: "In Service",
+                hours: 0,
+                starts: 0,
+                trips: 0,
+                repairJob: "",
+                repairDetails: "",
+                conditionDetails: "",
+                notes: ""
+            })
+        }
+        // Reset edit component form when opening edit component dialog
+        if (cardType === 'editComponent') {
+            setEditComponentForm({
+                id: "",
+                name: "",
+                type: "" as "fuel" | "comb" | "turbine" | "compressor" | "generator" | "auxiliary",
+                intervalFH: 0,
+                intervalFS: 0,
+                intervalTrips: 0,
+                assignedPieces: [],
+                pastEvents: []
+            })
+            setEditPieceAssignmentForm({
+                selectedPiece: "",
+                selectedPosition: ""
+            })
+        }
+        // Reset edit event form when opening edit event dialog
+        if (cardType === 'editEvent') {
+            setEditEventForm({
+                id: "",
+                type: "outage",
+                turbine: "",
+                eventName: "",
+                date: "",
+                hours: 0,
+                target: 0,
+                intFh: 0,
+                starts: 0,
+                trips: 0,
+                intFh2: 0,
+                intTrips: 0,
+                notes: "",
+                setIn: [],
+                setOut: [],
+                repairNumber: "",
+                repairComponent: "",
+                preEventTitle: "",
+                repairIntHours: 0,
+                repairIntFS: 0,
+                repairIntTrips: 0,
+                repairPieces: []
+            })
+            setEditSetInAssignmentForm({
+                selectedComponent: ""
+            })
+            setEditSetOutAssignmentForm({
+                selectedComponent: ""
+            })
+            setEditRepairPieceForm({
+                selectedPiece: "",
+                conditionDetails: "",
+                repairDetails: ""
+            })
+        }
+        // Reset edit turbine/site form when opening edit turbine/site dialog
+        if (cardType === 'editTurbine') {
+            setEditTurbineSiteForm({
+                id: "",
+                type: "turbine",
+                turbineName: "",
+                plantLocation: "",
+                assignedComponents: [],
+                siteName: "",
+                address: "",
+                contacts: []
+            })
+            setEditTurbineComponentForm({
+                selectedComponent: ""
+            })
+            setEditSiteContactForm({
+                name: "",
+                phone: "",
+                title: "",
+                email: ""
             })
         }
     }
@@ -246,6 +725,72 @@ export default function SettingsPage() {
             notes: ""
         })
         setOpenDialog(null)
+    }
+
+    const handleEditPieceFormChange = (field: string, value: string | number) => {
+        setEditPieceForm(prev => ({
+            ...prev,
+            [field]: value
+        }))
+    }
+
+    const handleEditPieceFormSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        // Here you would typically update the piece data in your backend/database
+        console.log("Edit piece form submitted:", editPieceForm)
+        // Reset form
+        setEditPieceForm({
+            id: "",
+            sn: "",
+            pn: "",
+            component: "",
+            position: "",
+            status: "OK",
+            state: "In Service",
+            hours: 0,
+            starts: 0,
+            trips: 0,
+            repairJob: "",
+            repairDetails: "",
+            conditionDetails: "",
+            notes: ""
+        })
+        setOpenDialog(null)
+    }
+
+    const handleSelectPieceToEdit = (pieceId: string) => {
+        // Find the piece in available pieces and populate the form
+        const piece = availablePieces.find(p => p.id === pieceId)
+        if (piece) {
+            setEditPieceForm({
+                id: piece.id,
+                sn: piece.id, // Using ID as SN for demo
+                pn: piece.pn,
+                component: piece.name,
+                position: "Position 1", // Default position
+                status: "OK",
+                state: "In Service",
+                hours: 0,
+                starts: 0,
+                trips: 0,
+                repairJob: "",
+                repairDetails: "",
+                conditionDetails: "",
+                notes: ""
+            })
+        }
+    }
+
+    const handleRepairJobChange = (repairJobId: string) => {
+        const selectedRepairJob = availableRepairJobs.find(job => job.id === repairJobId)
+        if (selectedRepairJob) {
+            setEditPieceForm(prev => ({
+                ...prev,
+                repairJob: repairJobId,
+                repairDetails: selectedRepairJob.repairDetails,
+                conditionDetails: selectedRepairJob.conditionDetails
+            }))
+        }
     }
 
     const handleComponentFormChange = (field: string, value: string | number) => {
@@ -309,6 +854,92 @@ export default function SettingsPage() {
             pastEvents: []
         })
         setPieceAssignmentForm({
+            selectedPiece: "",
+            selectedPosition: ""
+        })
+        setOpenDialog(null)
+    }
+
+    // Edit Component Handlers
+    const handleEditComponentFormChange = (field: string, value: string | number) => {
+        setEditComponentForm(prev => ({
+            ...prev,
+            [field]: value
+        }))
+    }
+
+    const handleSelectComponentToEdit = (componentId: string) => {
+        // Find the component in available components and populate the form
+        const component = availableComponentsForEdit.find(c => c.id === componentId)
+        if (component) {
+            setEditComponentForm({
+                id: component.id,
+                name: component.name,
+                type: component.type,
+                intervalFH: component.intervalFH,
+                intervalFS: component.intervalFS,
+                intervalTrips: component.intervalTrips,
+                assignedPieces: component.assignedPieces,
+                pastEvents: component.pastEvents
+            })
+        }
+    }
+
+    const handleAddPieceToEditComponent = (pieceId: string, position: string) => {
+        setEditComponentForm(prev => ({
+            ...prev,
+            assignedPieces: [...prev.assignedPieces, { pieceId, position }]
+        }))
+        // Reset the assignment form
+        setEditPieceAssignmentForm({
+            selectedPiece: "",
+            selectedPosition: ""
+        })
+    }
+
+    const handleAddEditPieceAssignment = () => {
+        if (editPieceAssignmentForm.selectedPiece && editPieceAssignmentForm.selectedPosition) {
+            handleAddPieceToEditComponent(editPieceAssignmentForm.selectedPiece, editPieceAssignmentForm.selectedPosition)
+        }
+    }
+
+    const handleRemovePieceFromEditComponent = (pieceId: string) => {
+        setEditComponentForm(prev => ({
+            ...prev,
+            assignedPieces: prev.assignedPieces.filter(p => p.pieceId !== pieceId)
+        }))
+    }
+
+    const handleAddPastEventToEditComponent = (eventName: string) => {
+        setEditComponentForm(prev => ({
+            ...prev,
+            pastEvents: [...prev.pastEvents, eventName]
+        }))
+    }
+
+    const handleRemovePastEventFromEditComponent = (eventName: string) => {
+        setEditComponentForm(prev => ({
+            ...prev,
+            pastEvents: prev.pastEvents.filter(e => e !== eventName)
+        }))
+    }
+
+    const handleEditComponentFormSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        // Here you would typically update the component data in your backend/database
+        console.log("Edit component form submitted:", editComponentForm)
+        // Reset forms
+        setEditComponentForm({
+            id: "",
+            name: "",
+            type: "" as "fuel" | "comb" | "turbine" | "compressor" | "generator" | "auxiliary",
+            intervalFH: 0,
+            intervalFS: 0,
+            intervalTrips: 0,
+            assignedPieces: [],
+            pastEvents: []
+        })
+        setEditPieceAssignmentForm({
             selectedPiece: "",
             selectedPosition: ""
         })
@@ -530,6 +1161,276 @@ export default function SettingsPage() {
         setOpenDialog(null)
     }
 
+    // Edit Turbine/Site Handlers
+    const handleEditTurbineSiteFormChange = (field: string, value: string | number) => {
+        setEditTurbineSiteForm(prev => ({
+            ...prev,
+            [field]: value,
+            // Clear the selected item when type changes
+            ...(field === 'type' && { id: "" })
+        }))
+    }
+
+    const handleSelectTurbineSiteToEdit = (turbineSiteId: string) => {
+        // Find the turbine/site in available data and populate the form
+        const turbineSite = availableTurbinesAndSites.find(ts => ts.id === turbineSiteId)
+        if (turbineSite) {
+            setEditTurbineSiteForm({
+                id: turbineSite.id,
+                type: turbineSite.type,
+                turbineName: turbineSite.turbineName || "",
+                plantLocation: turbineSite.plantLocation || "",
+                assignedComponents: turbineSite.assignedComponents || [],
+                siteName: turbineSite.siteName || "",
+                address: turbineSite.address || "",
+                contacts: turbineSite.contacts || []
+            })
+        }
+    }
+
+    const handleAddComponentToEditTurbine = () => {
+        if (editTurbineComponentForm.selectedComponent) {
+            setEditTurbineSiteForm(prev => ({
+                ...prev,
+                assignedComponents: [...prev.assignedComponents, editTurbineComponentForm.selectedComponent]
+            }))
+            setEditTurbineComponentForm({
+                selectedComponent: ""
+            })
+        }
+    }
+
+    const handleRemoveComponentFromEditTurbine = (component: string) => {
+        setEditTurbineSiteForm(prev => ({
+            ...prev,
+            assignedComponents: prev.assignedComponents.filter(c => c !== component)
+        }))
+    }
+
+    const handleAddContactToEditSite = () => {
+        if (editSiteContactForm.name && editSiteContactForm.phone) {
+            setEditTurbineSiteForm(prev => ({
+                ...prev,
+                contacts: [...prev.contacts, {
+                    name: editSiteContactForm.name,
+                    phone: editSiteContactForm.phone,
+                    title: editSiteContactForm.title,
+                    email: editSiteContactForm.email
+                }]
+            }))
+            // Reset the contact form
+            setEditSiteContactForm({
+                name: "",
+                phone: "",
+                title: "",
+                email: ""
+            })
+        }
+    }
+
+    const handleRemoveContactFromEditSite = (index: number) => {
+        setEditTurbineSiteForm(prev => ({
+            ...prev,
+            contacts: prev.contacts.filter((_, i) => i !== index)
+        }))
+    }
+
+    const handleEditTurbineSiteFormSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        // Here you would typically update the turbine/site data in your backend/database
+        console.log("Edit turbine/site form submitted:", editTurbineSiteForm)
+        // Reset form
+        setEditTurbineSiteForm({
+            id: "",
+            type: "turbine",
+            turbineName: "",
+            plantLocation: "",
+            assignedComponents: [],
+            siteName: "",
+            address: "",
+            contacts: []
+        })
+        setEditTurbineComponentForm({
+            selectedComponent: ""
+        })
+        setEditSiteContactForm({
+            name: "",
+            phone: "",
+            title: "",
+            email: ""
+        })
+        setOpenDialog(null)
+    }
+
+    // Edit Event Handlers
+    const handleEditEventFormChange = (field: string, value: string | number) => {
+        setEditEventForm(prev => ({
+            ...prev,
+            [field]: value
+        }))
+    }
+
+    const handleSelectEventToEdit = (eventId: string) => {
+        // Find the event in available events and populate the form
+        const event = availableEvents.find(e => e.id === eventId)
+        if (event) {
+            setEditEventForm({
+                id: event.id,
+                type: event.type,
+                // Outage fields
+                turbine: event.turbine || "",
+                eventName: event.eventName || "",
+                date: event.date,
+                hours: event.hours || 0,
+                target: event.target || 0,
+                intFh: event.intFh || 0,
+                starts: event.starts || 0,
+                trips: event.trips || 0,
+                intFh2: event.intFh2 || 0,
+                intTrips: event.intTrips || 0,
+                notes: event.notes || "",
+                setIn: event.setIn || [],
+                setOut: event.setOut || [],
+                // Repair fields
+                repairNumber: event.repairNumber || "",
+                repairComponent: event.repairComponent || "",
+                preEventTitle: event.preEventTitle || "",
+                repairIntHours: event.repairIntHours || 0,
+                repairIntFS: event.repairIntFS || 0,
+                repairIntTrips: event.repairIntTrips || 0,
+                repairPieces: event.repairPieces || []
+            })
+        }
+    }
+
+    const handleAddEditSetInComponent = () => {
+        if (editSetInAssignmentForm.selectedComponent) {
+            setEditEventForm(prev => ({
+                ...prev,
+                setIn: [...prev.setIn, editSetInAssignmentForm.selectedComponent]
+            }))
+            setEditSetInAssignmentForm({
+                selectedComponent: ""
+            })
+        }
+    }
+
+    const handleRemoveEditSetInComponent = (component: string) => {
+        setEditEventForm(prev => ({
+            ...prev,
+            setIn: prev.setIn.filter(item => item !== component)
+        }))
+    }
+
+    const handleAddEditSetOutComponent = () => {
+        if (editSetOutAssignmentForm.selectedComponent) {
+            setEditEventForm(prev => ({
+                ...prev,
+                setOut: [...prev.setOut, editSetOutAssignmentForm.selectedComponent]
+            }))
+            setEditSetOutAssignmentForm({
+                selectedComponent: ""
+            })
+        }
+    }
+
+    const handleRemoveEditSetOutComponent = (component: string) => {
+        setEditEventForm(prev => ({
+            ...prev,
+            setOut: prev.setOut.filter(item => item !== component)
+        }))
+    }
+
+    const handleAddEditBothComponents = () => {
+        const setInComponent = editSetInAssignmentForm.selectedComponent
+        const setOutComponent = editSetOutAssignmentForm.selectedComponent
+        
+        if (setInComponent || setOutComponent) {
+            setEditEventForm(prev => ({
+                ...prev,
+                setIn: setInComponent ? [...prev.setIn, setInComponent] : prev.setIn,
+                setOut: setOutComponent ? [...prev.setOut, setOutComponent] : prev.setOut
+            }))
+            
+            setEditSetInAssignmentForm({
+                selectedComponent: ""
+            })
+            setEditSetOutAssignmentForm({
+                selectedComponent: ""
+            })
+        }
+    }
+
+    const handleAddEditRepairPiece = () => {
+        if (editRepairPieceForm.selectedPiece && editRepairPieceForm.conditionDetails && editRepairPieceForm.repairDetails) {
+            setEditEventForm(prev => ({
+                ...prev,
+                repairPieces: [...prev.repairPieces, {
+                    pieceId: editRepairPieceForm.selectedPiece,
+                    conditionDetails: editRepairPieceForm.conditionDetails,
+                    repairDetails: editRepairPieceForm.repairDetails
+                }]
+            }))
+            // Reset the repair piece form
+            setEditRepairPieceForm({
+                selectedPiece: "",
+                conditionDetails: "",
+                repairDetails: ""
+            })
+        }
+    }
+
+    const handleRemoveEditRepairPiece = (pieceId: string) => {
+        setEditEventForm(prev => ({
+            ...prev,
+            repairPieces: prev.repairPieces.filter(p => p.pieceId !== pieceId)
+        }))
+    }
+
+    const handleEditEventFormSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        // Here you would typically update the event data in your backend/database
+        console.log("Edit event form submitted:", editEventForm)
+        // Reset form
+        setEditEventForm({
+            id: "",
+            type: "outage",
+            turbine: "",
+            eventName: "",
+            date: "",
+            hours: 0,
+            target: 0,
+            intFh: 0,
+            starts: 0,
+            trips: 0,
+            intFh2: 0,
+            intTrips: 0,
+            notes: "",
+            setIn: [],
+            setOut: [],
+            // Reset repair fields
+            repairNumber: "",
+            repairComponent: "",
+            preEventTitle: "",
+            repairIntHours: 0,
+            repairIntFS: 0,
+            repairIntTrips: 0,
+            repairPieces: []
+        })
+        setEditSetInAssignmentForm({
+            selectedComponent: ""
+        })
+        setEditSetOutAssignmentForm({
+            selectedComponent: ""
+        })
+        setEditRepairPieceForm({
+            selectedPiece: "",
+            conditionDetails: "",
+            repairDetails: ""
+        })
+        setOpenDialog(null)
+    }
+
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-start py-12">
             <div className="w-full max-w-6xl space-y-8">
@@ -558,6 +1459,34 @@ export default function SettingsPage() {
                         onClick={() => handleCardClick('turbine')}
                     >
                         Add a Turbine or Site
+                    </div>
+                </div>
+
+                {/* Edit boxes */}
+                <div className="flex gap-6">
+                    <div 
+                        className="flex-1 h-32 bg-blue-100 border border-blue-200 flex items-center justify-center text-lg font-bold text-blue-700 rounded-lg shadow-sm cursor-pointer hover:bg-blue-200 transition-colors"
+                        onClick={() => handleCardClick('editPiece')}
+                    >
+                        Edit a piece
+                    </div>
+                    <div 
+                        className="flex-1 h-32 bg-green-100 border border-green-200 flex items-center justify-center text-lg font-bold text-green-700 rounded-lg shadow-sm cursor-pointer hover:bg-green-200 transition-colors"
+                        onClick={() => handleCardClick('editComponent')}
+                    >
+                        Edit a Component
+                    </div>
+                    <div 
+                        className="flex-1 h-32 bg-yellow-100 border border-yellow-200 flex items-center justify-center text-lg font-bold text-yellow-700 rounded-lg shadow-sm cursor-pointer hover:bg-yellow-200 transition-colors"
+                        onClick={() => handleCardClick('editEvent')}
+                    >
+                        Edit an event
+                    </div>
+                    <div 
+                        className="flex-1 h-32 bg-purple-100 border border-purple-200 flex items-center justify-center text-lg font-bold text-purple-700 rounded-lg shadow-sm cursor-pointer hover:bg-purple-200 transition-colors"
+                        onClick={() => handleCardClick('editTurbine')}
+                    >
+                        Edit a Turbine or Site
                     </div>
                 </div>
 
@@ -894,6 +1823,513 @@ export default function SettingsPage() {
                             </Button>
                             <Button type="submit">
                                 Add Piece
+                            </Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Dialog for Edit a piece */}
+            <Dialog open={openDialog === 'editPiece'} onOpenChange={() => setOpenDialog(null)}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit a Piece</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleEditPieceFormSubmit} className="space-y-6">
+                        {/* Piece Selection */}
+                        <div className="space-y-2">
+                            <Label htmlFor="selectPiece">Select Piece to Edit</Label>
+                            <Select 
+                                value={editPieceForm.id} 
+                                onValueChange={(pieceId) => handleSelectPieceToEdit(pieceId)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Choose a piece to edit" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {availablePieces.map((piece) => (
+                                        <SelectItem key={piece.id} value={piece.id}>
+                                            {piece.name} ({piece.pn}) - {piece.id}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Basic Information */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="editSn">Serial Number (SN)</Label>
+                                <Input
+                                    id="editSn"
+                                    value={editPieceForm.sn}
+                                    onChange={(e) => handleEditPieceFormChange('sn', e.target.value)}
+                                    placeholder="Enter serial number"
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editPn">Part Number (PN)</Label>
+                                <Input
+                                    id="editPn"
+                                    value={editPieceForm.pn}
+                                    onChange={(e) => handleEditPieceFormChange('pn', e.target.value)}
+                                    placeholder="Enter part number"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        {/* Component and Position */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="editComponent">Component</Label>
+                                <Select value={editPieceForm.component} onValueChange={(value) => handleEditPieceFormChange('component', value)}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select component" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableComponents.map((component) => (
+                                            <SelectItem key={component} value={component}>
+                                                {component}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editPosition">Position</Label>
+                                <Select 
+                                    value={editPieceForm.position} 
+                                    onValueChange={(value) => {
+                                        handleEditPieceFormChange('position', value)
+                                        handleEditPieceFormChange('state', 'In Service')
+                                    }}
+                                    disabled={!editPieceForm.component}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select position" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availablePositions.map((position) => (
+                                            <SelectItem key={position} value={position}>
+                                                {position}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        {/* Status and State */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="editStatus">Status</Label>
+                                <Select value={editPieceForm.status} onValueChange={(value) => handleEditPieceFormChange('status', value)}>
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="OK">OK</SelectItem>
+                                        <SelectItem value="Monitor">Monitor</SelectItem>
+                                        <SelectItem value="Replace Soon">Replace Soon</SelectItem>
+                                        <SelectItem value="Replace Now">Replace Now</SelectItem>
+                                        <SelectItem value="Spare">Spare</SelectItem>
+                                        <SelectItem value="Degraded">Degraded</SelectItem>
+                                        <SelectItem value="Unknown">Unknown</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editState">State</Label>
+                                <Select value={editPieceForm.state} onValueChange={(value) => handleEditPieceFormChange('state', value)}>
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="In Service">In Service</SelectItem>
+                                        <SelectItem value="Out of Service">Out of Service</SelectItem>
+                                        <SelectItem value="Standby">Standby</SelectItem>
+                                        <SelectItem value="Repair">Repair</SelectItem>
+                                        <SelectItem value="On Order">On Order</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        {/* Hours, Starts, Trips */}
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="editHours">Hours</Label>
+                                <Input
+                                    id="editHours"
+                                    type="number"
+                                    value={editPieceForm.hours}
+                                    onChange={(e) => handleEditPieceFormChange('hours', parseInt(e.target.value) || 0)}
+                                    placeholder="0"
+                                    min="0"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editStarts">Starts</Label>
+                                <Input
+                                    id="editStarts"
+                                    type="number"
+                                    value={editPieceForm.starts}
+                                    onChange={(e) => handleEditPieceFormChange('starts', parseInt(e.target.value) || 0)}
+                                    placeholder="0"
+                                    min="0"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editTrips">Trips</Label>
+                                <Input
+                                    id="editTrips"
+                                    type="number"
+                                    value={editPieceForm.trips}
+                                    onChange={(e) => handleEditPieceFormChange('trips', parseInt(e.target.value) || 0)}
+                                    placeholder="0"
+                                    min="0"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Repair Job Selection */}
+                        <div className="space-y-2">
+                            <Label htmlFor="editRepairJob">Repair Job</Label>
+                            <Select 
+                                value={editPieceForm.repairJob} 
+                                onValueChange={handleRepairJobChange}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a repair job" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {availableRepairJobs.map((job) => (
+                                        <SelectItem key={job.id} value={job.id}>
+                                            {job.name} ({job.id})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Text Areas for Details */}
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="editRepairDetails">Repair Details</Label>
+                                <textarea
+                                    id="editRepairDetails"
+                                    value={editPieceForm.repairDetails}
+                                    onChange={(e) => handleEditPieceFormChange('repairDetails', e.target.value)}
+                                    placeholder="Enter repair details..."
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                                    rows={3}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editConditionDetails">Condition Details</Label>
+                                <textarea
+                                    id="editConditionDetails"
+                                    value={editPieceForm.conditionDetails}
+                                    onChange={(e) => handleEditPieceFormChange('conditionDetails', e.target.value)}
+                                    placeholder="Enter condition details..."
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                                    rows={3}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editNotes">Notes</Label>
+                                <textarea
+                                    id="editNotes"
+                                    value={editPieceForm.notes}
+                                    onChange={(e) => handleEditPieceFormChange('notes', e.target.value)}
+                                    placeholder="Enter additional notes..."
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                                    rows={3}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Form Actions */}
+                        <div className="flex justify-end gap-3 pt-4 border-t">
+                            <Button 
+                                type="button" 
+                                variant="outline" 
+                                onClick={() => setOpenDialog(null)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={!editPieceForm.id}>
+                                Update Piece
+                            </Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Dialog for Edit a Component */}
+            <Dialog open={openDialog === 'editComponent'} onOpenChange={() => setOpenDialog(null)}>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit a Component</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleEditComponentFormSubmit} className="space-y-6">
+                        {/* Component Selection */}
+                        <div className="space-y-2">
+                            <Label htmlFor="selectComponent">Select Component to Edit</Label>
+                            <Select 
+                                value={editComponentForm.id} 
+                                onValueChange={(componentId) => handleSelectComponentToEdit(componentId)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Choose a component to edit" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {availableComponentsForEdit.map((component) => (
+                                        <SelectItem key={component.id} value={component.id}>
+                                            {component.name} ({component.type}) - {component.id}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Basic Information */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="editComponentName">Component Name</Label>
+                                <Input
+                                    id="editComponentName"
+                                    value={editComponentForm.name}
+                                    onChange={(e) => handleEditComponentFormChange('name', e.target.value)}
+                                    placeholder="Enter component name"
+                                    required
+                                    disabled={!editComponentForm.id}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editComponentType">Component Type</Label>
+                                <Select 
+                                    value={editComponentForm.type} 
+                                    onValueChange={(value) => handleEditComponentFormChange('type', value)}
+                                    disabled={!editComponentForm.id}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select component type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableComponentTypes.map((type) => (
+                                            <SelectItem key={type} value={type}>
+                                                {type.charAt(0).toUpperCase() + type.slice(1)}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        {/* Interval Fields */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-semibold">Intervals</h3>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="editIntervalFH">Interval FH</Label>
+                                    <Input
+                                        id="editIntervalFH"
+                                        type="number"
+                                        value={editComponentForm.intervalFH}
+                                        onChange={(e) => handleEditComponentFormChange('intervalFH', parseInt(e.target.value) || 0)}
+                                        placeholder="0"
+                                        min="0"
+                                        disabled={!editComponentForm.id}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="editIntervalFS">Interval FS</Label>
+                                    <Input
+                                        id="editIntervalFS"
+                                        type="number"
+                                        value={editComponentForm.intervalFS}
+                                        onChange={(e) => handleEditComponentFormChange('intervalFS', parseInt(e.target.value) || 0)}
+                                        placeholder="0"
+                                        min="0"
+                                        disabled={!editComponentForm.id}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="editIntervalTrips">Interval Trips</Label>
+                                    <Input
+                                        id="editIntervalTrips"
+                                        type="number"
+                                        value={editComponentForm.intervalTrips}
+                                        onChange={(e) => handleEditComponentFormChange('intervalTrips', parseInt(e.target.value) || 0)}
+                                        placeholder="0"
+                                        min="0"
+                                        disabled={!editComponentForm.id}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Piece Assignment */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-semibold">Assign Pieces to Positions</h3>
+                            <div className="space-y-3">
+                                {editComponentForm.assignedPieces.map((assignment, index) => {
+                                    const piece = availablePieces.find(p => p.id === assignment.pieceId)
+                                    return (
+                                        <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                                            <div className="flex-1">
+                                                <span className="font-medium">{piece?.name}</span>
+                                                <span className="text-gray-500 ml-2">({piece?.pn})</span>
+                                                <span className="text-blue-600 ml-2">→ {assignment.position}</span>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleRemovePieceFromEditComponent(assignment.pieceId)}
+                                                disabled={!editComponentForm.id}
+                                            >
+                                                Remove
+                                            </Button>
+                                        </div>
+                                    )
+                                })}
+                                
+                                {/* Add new piece assignment */}
+                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                    <div className="space-y-3">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-2">
+                                                <Label>Select Piece</Label>
+                                                <Select 
+                                                    value={editPieceAssignmentForm.selectedPiece}
+                                                    onValueChange={(pieceId) => {
+                                                        setEditPieceAssignmentForm(prev => ({
+                                                            ...prev,
+                                                            selectedPiece: pieceId
+                                                        }))
+                                                    }}
+                                                    disabled={!editComponentForm.id}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Choose a piece" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {availablePieces
+                                                            .filter(piece => !editComponentForm.assignedPieces.some(ap => ap.pieceId === piece.id))
+                                                            .map((piece) => (
+                                                                <SelectItem key={piece.id} value={piece.id}>
+                                                                    {piece.name} ({piece.pn})
+                                                                </SelectItem>
+                                                            ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Position</Label>
+                                                <Select 
+                                                    value={editPieceAssignmentForm.selectedPosition}
+                                                    onValueChange={(position) => {
+                                                        setEditPieceAssignmentForm(prev => ({
+                                                            ...prev,
+                                                            selectedPosition: position
+                                                        }))
+                                                    }}
+                                                    disabled={!editComponentForm.id}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select position" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {availablePositions.map((position) => (
+                                                            <SelectItem key={position} value={position}>
+                                                                {position}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-end">
+                                            <Button
+                                                type="button"
+                                                onClick={handleAddEditPieceAssignment}
+                                                disabled={!editPieceAssignmentForm.selectedPiece || !editPieceAssignmentForm.selectedPosition || !editComponentForm.id}
+                                                size="sm"
+                                            >
+                                                Add Assignment
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Past Events */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-semibold">Past Events</h3>
+                            <div className="space-y-3">
+                                {editComponentForm.pastEvents.map((event, index) => (
+                                    <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                                        <div className="flex-1">
+                                            <span className="font-medium">{event}</span>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleRemovePastEventFromEditComponent(event)}
+                                            disabled={!editComponentForm.id}
+                                        >
+                                            Remove
+                                        </Button>
+                                    </div>
+                                ))}
+                                
+                                {/* Add new past event */}
+                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                    <div className="space-y-2">
+                                        <Label>Add Past Event</Label>
+                                        <Select 
+                                            onValueChange={(eventName) => {
+                                                if (!editComponentForm.pastEvents.includes(eventName)) {
+                                                    handleAddPastEventToEditComponent(eventName)
+                                                }
+                                            }}
+                                            disabled={!editComponentForm.id}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Choose a past event" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {availablePastEvents
+                                                    .filter(event => !editComponentForm.pastEvents.includes(event))
+                                                    .map((event) => (
+                                                        <SelectItem key={event} value={event}>
+                                                            {event}
+                                                        </SelectItem>
+                                                    ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Form Actions */}
+                        <div className="flex justify-end gap-3 pt-4 border-t">
+                            <Button 
+                                type="button" 
+                                variant="outline" 
+                                onClick={() => setOpenDialog(null)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={!editComponentForm.id}>
+                                Update Component
                             </Button>
                         </div>
                     </form>
@@ -1958,6 +3394,915 @@ export default function SettingsPage() {
                             </Button>
                             <Button type="submit">
                                 Add {turbineSiteForm.type === "turbine" ? "Turbine" : "Site"}
+                            </Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Dialog for Edit an Event */}
+            <Dialog open={openDialog === 'editEvent'} onOpenChange={() => setOpenDialog(null)}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit an Event</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleEditEventFormSubmit} className="space-y-6">
+                        {/* Event Type Toggle */}
+                        <div className="space-y-4">
+                            <Label className="text-lg font-semibold">Event Type</Label>
+                            <div className="flex gap-4">
+                                <Button
+                                    type="button"
+                                    variant={editEventForm.type === "outage" ? "default" : "outline"}
+                                    onClick={() => handleEditEventFormChange('type', 'outage')}
+                                    className="flex-1"
+                                >
+                                    Outage
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant={editEventForm.type === "repair" ? "default" : "outline"}
+                                    onClick={() => handleEditEventFormChange('type', 'repair')}
+                                    className="flex-1"
+                                >
+                                    Repair
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Event Selection */}
+                        <div className="space-y-2">
+                            <Label htmlFor="selectEvent">Select Event to Edit</Label>
+                            <Select 
+                                value={editEventForm.id} 
+                                onValueChange={(eventId) => handleSelectEventToEdit(eventId)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Choose an event to edit" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {availableEvents
+                                        .filter(event => event.type === editEventForm.type)
+                                        .map((event) => (
+                                            <SelectItem key={event.id} value={event.id}>
+                                                {event.type === "outage" ? event.eventName : event.preEventTitle} - {event.id}
+                                            </SelectItem>
+                                        ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Form Content Based on Type */}
+                        <div className="min-h-[300px] p-6 border border-gray-200 rounded-lg bg-gray-50">
+                            {editEventForm.type === "outage" ? (
+                                <div className="space-y-6">
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-4">Edit Outage Event</h3>
+                                    
+                                    {/* Basic Information */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editTurbine">Turbine</Label>
+                                            <Select value={editEventForm.turbine} onValueChange={(value) => handleEditEventFormChange('turbine', value)} disabled={!editEventForm.id}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select turbine" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {availableTurbines.map((turbine) => (
+                                                        <SelectItem key={turbine} value={turbine}>
+                                                            {turbine}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editEventName">Event Name</Label>
+                                            <Input
+                                                id="editEventName"
+                                                value={editEventForm.eventName}
+                                                onChange={(e) => handleEditEventFormChange('eventName', e.target.value)}
+                                                placeholder="Enter event name"
+                                                required
+                                                disabled={!editEventForm.id}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editDate">Date</Label>
+                                            <Input
+                                                id="editDate"
+                                                type="date"
+                                                value={editEventForm.date}
+                                                onChange={(e) => handleEditEventFormChange('date', e.target.value)}
+                                                required
+                                                disabled={!editEventForm.id}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editHours">Hours</Label>
+                                            <Input
+                                                id="editHours"
+                                                type="number"
+                                                value={editEventForm.hours}
+                                                onChange={(e) => handleEditEventFormChange('hours', parseInt(e.target.value) || 0)}
+                                                placeholder="0"
+                                                min="0"
+                                                disabled={!editEventForm.id}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="editTarget">Target</Label>
+                                        <Input
+                                            id="editTarget"
+                                            type="number"
+                                            value={editEventForm.target}
+                                            onChange={(e) => handleEditEventFormChange('target', parseInt(e.target.value) || 0)}
+                                            placeholder="0"
+                                            min="0"
+                                            disabled={!editEventForm.id}
+                                        />
+                                    </div>
+
+                                    {/* Interval Fields */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editIntFh">Int FH</Label>
+                                            <Input
+                                                id="editIntFh"
+                                                type="number"
+                                                value={editEventForm.intFh}
+                                                onChange={(e) => handleEditEventFormChange('intFh', parseInt(e.target.value) || 0)}
+                                                placeholder="0"
+                                                min="0"
+                                                disabled={!editEventForm.id}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editStarts">Starts</Label>
+                                            <Input
+                                                id="editStarts"
+                                                type="number"
+                                                value={editEventForm.starts}
+                                                onChange={(e) => handleEditEventFormChange('starts', parseInt(e.target.value) || 0)}
+                                                placeholder="0"
+                                                min="0"
+                                                disabled={!editEventForm.id}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editTrips">Trips</Label>
+                                            <Input
+                                                id="editTrips"
+                                                type="number"
+                                                value={editEventForm.trips}
+                                                onChange={(e) => handleEditEventFormChange('trips', parseInt(e.target.value) || 0)}
+                                                placeholder="0"
+                                                min="0"
+                                                disabled={!editEventForm.id}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editIntFh2">Int FH</Label>
+                                            <Input
+                                                id="editIntFh2"
+                                                type="number"
+                                                value={editEventForm.intFh2}
+                                                onChange={(e) => handleEditEventFormChange('intFh2', parseInt(e.target.value) || 0)}
+                                                placeholder="0"
+                                                min="0"
+                                                disabled={!editEventForm.id}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="editIntTrips">Int Trips</Label>
+                                        <Input
+                                            id="editIntTrips"
+                                            type="number"
+                                            value={editEventForm.intTrips}
+                                            onChange={(e) => handleEditEventFormChange('intTrips', parseInt(e.target.value) || 0)}
+                                            placeholder="0"
+                                            min="0"
+                                            disabled={!editEventForm.id}
+                                        />
+                                    </div>
+
+                                    {/* Set In/Set Out Components */}
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <h4 className="text-lg font-semibold">Component Replacement</h4>
+                                            <div className="text-sm text-gray-600">
+                                                Components being set in will replace components being set out
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Current Assignments */}
+                                        <div className="grid grid-cols-2 gap-6">
+                                            {/* Set In Components */}
+                                            <div className="space-y-3">
+                                                <h5 className="font-medium text-green-600 flex items-center gap-2">
+                                                    <span className="w-3 h-3 bg-green-500 rounded-full"></span>
+                                                    Set In (New Components)
+                                                </h5>
+                                                {editEventForm.setIn.length > 0 ? (
+                                                    <div className="space-y-2">
+                                                        {editEventForm.setIn.map((component, index) => (
+                                                            <div key={index} className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                                                                <span className="text-sm font-medium">{component}</span>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => handleRemoveEditSetInComponent(component)}
+                                                                    className="h-4 w-4 p-0 text-green-600 hover:text-green-800"
+                                                                    disabled={!editEventForm.id}
+                                                                >
+                                                                    ×
+                                                                </Button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-sm text-gray-400 italic">No components selected</div>
+                                                )}
+                                            </div>
+
+                                            {/* Set Out Components */}
+                                            <div className="space-y-3">
+                                                <h5 className="font-medium text-red-600 flex items-center gap-2">
+                                                    <span className="w-3 h-3 bg-red-500 rounded-full"></span>
+                                                    Set Out (Removed Components)
+                                                </h5>
+                                                {editEventForm.setOut.length > 0 ? (
+                                                    <div className="space-y-2">
+                                                        {editEventForm.setOut.map((component, index) => (
+                                                            <div key={index} className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+                                                                <span className="text-sm font-medium">{component}</span>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => handleRemoveEditSetOutComponent(component)}
+                                                                    className="h-4 w-4 p-0 text-red-600 hover:text-red-800"
+                                                                    disabled={!editEventForm.id}
+                                                                >
+                                                                    ×
+                                                                </Button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-sm text-gray-400 italic">No components selected</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Add Components */}
+                                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                            <div className="space-y-4">
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <Label>Select Component</Label>
+                                                        <Select 
+                                                            value={editSetInAssignmentForm.selectedComponent}
+                                                            onValueChange={(component) => {
+                                                                setEditSetInAssignmentForm(prev => ({
+                                                                    ...prev,
+                                                                    selectedComponent: component
+                                                                }))
+                                                            }}
+                                                            disabled={!editEventForm.id}
+                                                        >
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Choose a component" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {availableComponents
+                                                                    .filter(component => 
+                                                                        !editEventForm.setIn.includes(component) && 
+                                                                        !editEventForm.setOut.includes(component)
+                                                                    )
+                                                                    .map((component) => (
+                                                                        <SelectItem key={component} value={component}>
+                                                                            {component}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Select Component</Label>
+                                                        <Select 
+                                                            value={editSetOutAssignmentForm.selectedComponent}
+                                                            onValueChange={(component) => {
+                                                                setEditSetOutAssignmentForm(prev => ({
+                                                                    ...prev,
+                                                                    selectedComponent: component
+                                                                }))
+                                                            }}
+                                                            disabled={!editEventForm.id}
+                                                        >
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Choose a component" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {availableComponents
+                                                                    .filter(component => 
+                                                                        !editEventForm.setIn.includes(component) && 
+                                                                        !editEventForm.setOut.includes(component)
+                                                                    )
+                                                                    .map((component) => (
+                                                                        <SelectItem key={component} value={component}>
+                                                                            {component}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                </div>
+                                                <div className="flex justify-center">
+                                                    <Button
+                                                        type="button"
+                                                        onClick={handleAddEditBothComponents}
+                                                        disabled={!editSetInAssignmentForm.selectedComponent && !editSetOutAssignmentForm.selectedComponent || !editEventForm.id}
+                                                        size="sm"
+                                                        className="bg-slate-600 hover:bg-slate-700"
+                                                    >
+                                                        Add Components
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Notes */}
+                                    <div className="space-y-2">
+                                        <Label htmlFor="editNotes">Notes</Label>
+                                        <textarea
+                                            id="editNotes"
+                                            value={editEventForm.notes}
+                                            onChange={(e) => handleEditEventFormChange('notes', e.target.value)}
+                                            placeholder="Enter notes..."
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                                            rows={3}
+                                            disabled={!editEventForm.id}
+                                        />
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-4">Edit Repair Event</h3>
+                                    
+                                    {/* Basic Information */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editRepairNumber">Repair #</Label>
+                                            <Input
+                                                id="editRepairNumber"
+                                                value={editEventForm.repairNumber}
+                                                onChange={(e) => handleEditEventFormChange('repairNumber', e.target.value)}
+                                                placeholder="Enter repair number"
+                                                required
+                                                disabled={!editEventForm.id}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editRepairComponent">Component</Label>
+                                            <Select value={editEventForm.repairComponent} onValueChange={(value) => handleEditEventFormChange('repairComponent', value)} disabled={!editEventForm.id}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select component" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {availableComponents.map((component) => (
+                                                        <SelectItem key={component} value={component}>
+                                                            {component}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="editPreEventTitle">Pre-Event Title</Label>
+                                        <Input
+                                            id="editPreEventTitle"
+                                            value={editEventForm.preEventTitle}
+                                            onChange={(e) => handleEditEventFormChange('preEventTitle', e.target.value)}
+                                            placeholder="Enter pre-event title"
+                                            required
+                                            disabled={!editEventForm.id}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="editRepairDate">Date</Label>
+                                        <Input
+                                            id="editRepairDate"
+                                            type="date"
+                                            value={editEventForm.date}
+                                            onChange={(e) => handleEditEventFormChange('date', e.target.value)}
+                                            required
+                                            disabled={!editEventForm.id}
+                                        />
+                                    </div>
+
+                                    {/* Interval Fields */}
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editRepairIntHours">Int Hours</Label>
+                                            <Input
+                                                id="editRepairIntHours"
+                                                type="number"
+                                                value={editEventForm.repairIntHours}
+                                                onChange={(e) => handleEditEventFormChange('repairIntHours', parseInt(e.target.value) || 0)}
+                                                placeholder="0"
+                                                min="0"
+                                                disabled={!editEventForm.id}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editRepairIntFS">Int FS</Label>
+                                            <Input
+                                                id="editRepairIntFS"
+                                                type="number"
+                                                value={editEventForm.repairIntFS}
+                                                onChange={(e) => handleEditEventFormChange('repairIntFS', parseInt(e.target.value) || 0)}
+                                                placeholder="0"
+                                                min="0"
+                                                disabled={!editEventForm.id}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editRepairIntTrips">Int Trips</Label>
+                                            <Input
+                                                id="editRepairIntTrips"
+                                                type="number"
+                                                value={editEventForm.repairIntTrips}
+                                                onChange={(e) => handleEditEventFormChange('repairIntTrips', parseInt(e.target.value) || 0)}
+                                                placeholder="0"
+                                                min="0"
+                                                disabled={!editEventForm.id}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Pieces Section */}
+                                    <div className="space-y-4">
+                                        <h4 className="text-lg font-semibold">Pieces</h4>
+                                        
+                                        {/* Current Pieces */}
+                                        <div className="space-y-3">
+                                            {editEventForm.repairPieces.map((repairPiece, index) => {
+                                                const piece = availablePieces.find(p => p.id === repairPiece.pieceId)
+                                                return (
+                                                    <div key={index} className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <div className="flex-1">
+                                                                <h5 className="font-medium text-gray-900">
+                                                                    {piece?.name} ({piece?.pn}) - {piece?.id}
+                                                                </h5>
+                                                            </div>
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => handleRemoveEditRepairPiece(repairPiece.pieceId)}
+                                                                className="text-red-600 hover:text-red-800"
+                                                                disabled={!editEventForm.id}
+                                                            >
+                                                                Remove
+                                                            </Button>
+                                                        </div>
+                                                        <div className="space-y-3">
+                                                            <div>
+                                                                <Label className="text-sm font-medium text-gray-700">Condition Details</Label>
+                                                                <div className="mt-1 p-2 bg-white border border-gray-300 rounded text-sm">
+                                                                    {repairPiece.conditionDetails}
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <Label className="text-sm font-medium text-gray-700">Repair Details</Label>
+                                                                <div className="mt-1 p-2 bg-white border border-gray-300 rounded text-sm">
+                                                                    {repairPiece.repairDetails}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                        
+                                        {/* Add New Piece */}
+                                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                            <h5 className="font-medium text-gray-700 mb-3">Add New Piece</h5>
+                                            <div className="space-y-4">
+                                                <div className="space-y-2">
+                                                    <Label>Select Piece</Label>
+                                                    <Select 
+                                                        value={editRepairPieceForm.selectedPiece}
+                                                        onValueChange={(pieceId) => {
+                                                            setEditRepairPieceForm(prev => ({
+                                                                ...prev,
+                                                                selectedPiece: pieceId
+                                                            }))
+                                                        }}
+                                                        disabled={!editEventForm.id}
+                                                    >
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Choose a piece" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {availablePieces
+                                                                .filter(piece => !editEventForm.repairPieces.some(rp => rp.pieceId === piece.id))
+                                                                .map((piece) => (
+                                                                    <SelectItem key={piece.id} value={piece.id}>
+                                                                        {piece.name} ({piece.pn}) - {piece.id}
+                                                                    </SelectItem>
+                                                                ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="editNewConditionDetails">Condition Details</Label>
+                                                    <textarea
+                                                        id="editNewConditionDetails"
+                                                        value={editRepairPieceForm.conditionDetails}
+                                                        onChange={(e) => setEditRepairPieceForm(prev => ({
+                                                            ...prev,
+                                                            conditionDetails: e.target.value
+                                                        }))}
+                                                        placeholder="Enter condition details..."
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                                                        rows={3}
+                                                        disabled={!editEventForm.id}
+                                                    />
+                                                </div>
+                                                
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="editNewRepairDetails">Repair Details</Label>
+                                                    <textarea
+                                                        id="editNewRepairDetails"
+                                                        value={editRepairPieceForm.repairDetails}
+                                                        onChange={(e) => setEditRepairPieceForm(prev => ({
+                                                            ...prev,
+                                                            repairDetails: e.target.value
+                                                        }))}
+                                                        placeholder="Enter repair details..."
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                                                        rows={3}
+                                                        disabled={!editEventForm.id}
+                                                    />
+                                                </div>
+                                                
+                                                <div className="flex justify-end">
+                                                    <Button
+                                                        type="button"
+                                                        onClick={handleAddEditRepairPiece}
+                                                        disabled={!editRepairPieceForm.selectedPiece || !editRepairPieceForm.conditionDetails || !editRepairPieceForm.repairDetails || !editEventForm.id}
+                                                        size="sm"
+                                                        className="bg-blue-600 hover:bg-blue-700"
+                                                    >
+                                                        Add Piece
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Form Actions */}
+                        <div className="flex justify-end gap-3 pt-4 border-t">
+                            <Button 
+                                type="button" 
+                                variant="outline" 
+                                onClick={() => setOpenDialog(null)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={!editEventForm.id}>
+                                Update Event
+                            </Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Dialog for Edit a Turbine or Site */}
+            <Dialog open={openDialog === 'editTurbine'} onOpenChange={() => setOpenDialog(null)}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit a Turbine or Site</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleEditTurbineSiteFormSubmit} className="space-y-6">
+                        {/* Type Toggle */}
+                        <div className="space-y-4">
+                            <Label className="text-lg font-semibold">Type</Label>
+                            <div className="flex gap-4">
+                                <Button
+                                    type="button"
+                                    variant={editTurbineSiteForm.type === "turbine" ? "default" : "outline"}
+                                    onClick={() => handleEditTurbineSiteFormChange('type', 'turbine')}
+                                    className="flex-1"
+                                >
+                                    Edit a Turbine
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant={editTurbineSiteForm.type === "site" ? "default" : "outline"}
+                                    onClick={() => handleEditTurbineSiteFormChange('type', 'site')}
+                                    className="flex-1"
+                                >
+                                    Edit a Site
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Turbine/Site Selection */}
+                        <div className="space-y-2">
+                            <Label htmlFor="selectTurbineSite">Select {editTurbineSiteForm.type === "turbine" ? "Turbine" : "Site"} to Edit</Label>
+                            <Select 
+                                value={editTurbineSiteForm.id} 
+                                onValueChange={(turbineSiteId) => handleSelectTurbineSiteToEdit(turbineSiteId)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder={`Choose a ${editTurbineSiteForm.type} to edit`} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {availableTurbinesAndSites
+                                        .filter(turbineSite => turbineSite.type === editTurbineSiteForm.type)
+                                        .map((turbineSite) => (
+                                            <SelectItem key={turbineSite.id} value={turbineSite.id}>
+                                                {turbineSite.type === "turbine" ? turbineSite.turbineName : turbineSite.siteName} - {turbineSite.id}
+                                            </SelectItem>
+                                        ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Form Content Based on Type */}
+                        <div className="min-h-[300px] p-6 border border-gray-200 rounded-lg bg-gray-50">
+                            {editTurbineSiteForm.type === "turbine" ? (
+                                <div className="space-y-6">
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-4">Edit a Turbine</h3>
+                                    
+                                    {/* Basic Information */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editTurbineName">Turbine Name</Label>
+                                            <Input
+                                                id="editTurbineName"
+                                                value={editTurbineSiteForm.turbineName}
+                                                onChange={(e) => handleEditTurbineSiteFormChange('turbineName', e.target.value)}
+                                                placeholder="Enter turbine name"
+                                                required
+                                                disabled={!editTurbineSiteForm.id}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editPlantLocation">Plant Location</Label>
+                                            <Select value={editTurbineSiteForm.plantLocation} onValueChange={(value) => handleEditTurbineSiteFormChange('plantLocation', value)} disabled={!editTurbineSiteForm.id}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select plant location" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {availablePlantLocations.map((location) => (
+                                                        <SelectItem key={location} value={location}>
+                                                            {location}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    {/* Component Assignment */}
+                                    <div className="space-y-4">
+                                        <h4 className="text-lg font-semibold">Assigned Components</h4>
+                                        
+                                        {/* Current Components */}
+                                        <div className="space-y-3">
+                                            {editTurbineSiteForm.assignedComponents.map((component, index) => (
+                                                <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                                                    <div className="flex-1">
+                                                        <span className="font-medium">{component}</span>
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleRemoveComponentFromEditTurbine(component)}
+                                                        disabled={!editTurbineSiteForm.id}
+                                                    >
+                                                        Remove
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                            
+                                            {/* Add new component */}
+                                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                                <div className="space-y-3">
+                                                    <Label>Add Component</Label>
+                                                    <div className="flex gap-3">
+                                                        <Select 
+                                                            value={editTurbineComponentForm.selectedComponent}
+                                                            onValueChange={(component) => {
+                                                                setEditTurbineComponentForm(prev => ({
+                                                                    ...prev,
+                                                                    selectedComponent: component
+                                                                }))
+                                                            }}
+                                                            disabled={!editTurbineSiteForm.id}
+                                                        >
+                                                            <SelectTrigger className="flex-1">
+                                                                <SelectValue placeholder="Choose a component" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {availableComponents
+                                                                    .filter(component => !editTurbineSiteForm.assignedComponents.includes(component))
+                                                                    .map((component) => (
+                                                                        <SelectItem key={component} value={component}>
+                                                                            {component}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <Button
+                                                            type="button"
+                                                            onClick={handleAddComponentToEditTurbine}
+                                                            disabled={!editTurbineComponentForm.selectedComponent || !editTurbineSiteForm.id}
+                                                            size="sm"
+                                                        >
+                                                            Add Component
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-4">Edit a Site</h3>
+                                    
+                                    {/* Basic Information */}
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editSiteName">Site Name</Label>
+                                            <Input
+                                                id="editSiteName"
+                                                value={editTurbineSiteForm.siteName}
+                                                onChange={(e) => handleEditTurbineSiteFormChange('siteName', e.target.value)}
+                                                placeholder="Enter site name"
+                                                required
+                                                disabled={!editTurbineSiteForm.id}
+                                            />
+                                        </div>
+                                        
+                                        <div className="space-y-2">
+                                            <Label htmlFor="editAddress">Address</Label>
+                                            <textarea
+                                                id="editAddress"
+                                                value={editTurbineSiteForm.address}
+                                                onChange={(e) => handleEditTurbineSiteFormChange('address', e.target.value)}
+                                                placeholder="Enter full address"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                                                rows={3}
+                                                required
+                                                disabled={!editTurbineSiteForm.id}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Points of Contact */}
+                                    <div className="space-y-4">
+                                        <h4 className="text-lg font-semibold">Points of Contact</h4>
+                                        
+                                        {/* Current Contacts */}
+                                        <div className="space-y-3">
+                                            {editTurbineSiteForm.contacts.map((contact, index) => (
+                                                <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                                                    <div className="flex-1">
+                                                        <div className="font-medium">{contact.name}</div>
+                                                        {contact.title && <div className="text-sm text-gray-500">{contact.title}</div>}
+                                                        <div className="text-sm text-gray-600">{contact.phone}</div>
+                                                        {contact.email && <div className="text-sm text-gray-600">{contact.email}</div>}
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleRemoveContactFromEditSite(index)}
+                                                        className="text-red-600 hover:text-red-800"
+                                                        disabled={!editTurbineSiteForm.id}
+                                                    >
+                                                        Remove
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                            
+                                            {/* Add new contact */}
+                                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                                <div className="space-y-3">
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="editNewContactName">Contact Name</Label>
+                                                            <Input
+                                                                id="editNewContactName"
+                                                                value={editSiteContactForm.name}
+                                                                onChange={(e) => setEditSiteContactForm(prev => ({
+                                                                    ...prev,
+                                                                    name: e.target.value
+                                                                }))}
+                                                                placeholder="Enter contact name"
+                                                                disabled={!editTurbineSiteForm.id}
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="editNewContactPhone">Phone Number</Label>
+                                                            <Input
+                                                                id="editNewContactPhone"
+                                                                value={editSiteContactForm.phone}
+                                                                onChange={(e) => setEditSiteContactForm(prev => ({
+                                                                    ...prev,
+                                                                    phone: e.target.value
+                                                                }))}
+                                                                placeholder="Enter phone number"
+                                                                type="tel"
+                                                                disabled={!editTurbineSiteForm.id}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="editNewContactTitle">Title</Label>
+                                                            <Input
+                                                                id="editNewContactTitle"
+                                                                value={editSiteContactForm.title}
+                                                                onChange={(e) => setEditSiteContactForm(prev => ({
+                                                                    ...prev,
+                                                                    title: e.target.value
+                                                                }))}
+                                                                placeholder="Enter job title"
+                                                                disabled={!editTurbineSiteForm.id}
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="editNewContactEmail">Email</Label>
+                                                            <Input
+                                                                id="editNewContactEmail"
+                                                                value={editSiteContactForm.email}
+                                                                onChange={(e) => setEditSiteContactForm(prev => ({
+                                                                    ...prev,
+                                                                    email: e.target.value
+                                                                }))}
+                                                                placeholder="Enter email address"
+                                                                type="email"
+                                                                disabled={!editTurbineSiteForm.id}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex justify-end">
+                                                        <Button
+                                                            type="button"
+                                                            onClick={handleAddContactToEditSite}
+                                                            disabled={!editSiteContactForm.name || !editSiteContactForm.phone || !editTurbineSiteForm.id}
+                                                            size="sm"
+                                                            className="bg-blue-600 hover:bg-blue-700"
+                                                        >
+                                                            Add Contact
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Form Actions */}
+                        <div className="flex justify-end gap-3 pt-4 border-t">
+                            <Button 
+                                type="button" 
+                                variant="outline" 
+                                onClick={() => setOpenDialog(null)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={!editTurbineSiteForm.id}>
+                                Update {editTurbineSiteForm.type === "turbine" ? "Turbine" : "Site"}
                             </Button>
                         </div>
                     </form>

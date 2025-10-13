@@ -27,6 +27,7 @@ import {
   Briefcase
 } from "lucide-react";
 import VisualTreeView from "@/components/VisualTreeView";
+import AddTurbineSiteDialog from "@/components/AddTurbineSiteDialog";
 import type { InventoryItem } from "@/lib/inventory/types";
 
 // Mock inventory data for turbines
@@ -414,6 +415,7 @@ export default function SitesAndTurbinesPage() {
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [expandedTurbines, setExpandedTurbines] = React.useState<Set<string>>(new Set());
+  const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
 
   // Flatten turbines for turbine view
   const allTurbines = React.useMemo(() => {
@@ -470,9 +472,12 @@ export default function SitesAndTurbinesPage() {
           <h1 className="text-3xl font-bold">Sites & Turbines</h1>
           <p className="text-gray-600 mt-1">Manage power plant sites and their associated turbines</p>
         </div>
-        <Button className="flex items-center gap-2">
+        <Button 
+          className="flex items-center gap-2"
+          onClick={() => setIsAddDialogOpen(true)}
+        >
           <Plus className="h-4 w-4" />
-          Add Site
+          {viewMode === "sites" ? "Add Site" : "Add Turbine"}
         </Button>
       </div>
 
@@ -568,6 +573,13 @@ export default function SitesAndTurbinesPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Add Turbine/Site Dialog */}
+      <AddTurbineSiteDialog
+        open={isAddDialogOpen}
+        onOpenChange={setIsAddDialogOpen}
+        initialType={viewMode === "sites" ? "site" : "turbine"}
+      />
     </div>
   );
 }
