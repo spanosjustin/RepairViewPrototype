@@ -64,6 +64,7 @@ export default function MatrixPage() {
         editingCell={editingCell}
         onStartEdit={handleStartEdit}
         onStopEdit={handleStopEdit}
+        actionLabel={editingCell ? "Save Edits" : "Edit"}
       />
     </div>
   );
