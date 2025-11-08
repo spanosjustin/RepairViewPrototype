@@ -10,4 +10,7 @@ export type InventoryItem = {
     status: "OK" | "Monitor" | "Replace Soon" | "Replace Now" | "Spare" | "Degraded" | "Unknown";
     state: "In Service" | "Out of Service" | "Standby" | "Repair" | "On Order";
     component: string;
+    componentType: string;
+    turbine: string;
+    position: string;
 };
