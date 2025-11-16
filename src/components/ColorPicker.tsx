@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog"
 
@@ -57,13 +58,20 @@ export function ColorPicker({ currentColor, onColorChange, statusName }: ColorPi
   
   const currentColorOption = colorOptions.find(option => option.value === currentColor) || colorOptions[0]
   
-  const handleColorSelect = (colorValue: string) => {
-    onColorChange(colorValue)
+  const handleColorSelect = useCallback((colorValue: string) => {
+    // Only call onColorChange if the color actually changed
+    if (colorValue !== currentColor) {
+      onColorChange(colorValue)
+    }
     setIsOpen(false)
-  }
+  }, [currentColor, onColorChange])
+
+  const handleOpenChange = useCallback((open: boolean) => {
+    setIsOpen(open)
+  }, [])
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <button 
           className={`w-6 h-6 ${currentColorOption.bgClass} rounded-full border-2 ${currentColorOption.borderClass} cursor-pointer hover:scale-110 transition-transform`}
@@ -73,6 +81,9 @@ export function ColorPicker({ currentColor, onColorChange, statusName }: ColorPi
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Select Color for {statusName}</DialogTitle>
+          <DialogDescription>
+            Choose a color to represent the {statusName} state
+          </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-6 gap-3 py-4">
           {colorOptions.map((color) => (

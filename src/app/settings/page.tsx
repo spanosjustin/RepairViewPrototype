@@ -1,12 +1,182 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
+import { statusColorStorage } from "@/lib/storage/indexedDB"
+import type { StatusColorSetting } from "@/lib/storage/indexedDB"
 import { ColorPicker } from "@/components/ColorPicker"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
+/**
+ * Color Customization Section Component
+ * Allows users to customize colors for state values (using local state like Status)
+ */
+function ColorCustomizationSection() {
+  // State for managing colors for each state (like Status section)
+  const [stateColors, setStateColors] = useState({
+    inService: "emerald",
+    outOfService: "rose",
+    standby: "sky",
+    repair: "amber",
+    onOrder: "sky"
+  });
+
+  // Map color name to tone for saving to DB
+  const colorNameToTone = (colorName: string): StatusColorSetting['tone'] => {
+    if (['emerald', 'green', 'lime'].includes(colorName)) return 'ok';
+    if (['amber', 'yellow', 'orange', 'gold', 'coral', 'cream'].includes(colorName)) return 'warn';
+    if (['rose', 'red', 'pink'].includes(colorName)) return 'bad';
+    if (['sky', 'blue', 'indigo', 'purple', 'violet', 'fuchsia'].includes(colorName)) return 'info';
+    return 'neutral';
+  };
+
+  // Map tone to color name for loading from DB
+  // Note: We'll store the actual color name in bg_color field if available
+  const toneToColorName = (tone: string, storedColor?: string): string => {
+    // If we have a stored color name, use it
+    if (storedColor) return storedColor;
+    // Otherwise fall back to tone-based defaults
+    switch (tone) {
+      case 'ok': return 'emerald';
+      case 'warn': return 'amber';
+      case 'bad': return 'rose';
+      case 'info': return 'sky';
+      default: return 'gray';
+    }
+  };
+
+  // Load state colors from IndexedDB on mount (only once)
+  const hasLoadedState = useRef(false);
+  useEffect(() => {
+    if (hasLoadedState.current) return;
+    hasLoadedState.current = true;
+    
+    const loadStateColors = async () => {
+      try {
+        const stateSettings = await statusColorStorage.getByType('state');
+        if (stateSettings.length > 0) {
+          const loaded = {
+            inService: "emerald",
+            outOfService: "rose",
+            standby: "sky",
+            repair: "amber",
+            onOrder: "sky"
+          };
+          stateSettings.forEach(setting => {
+            // Use bg_color if available, otherwise map from tone
+            const colorName = toneToColorName(setting.tone, setting.bg_color);
+            if (setting.value === 'In Service') loaded.inService = colorName;
+            else if (setting.value === 'Out of Service') loaded.outOfService = colorName;
+            else if (setting.value === 'Standby') loaded.standby = colorName;
+            else if (setting.value === 'Repair') loaded.repair = colorName;
+            else if (setting.value === 'On Order') loaded.onOrder = colorName;
+          });
+          setStateColors(loaded);
+        }
+      } catch (error) {
+        console.error('Error loading state colors:', error);
+      }
+    };
+    loadStateColors();
+  }, []); // Only run on mount
+
+  const [isSaving, setIsSaving] = useState(false);
+  
+  const handleColorChange = async (state: keyof typeof stateColors, color: string) => {
+    // Prevent multiple simultaneous saves
+    if (isSaving) return;
+    
+    // Don't save if color hasn't changed
+    if (stateColors[state] === color) return;
+    
+    // Update UI immediately
+    setStateColors(prev => ({
+      ...prev,
+      [state]: color
+    }));
+
+    // Save to IndexedDB in background
+    setIsSaving(true);
+    try {
+      const stateValueMap: Record<keyof typeof stateColors, string> = {
+        inService: 'In Service',
+        outOfService: 'Out of Service',
+        standby: 'Standby',
+        repair: 'Repair',
+        onOrder: 'On Order'
+      };
+
+      const stateValue = stateValueMap[state];
+      const tone = colorNameToTone(color);
+      
+      await statusColorStorage.save({
+        value: stateValue,
+        type: 'state',
+        tone,
+        bg_color: color // Store the actual color name so we can restore it exactly
+      });
+    } catch (error) {
+      console.error('Error saving state color to DB:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Map state values to state color keys
+  const getStateKey = (state: string): keyof typeof stateColors => {
+    const normalized = state.toLowerCase();
+    if (normalized.includes('service') && !normalized.includes('out')) return 'inService';
+    if (normalized.includes('out of service')) return 'outOfService';
+    if (normalized.includes('standby')) return 'standby';
+    if (normalized.includes('repair')) return 'repair';
+    if (normalized.includes('order')) return 'onOrder';
+    return 'inService'; // default
+  };
+
+  // All possible state values (from types)
+  const allStateValues: string[] = ['In Service', 'Out of Service', 'Standby', 'Repair', 'On Order'];
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-lg">
+      <div className="bg-slate-600 text-white p-4">
+        <h2 className="text-xl font-bold">State Color Customization</h2>
+        <p className="text-sm text-slate-200 mt-1">Customize colors for state values</p>
+      </div>
+
+      <div className="p-6">
+        {/* State Colors Section */}
+        <div>
+          <h3 className="text-lg font-semibold mb-4 text-gray-800">State Colors</h3>
+          <div className="space-y-3">
+            {allStateValues.map((state) => {
+              const stateKey = getStateKey(state);
+              const currentColor = stateColors[stateKey];
+              return (
+                <div
+                  key={state}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-medium text-gray-700 min-w-[140px]">{state}</span>
+                    <span className="text-sm text-gray-500">State</span>
+                  </div>
+                  <ColorPicker
+                    currentColor={currentColor}
+                    onColorChange={(color) => handleColorChange(stateKey, color)}
+                    statusName={state}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
     // State for managing colors for each status
@@ -584,11 +754,143 @@ export default function SettingsPage() {
         }
     ]
 
-    const handleColorChange = (status: keyof typeof statusColors, color: string) => {
+    // Map color name to tone for saving to DB
+    const colorNameToTone = (colorName: string): StatusColorSetting['tone'] => {
+        if (['emerald', 'green', 'lime'].includes(colorName)) return 'ok';
+        if (['amber', 'yellow', 'orange', 'gold', 'coral', 'cream'].includes(colorName)) return 'warn';
+        if (['rose', 'red', 'pink'].includes(colorName)) return 'bad';
+        if (['sky', 'blue', 'indigo', 'purple', 'violet', 'fuchsia'].includes(colorName)) return 'info';
+        return 'neutral';
+    };
+
+    // Map tone to color name for loading from DB
+    // Note: We'll store the actual color name in bg_color field if available
+    const toneToColorName = (tone: string, storedColor?: string): string => {
+        // If we have a stored color name, use it
+        if (storedColor) return storedColor;
+        // Otherwise fall back to tone-based defaults
+        switch (tone) {
+            case 'ok': return 'emerald';
+            case 'warn': return 'amber';
+            case 'bad': return 'rose';
+            case 'info': return 'sky';
+            default: return 'gray';
+        }
+    };
+
+    // Map color name to Tailwind badge classes (for Status Table badges)
+    const getStatusBadgeClasses = (colorName: string): string => {
+        const colorMap: Record<string, string> = {
+            // Reds
+            red: 'bg-red-500',
+            rose: 'bg-rose-500',
+            pink: 'bg-pink-500',
+            // Oranges
+            orange: 'bg-orange-500',
+            amber: 'bg-amber-500',
+            coral: 'bg-orange-500',
+            // Yellows
+            yellow: 'bg-yellow-500',
+            gold: 'bg-yellow-500',
+            cream: 'bg-yellow-400',
+            // Greens
+            green: 'bg-green-500',
+            emerald: 'bg-emerald-500',
+            lime: 'bg-lime-500',
+            // Blues
+            blue: 'bg-blue-500',
+            sky: 'bg-sky-500',
+            indigo: 'bg-indigo-500',
+            // Purples
+            purple: 'bg-purple-500',
+            violet: 'bg-violet-500',
+            fuchsia: 'bg-fuchsia-500',
+            // Grays
+            gray: 'bg-gray-500',
+            slate: 'bg-slate-500',
+            stone: 'bg-stone-500',
+        };
+        return colorMap[colorName.toLowerCase()] || 'bg-gray-500';
+    };
+
+    // Load status colors from IndexedDB on mount (only once)
+    const hasLoadedStatus = useRef(false);
+    useEffect(() => {
+        if (hasLoadedStatus.current) return;
+        hasLoadedStatus.current = true;
+        
+        const loadStatusColors = async () => {
+            try {
+                const statusSettings = await statusColorStorage.getByType('status');
+                if (statusSettings.length > 0) {
+                    const loaded = {
+                        good: "green",
+                        monitor: "yellow", 
+                        replaceSoon: "orange",
+                        replaceNow: "red",
+                        spare: "slate",
+                        degraded: "gray"
+                    };
+                    statusSettings.forEach(setting => {
+                        // Use bg_color if available, otherwise map from tone
+                        const colorName = toneToColorName(setting.tone, setting.bg_color);
+                        if (setting.value === 'OK') loaded.good = colorName;
+                        else if (setting.value === 'Monitor') loaded.monitor = colorName;
+                        else if (setting.value === 'Replace Soon') loaded.replaceSoon = colorName;
+                        else if (setting.value === 'Replace Now') loaded.replaceNow = colorName;
+                        else if (setting.value === 'Spare') loaded.spare = colorName;
+                        else if (setting.value === 'Degraded') loaded.degraded = colorName;
+                    });
+                    setStatusColors(loaded);
+                }
+            } catch (error) {
+                console.error('Error loading status colors:', error);
+            }
+        };
+        loadStatusColors();
+    }, []); // Only run on mount
+
+    const [isSavingStatus, setIsSavingStatus] = useState(false);
+
+    const handleColorChange = async (status: keyof typeof statusColors, color: string) => {
+        // Prevent multiple simultaneous saves
+        if (isSavingStatus) return;
+        
+        // Don't save if color hasn't changed
+        if (statusColors[status] === color) return;
+        
+        // Update UI immediately
         setStatusColors(prev => ({
             ...prev,
             [status]: color
-        }))
+        }));
+
+        // Save to IndexedDB in background
+        setIsSavingStatus(true);
+        try {
+            const statusValueMap: Record<keyof typeof statusColors, string> = {
+                good: 'OK',
+                monitor: 'Monitor',
+                replaceSoon: 'Replace Soon',
+                replaceNow: 'Replace Now',
+                spare: 'Spare',
+                degraded: 'Degraded'
+            };
+
+            const statusValue = statusValueMap[status];
+            const tone = colorNameToTone(color);
+            
+            await statusColorStorage.save({
+                value: statusValue,
+                type: 'status',
+                tone,
+                bg_color: color // Store the actual color name so we can restore it exactly
+            });
+        } catch (error) {
+            console.error('Error saving status color to DB:', error);
+        } finally {
+            setIsSavingStatus(false);
+        }
     }
 
     const handleCardClick = (cardType: string) => {
@@ -1505,7 +1807,7 @@ export default function SettingsPage() {
                     <div className="divide-y divide-gray-200">
                         {/* Good */}
                         <div className="grid grid-cols-5 gap-8 p-4 items-center hover:bg-gray-50">
-                            <div className="bg-green-500 text-white px-3 py-2 rounded text-sm font-medium">Good</div>
+                            <div className={`${getStatusBadgeClasses(statusColors.good)} text-white px-3 py-2 rounded text-sm font-medium`}>Good</div>
                             <div className="flex gap-2">
                                 <input type="number" placeholder="From" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
                                 <input type="number" placeholder="To" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
@@ -1527,7 +1829,7 @@ export default function SettingsPage() {
 
                         {/* Monitor */}
                         <div className="grid grid-cols-5 gap-8 p-4 items-center hover:bg-gray-50">
-                            <div className="bg-yellow-500 text-white px-3 py-2 rounded text-sm font-medium">Monitor</div>
+                            <div className={`${getStatusBadgeClasses(statusColors.monitor)} text-white px-3 py-2 rounded text-sm font-medium`}>Monitor</div>
                             <div className="flex gap-2">
                                 <input type="number" placeholder="From" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
                                 <input type="number" placeholder="To" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
@@ -1549,7 +1851,7 @@ export default function SettingsPage() {
 
                         {/* Replace Soon */}
                         <div className="grid grid-cols-5 gap-8 p-4 items-center hover:bg-gray-50">
-                            <div className="bg-orange-500 text-white px-3 py-2 rounded text-sm font-medium">Replace Soon</div>
+                            <div className={`${getStatusBadgeClasses(statusColors.replaceSoon)} text-white px-3 py-2 rounded text-sm font-medium`}>Replace Soon</div>
                             <div className="flex gap-2">
                                 <input type="number" placeholder="From" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
                                 <input type="number" placeholder="To" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
@@ -1571,7 +1873,7 @@ export default function SettingsPage() {
 
                         {/* Replace Now */}
                         <div className="grid grid-cols-5 gap-8 p-4 items-center hover:bg-gray-50">
-                            <div className="bg-red-500 text-white px-3 py-2 rounded text-sm font-medium">Replace Now</div>
+                            <div className={`${getStatusBadgeClasses(statusColors.replaceNow)} text-white px-3 py-2 rounded text-sm font-medium`}>Replace Now</div>
                             <div className="flex gap-2">
                                 <input type="number" placeholder="From" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
                                 <input type="number" placeholder="To" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
@@ -1596,7 +1898,7 @@ export default function SettingsPage() {
 
                         {/* Spare */}
                         <div className="grid grid-cols-5 gap-8 p-4 items-center hover:bg-gray-50">
-                            <div className="bg-slate-500 text-white px-3 py-2 rounded text-sm font-medium">Spare</div>
+                            <div className={`${getStatusBadgeClasses(statusColors.spare)} text-white px-3 py-2 rounded text-sm font-medium`}>Spare</div>
                             <div></div>
                             <div></div>
                             <div></div>
@@ -1609,7 +1911,7 @@ export default function SettingsPage() {
 
                         {/* Degraded */}
                         <div className="grid grid-cols-5 gap-8 p-4 items-center hover:bg-gray-50">
-                            <div className="bg-gray-500 text-white px-3 py-2 rounded text-sm font-medium">Degraded</div>
+                            <div className={`${getStatusBadgeClasses(statusColors.degraded)} text-white px-3 py-2 rounded text-sm font-medium`}>Degraded</div>
                             <div></div>
                             <div></div>
                             <div></div>
@@ -1621,6 +1923,9 @@ export default function SettingsPage() {
                         </div>
                     </div>
                 </div>
+
+                {/* Color Customization Section */}
+                <ColorCustomizationSection />
 
                 {/* Excel File Button */}
                 <div className="flex justify-center">

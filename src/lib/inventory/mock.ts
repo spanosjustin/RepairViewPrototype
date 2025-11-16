@@ -1,12 +1,70 @@
 import type { InventoryItem } from "@/lib/inventory/types";
 
-export const MOCK_INVENTORY: InventoryItem[] = [
-    { sn: "SN-00123", pn: "PN-AX45", hours: 18520, trips: 182, starts: 980,  status: "OK",           state: "In Service",  component: "Comb Liner" },
-    { sn: "SN-00456", pn: "PN-QZ19", hours: 23270, trips: 201, starts: 1165, status: "Replace Now",  state: "Repair",      component: "Comb Liner" },
-    { sn: "SN-00789", pn: "PN-TX88", hours:  7400, trips:  12, starts: 180,  status: "OK",           state: "In Service",  component: "Tran PRC" },
-    { sn: "SN-01011", pn: "PN-S1N1", hours:  9240, trips:  33, starts: 402,  status: "Monitor",      state: "In Service",  component: "S1N" },
-    { sn: "SN-01314", pn: "PN-S2N2", hours: 15410, trips:  77, starts: 605,  status: "Replace Soon", state: "In Service",  component: "S2N" },
-    { sn: "SN-01617", pn: "PN-RTR1", hours: 28100, trips:  15, starts: 220,  status: "OK",           state: "Standby",     component: "Rotor" },
-    { sn: "SN-01920", pn: "PN-SPR1", hours:     0, trips:   0, starts:   0,  status: "Spare",        state: "On Order",    component: "Comb Liner" },
-    { sn: "SN-02122", pn: "PN-UNK1", hours:  1200, trips:   5, starts:  40,  status: "Unknown",      state: "Out of Service", component: "S3S" },
+// Component types that each turbine should have
+const COMPONENT_TYPES = [
+    "Fuel Nozzles", "Liner Caps", "Comb Liners", "Tran PRC", 
+    "S1N", "S2N", "S3N", "S1S", "S2S", "S3S", "S1B", "S2B", "S3B", "Rotor"
 ];
+
+// Turbine IDs from matrix mock data
+const TURBINE_IDS = ["T-101", "T-202", "T-303"];
+
+// Generate unique part numbers and serial numbers for each component
+const generateComponentData = (turbineId: string, componentType: string, index: number) => {
+    const componentPrefixes: Record<string, string> = {
+        "Fuel Nozzles": "FN",
+        "Liner Caps": "CP", 
+        "Comb Liners": "CL",
+        "Tran PRC": "TP",
+        "S1N": "1N",
+        "S2N": "2N", 
+        "S3N": "3N",
+        "S1S": "1S",
+        "S2S": "2S",
+        "S3S": "3S",
+        "S1B": "1B",
+        "S2B": "2B", 
+        "S3B": "3B",
+        "Rotor": "RT"
+    };
+
+    const prefix = componentPrefixes[componentType] || "XX";
+    const turbineNum = turbineId.split('-')[1];
+    const pn = `${prefix}-${turbineNum}${String(index).padStart(2, '0')}`;
+    const sn = `SN-${turbineNum}${String(index).padStart(3, '0')}`;
+    
+    // Generate realistic hours, trips, and starts with some variation
+    const baseHours = Math.floor(Math.random() * 20000) + 5000;
+    const trips = Math.floor(baseHours / 100) + Math.floor(Math.random() * 50);
+    const starts = Math.floor(trips / 2) + Math.floor(Math.random() * 20);
+    
+    // Generate realistic status distribution
+    const statuses: Array<"OK" | "Monitor" | "Replace Soon" | "Replace Now" | "Spare" | "Degraded" | "Unknown"> = 
+        ["OK", "OK", "OK", "Monitor", "Replace Soon", "Replace Now", "Spare", "Degraded", "Unknown"];
+    const status = statuses[Math.floor(Math.random() * statuses.length)];
+    
+    const states: Array<"In Service" | "Out of Service" | "Standby" | "Repair" | "On Order"> = 
+        ["In Service", "In Service", "In Service", "Standby", "Repair", "Out of Service", "On Order"];
+    const state = states[Math.floor(Math.random() * states.length)];
+
+    return {
+        sn,
+        pn,
+        hours: baseHours,
+        trips,
+        starts,
+        status,
+        state,
+        component: componentType,
+        componentType: componentType,
+        turbine: turbineId,
+        position: `${turbineId}-${componentType.replace(/\s+/g, '')}`
+    };
+};
+
+// Generate inventory data for all turbines with all component types
+export const MOCK_INVENTORY: InventoryItem[] = TURBINE_IDS.flatMap((turbineId, turbineIndex) =>
+    COMPONENT_TYPES.map((componentType, componentIndex) => 
+        generateComponentData(turbineId, componentType, componentIndex + 1)
+    )
+);
