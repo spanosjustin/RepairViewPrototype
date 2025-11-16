@@ -4,6 +4,8 @@ import * as React from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { InventoryItem } from "@/lib/inventory/types";
+import { useStatusColors } from "@/hooks/useStatusColors";
+import { getTone, getColorName, getBadgeClasses } from "@/lib/settings/colorMapper";
 
 // Types for the tree structure
 type TurbineNode = {
@@ -70,9 +72,10 @@ interface TreeNodeProps {
   onSelectComponent?: (componentName: string, pieces: InventoryItem[]) => void;
   expandedNodes: Set<string>;
   toggleNode: (nodeId: string) => void;
+  colorSettings?: any[];
 }
 
-function TreeNode({ node, level, isExpanded, onToggle, onSelectPiece, onSelectComponent, expandedNodes, toggleNode }: TreeNodeProps) {
+function TreeNode({ node, level, isExpanded, onToggle, onSelectPiece, onSelectComponent, expandedNodes, toggleNode, colorSettings = [] }: TreeNodeProps) {
   const isTurbine = 'components' in node;
   const isComponent = 'pieces' in node && !isTurbine;
   const isPiece = 'item' in node;
@@ -140,22 +143,18 @@ function TreeNode({ node, level, isExpanded, onToggle, onSelectPiece, onSelectCo
             </button>
           )}
 
-          {isPiece && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className={cn(
-                "px-2 py-1 rounded-full text-xs font-medium",
-                node.item.status === "OK" && "bg-green-100 text-green-800",
-                node.item.status === "Monitor" && "bg-yellow-100 text-yellow-800",
-                node.item.status === "Replace Soon" && "bg-orange-100 text-orange-800",
-                node.item.status === "Replace Now" && "bg-red-100 text-red-800",
-                node.item.status === "Spare" && "bg-blue-100 text-blue-800",
-                node.item.status === "Unknown" && "bg-gray-100 text-gray-800"
-              )}>
-                {node.item.status}
-              </span>
-              <span>{node.item.hours}h</span>
-            </div>
-          )}
+          {isPiece && (() => {
+            const statusTone = getTone(node.item.status || "", 'status', colorSettings);
+            const statusColor = getColorName(node.item.status || "", 'status', colorSettings);
+            return (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className={getBadgeClasses(statusTone, statusColor)}>
+                  {node.item.status}
+                </span>
+                <span>{node.item.hours}h</span>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -172,6 +171,7 @@ function TreeNode({ node, level, isExpanded, onToggle, onSelectPiece, onSelectCo
               onSelectComponent={onSelectComponent}
               expandedNodes={expandedNodes}
               toggleNode={toggleNode}
+              colorSettings={colorSettings}
             />
           ))}
           {isComponent && node.pieces.map(piece => (
@@ -185,6 +185,7 @@ function TreeNode({ node, level, isExpanded, onToggle, onSelectPiece, onSelectCo
               onSelectComponent={onSelectComponent}
               expandedNodes={expandedNodes}
               toggleNode={toggleNode}
+              colorSettings={colorSettings}
             />
           ))}
         </div>
@@ -195,6 +196,7 @@ function TreeNode({ node, level, isExpanded, onToggle, onSelectPiece, onSelectCo
 
 export default function TreeView({ items, onSelectPiece, onSelectComponent }: TreeViewProps) {
   const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(new Set(['turbine-1']));
+  const { data: colorSettings = [] } = useStatusColors();
   
   const treeData = React.useMemo(() => buildTreeData(items), [items]);
 
@@ -223,6 +225,7 @@ export default function TreeView({ items, onSelectPiece, onSelectComponent }: Tr
           onSelectComponent={onSelectComponent}
           expandedNodes={expandedNodes}
           toggleNode={toggleNode}
+          colorSettings={colorSettings}
         />
       ))}
     </div>

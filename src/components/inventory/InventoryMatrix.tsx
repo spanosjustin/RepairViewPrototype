@@ -2,6 +2,8 @@
 "use client";
 
 import * as React from "react";
+import { useStatusColors } from "@/hooks/useStatusColors";
+import { getTone, getColorName, getBadgeClasses, getRowStripeClass, getCellBackgroundClasses } from "@/lib/settings/colorMapper";
 
 const cx = (...parts: Array<string | false | null | undefined>) =>
   parts.filter(Boolean).join(" ");
@@ -33,54 +35,18 @@ type InventoryMatrixProps =
     };
 
 /* -------------------- Status/State color logic -------------------- */
-const norm = (s: unknown) => String(s ?? "").trim().toLowerCase();
+// Colors are now loaded from IndexedDB and applied dynamically
 
-function statusTone(status: string) {
-  const s = norm(status);
-  if (["ok", "good", "healthy", "active"].includes(s)) return "ok";
-  if (["warning", "degraded", "service soon"].includes(s)) return "warn";
-  if (["failed", "fault", "bad", "down", "out of service"].includes(s)) return "bad";
-  return "neutral";
-}
-
-function stateTone(state: string) {
-  const s = norm(state);
-  if (["spare", "standby", "stock"].includes(s)) return "info";
-  if (["installed", "running", "active"].includes(s)) return "ok";
-  if (["repair", "rma", "maintenance", "in shop"].includes(s)) return "warn";
-  return "neutral";
-}
-
-function rowStripeClass(tone: ReturnType<typeof statusTone>) {
-  switch (tone) {
-    case "ok":
-      return "border-l-4 border-emerald-500";
-    case "warn":
-      return "border-l-4 border-amber-500";
-    case "bad":
-      return "border-l-4 border-rose-600";
-    default:
-      return "border-l-4 border-transparent";
-  }
-}
-
-function badgeClass(tone: "ok" | "warn" | "bad" | "info" | "neutral") {
-  switch (tone) {
-    case "ok":
-      return "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300";
-    case "warn":
-      return "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300";
-    case "bad":
-      return "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300";
-    case "info":
-      return "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300";
-    default:
-      return "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-muted text-foreground/80 dark:bg-muted/60";
-  }
-}
-
-const Badge = ({ text, tone }: { text: React.ReactNode; tone: "ok" | "warn" | "bad" | "info" | "neutral" }) => (
-  <span className={badgeClass(tone)}>{text}</span>
+const Badge = ({ 
+  text, 
+  tone, 
+  colorName 
+}: { 
+  text: React.ReactNode; 
+  tone: "ok" | "warn" | "bad" | "info" | "neutral";
+  colorName?: string;
+}) => (
+  <span className={getBadgeClasses(tone, colorName)}>{text}</span>
 );
 
 /* -------------------- First-cell helper: pseudo dot + spacing -------------------- */
@@ -95,9 +61,11 @@ const firstCellBase =
 function ComponentsTable({
   rows,
   onSelect,
+  colorSettings = [],
 }: {
   rows: ComponentRow[];
   onSelect?: (row: ComponentRow) => void;
+  colorSettings?: any[];
 }) {
   // dataset color vars for the pseudo dot
   const style = {
@@ -130,14 +98,16 @@ function ComponentsTable({
             </tr>
           ) : (
             rows.map((r, i) => {
-              const sTone = statusTone(r.status);
-              const stTone = stateTone(r.state);
+              const sTone = getTone(r.status || "", 'status', colorSettings);
+              const stTone = getTone(r.state || "", 'state', colorSettings);
+              const statusColor = getColorName(r.status || "", 'status', colorSettings);
+              const stateColor = getColorName(r.state || "", 'state', colorSettings);
               return (
                 <tr
                   key={r.id ?? i}
                   className={cx(
                     "border-b last:border-0 hover:bg-muted/50 transition-colors cursor-pointer",
-                    rowStripeClass(sTone)
+                    getRowStripeClass(sTone, statusColor)
                   )}
                   onClick={() => onSelect?.(r)}
                 >
@@ -152,11 +122,11 @@ function ComponentsTable({
                   <td className="py-2 pr-3">{r.hours}</td>
                   <td className="py-2 pr-3">{r.trips}</td>
                   <td className="py-2 pr-3">{r.starts}</td>
-                  <td className="py-2 pr-3">
-                    <Badge text={r.status || "—"} tone={sTone} />
+                  <td className={`py-2 pr-3 ${statusColor ? getCellBackgroundClasses(statusColor) : ''} rounded`}>
+                    <Badge text={r.status || "—"} tone={sTone} colorName={statusColor} />
                   </td>
-                  <td className="py-2 pr-3">
-                    <Badge text={r.state || "—"} tone={stTone} />
+                  <td className={`py-2 pr-3 ${stateColor ? getCellBackgroundClasses(stateColor) : ''} rounded`}>
+                    <Badge text={r.state || "—"} tone={stTone} colorName={stateColor} />
                   </td>
                   <td className="py-2 pr-3">{r.turbine}</td>
                 </tr>
@@ -173,9 +143,11 @@ function ComponentsTable({
 function PiecesTable({
   items,
   onSelect,
+  colorSettings = [],
 }: {
   items: PieceItem[];
   onSelect?: (item: PieceItem) => void;
+  colorSettings?: any[];
 }) {
   const style = {
     // @ts-ignore custom CSS vars
@@ -200,14 +172,16 @@ function PiecesTable({
         </thead>
         <tbody>
           {(items ?? []).map((it: any, i: number) => {
-            const sTone = statusTone(it.status ?? it.health);
-            const stTone = stateTone(it.state ?? it.condition);
+            const sTone = getTone(it.status ?? it.health ?? "", 'status', colorSettings);
+            const stTone = getTone(it.state ?? it.condition ?? "", 'state', colorSettings);
+            const statusColor = getColorName(it.status ?? it.health ?? "", 'status', colorSettings);
+            const stateColor = getColorName(it.state ?? it.condition ?? "", 'state', colorSettings);
             return (
               <tr
                 key={it.id ?? i}
                 className={cx(
                   "border-b last:border-0 hover:bg-muted/50 transition-colors cursor-pointer",
-                  rowStripeClass(sTone)
+                  getRowStripeClass(sTone, statusColor)
                 )}
                 onClick={() => onSelect?.(it)}
                 // keyboard activation (Enter/Space) when row is focused
@@ -229,11 +203,11 @@ function PiecesTable({
                 <td className="py-2 pr-3">{it.hours ?? "—"}</td>
                 <td className="py-2 pr-3">{it.trips ?? "—"}</td>
                 <td className="py-2 pr-3">{it.starts ?? "—"}</td>
-                <td className="py-2 pr-3">
-                  <Badge text={it.status ?? it.health ?? "—"} tone={sTone} />
+                <td className={`py-2 pr-3 ${statusColor ? getCellBackgroundClasses(statusColor) : ''} rounded`}>
+                  <Badge text={it.status ?? it.health ?? "—"} tone={sTone} colorName={statusColor} />
                 </td>
-                <td className="py-2 pr-3">
-                  <Badge text={it.state ?? it.condition ?? "—"} tone={stTone} />
+                <td className={`py-2 pr-3 ${stateColor ? getCellBackgroundClasses(stateColor) : ''} rounded`}>
+                  <Badge text={it.state ?? it.condition ?? "—"} tone={stTone} colorName={stateColor} />
                 </td>
                 <td className="py-2 pr-3">{it.turbine ?? "—"}</td>
               </tr>
@@ -247,11 +221,15 @@ function PiecesTable({
 
 /* -------------------- Main Export -------------------- */
 export default function InventoryMatrix(props: InventoryMatrixProps) {
+  // Load color settings from IndexedDB
+  const { data: colorSettings = [] } = useStatusColors();
+  
   if (props.dataset === "components") {
     return (
       <ComponentsTable
         rows={props.componentStats ?? []}
         onSelect={props.onSelectComponent}
+        colorSettings={colorSettings}
       />
     );
   }
@@ -259,6 +237,7 @@ export default function InventoryMatrix(props: InventoryMatrixProps) {
     <PiecesTable
       items={props.items ?? []}
       onSelect={props.onSelectPiece}
+      colorSettings={colorSettings}
     />
   );
 }

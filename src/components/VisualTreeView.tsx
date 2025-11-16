@@ -3,6 +3,8 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import type { InventoryItem } from "@/lib/inventory/types";
+import { useStatusColors } from "@/hooks/useStatusColors";
+import { getTone, getColorName, getBadgeClasses } from "@/lib/settings/colorMapper";
 
 // Types for the tree structure
 type TurbineNode = {
@@ -64,9 +66,10 @@ interface TurbineBoxProps {
   turbine: TurbineNode;
   onSelectPiece?: (item: InventoryItem) => void;
   onSelectComponent?: (componentName: string, pieces: InventoryItem[]) => void;
+  colorSettings?: any[];
 }
 
-function TurbineBox({ turbine, onSelectPiece, onSelectComponent }: TurbineBoxProps) {
+function TurbineBox({ turbine, onSelectPiece, onSelectComponent, colorSettings = [] }: TurbineBoxProps) {
   return (
     <div className="relative">
       {/* Turbine Box - Top Level */}
@@ -94,30 +97,16 @@ function TurbineBox({ turbine, onSelectPiece, onSelectComponent }: TurbineBoxPro
             {/* Pieces under this component */}
             <div className="flex flex-col items-center space-y-2 relative z-10">
               {component.pieces.map((piece) => {
-                // Get status-based colors
-                const getStatusColors = (status: string) => {
-                  switch (status) {
-                    case "OK":
-                      return "bg-green-100 text-green-800 hover:bg-green-200";
-                    case "Monitor":
-                      return "bg-yellow-100 text-yellow-800 hover:bg-yellow-200";
-                    case "Replace Soon":
-                      return "bg-orange-100 text-orange-800 hover:bg-orange-200";
-                    case "Replace Now":
-                      return "bg-red-100 text-red-800 hover:bg-red-200";
-                    case "Spare":
-                      return "bg-blue-100 text-blue-800 hover:bg-blue-200";
-                    case "Unknown":
-                      return "bg-gray-100 text-gray-800 hover:bg-gray-200";
-                    default:
-                      return "bg-gray-200 text-gray-800 hover:bg-gray-300";
-                  }
-                };
+                const statusTone = getTone(piece.item.status || "", 'status', colorSettings);
+                const statusColor = getColorName(piece.item.status || "", 'status', colorSettings);
+                const badgeClasses = getBadgeClasses(statusTone, statusColor);
+                // Add hover effect
+                const hoverClasses = badgeClasses.replace(/hover:[^\s]+/g, '').trim() + ' hover:opacity-80';
 
                 return (
                   <div
                     key={piece.id}
-                    className={`rounded-full px-4 py-2 min-w-[80px] text-center cursor-pointer transition-colors ${getStatusColors(piece.item.status)}`}
+                    className={`rounded-full px-4 py-2 min-w-[80px] text-center cursor-pointer transition-colors ${hoverClasses}`}
                     onClick={() => onSelectPiece?.(piece.item)}
                   >
                     <div className="text-xs font-medium">
@@ -174,6 +163,7 @@ function TurbineBox({ turbine, onSelectPiece, onSelectComponent }: TurbineBoxPro
 
 export default function VisualTreeView({ items, onSelectPiece, onSelectComponent }: VisualTreeViewProps) {
   const treeData = React.useMemo(() => buildTreeData(items), [items]);
+  const { data: colorSettings = [] } = useStatusColors();
 
   return (
     <div className="p-8 min-h-[500px] overflow-auto">
@@ -184,6 +174,7 @@ export default function VisualTreeView({ items, onSelectPiece, onSelectComponent
             turbine={turbine}
             onSelectPiece={onSelectPiece}
             onSelectComponent={onSelectComponent}
+            colorSettings={colorSettings}
           />
         ))}
       </div>
