@@ -68,34 +68,67 @@ export default function PieceInfoCard({ item }: { item: ItemWithExtras }) {
 
   return (
     <div className="rounded-xl border p-6 space-y-6">
-      {/* Top: two info columns */}
+      {/* Two column layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <InfoCard
-          rows={[
-            ["Status", statusValue, statusTone, statusColor],
-            ["SN", v(item.sn)],
-            ["PN", v(item.pn)],
-            ["Component", v(item.component)],
-            ["Turbine", v(item.turbine)],
-          ]}
-        />
-        <div className="transition-all duration-500 ease-in-out">
-          {isRepairEventExpanded ? (
-            <div className="rounded-lg border p-3">
-              <div className="flex items-center justify-center gap-2 text-sm relative">
-                <div className="flex items-center gap-4 flex-wrap justify-center">
-                  <span className={getBadgeClasses(stateTone, stateColor)}>{stateValue}</span>
-                  <span className="text-muted-foreground">Hrs:</span>
-                  <span className="font-medium">{v(item.hours)}</span>
-                  <span className="text-muted-foreground">Strt:</span>
-                  <span className="font-medium">{v(item.starts)}</span>
-                  <span className="text-muted-foreground">Trp:</span>
-                  <span className="font-medium">{v(item.trips)}</span>
-                </div>
-                <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0 absolute right-0" />
-              </div>
+        {/* Left Column */}
+        <div className="space-y-6">
+          {/* Component Details Card */}
+          <InfoCard
+            rows={[
+              ["Status", statusValue, statusTone, statusColor],
+              ["SN", v(item.sn)],
+              ["PN", v(item.pn)],
+              ["Component", v(item.component)],
+              ["Turbine", v(item.turbine)],
+            ]}
+          />
+
+          {/* Notes Card */}
+          <div className="rounded-lg border self-start">
+            <div className="flex items-center justify-between border-b px-3 py-2">
+              <button
+                type="button"
+                className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
+                onClick={() => setNoteIdx((i) => Math.max(0, i - 1))}
+                disabled={!hasAnyNotes || noteIdx === 0}
+              >
+                ◀
+              </button>
+              <h4 className="text-sm font-medium text-center flex-1">
+                Note
+              </h4>
+              <button
+                type="button"
+                className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
+                onClick={() =>
+                  setNoteIdx((i) => Math.min(notes.length - 1, i + 1))
+                }
+                disabled={!hasAnyNotes || noteIdx === notes.length - 1}
+              >
+                ▶
+              </button>
             </div>
-          ) : (
+            {hasAnyNotes && (
+              <div className="text-center text-xs text-muted-foreground border-b py-1">
+                {noteIdx + 1} / {notes.length}
+              </div>
+            )}
+            <div className="px-3 py-3 text-sm text-muted-foreground min-h-[136px]">
+              {hasAnyNotes ? v(currentNote) : "No notes available."}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column */}
+        <div className="flex flex-col gap-6">
+          {/* State/Position/etc Card - shown when expanded, hidden when collapsed */}
+          <div 
+            className={`rounded-lg border overflow-hidden transition-all duration-500 ease-in-out ${
+              isRepairEventExpanded 
+                ? 'max-h-0 opacity-0 mb-0' 
+                : 'max-h-[500px] opacity-100'
+            }`}
+          >
             <InfoCard
               rows={[
                 ["State", stateValue, stateTone, stateColor],
@@ -105,131 +138,126 @@ export default function PieceInfoCard({ item }: { item: ItemWithExtras }) {
                 ["Trips", v(item.trips)],
               ]}
             />
-          )}
-        </div>
-      </div>
-
-      {/* Bottom: Notes + Repair Events */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-        {/* Notes (left) */}
-        <div className="rounded-lg border self-start">
-          <div className="flex items-center justify-between border-b px-3 py-2">
-            <button
-              type="button"
-              className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
-              onClick={() => setNoteIdx((i) => Math.max(0, i - 1))}
-              disabled={!hasAnyNotes || noteIdx === 0}
-            >
-              ◀
-            </button>
-            <h4 className="text-sm font-medium text-center flex-1">
-              Note
-            </h4>
-            <button
-              type="button"
-              className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
-              onClick={() =>
-                setNoteIdx((i) => Math.min(notes.length - 1, i + 1))
-              }
-              disabled={!hasAnyNotes || noteIdx === notes.length - 1}
-            >
-              ▶
-            </button>
           </div>
-          {hasAnyNotes && (
-            <div className="text-center text-xs text-muted-foreground border-b py-1">
-              {noteIdx + 1} / {notes.length}
+
+          {/* Repair Summary Header - shown when State/Position card is collapsed */}
+          <div 
+            className={`rounded-lg border p-3 transition-all duration-500 ease-in-out cursor-pointer hover:border-primary/50 ${
+              isRepairEventExpanded 
+                ? 'opacity-100 max-h-[100px] -mt-6' 
+                : 'opacity-0 max-h-0 overflow-hidden mb-0'
+            }`}
+            onClick={handleRepairEventClick}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4 flex-wrap">
+                <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300">
+                  Repair
+                </span>
+                <span className="text-sm">
+                  <span className="text-muted-foreground">Hrs:</span>
+                  <span className="font-bold ml-1">{v(item.hours)}</span>
+                </span>
+                <span className="text-sm">
+                  <span className="text-muted-foreground">Strt:</span>
+                  <span className="font-bold ml-1">{v(item.starts)}</span>
+                </span>
+                <span className="text-sm">
+                  <span className="text-muted-foreground">Trp:</span>
+                  <span className="font-bold ml-1">{v(item.trips)}</span>
+                </span>
+              </div>
+              <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
             </div>
-          )}
-          <div className="px-3 py-3 text-sm text-muted-foreground min-h-24">
-            {hasAnyNotes ? v(currentNote) : "No notes available."}
           </div>
-        </div>
 
-        {/* Repair Events (right) */}
-        <div 
-          className="rounded-lg border cursor-pointer transition-all duration-500 ease-in-out hover:border-primary/50"
-          onClick={handleRepairEventClick}
-        >
-          <div className="flex items-center justify-between border-b px-3 py-2">
-            <button
-              type="button"
-              className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEventIdx((i) => Math.max(0, i - 1));
-              }}
-              disabled={!hasAnyEvents || eventIdx === 0}
-            >
-              ◀
-            </button>
-            <h4 className="text-sm font-medium text-center flex-1">
-              {hasAnyEvents
-                ? v(currentEvent?.title ?? `Repair Event ${eventIdx + 1}`)
-                : "Repair Event"}
-            </h4>
-            <button
-              type="button"
-              className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEventIdx((i) => Math.min(events.length - 1, i + 1));
-              }}
-              disabled={!hasAnyEvents || eventIdx === events.length - 1}
-            >
-              ▶
-            </button>
-          </div>
-          {hasAnyEvents && (
-            <div className="text-center text-xs text-muted-foreground border-b py-1">
-              {eventIdx + 1} / {events.length}
+          {/* Repair Events Card - full height */}
+          <div 
+            className={`rounded-lg border cursor-pointer transition-all duration-500 ease-in-out hover:border-primary/50 flex flex-col ${
+              isRepairEventExpanded ? 'flex-1' : ''
+            }`}
+            onClick={handleRepairEventClick}
+          >
+            <div className="flex items-center justify-between border-b px-3 py-2">
+              <button
+                type="button"
+                className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEventIdx((i) => Math.max(0, i - 1));
+                }}
+                disabled={!hasAnyEvents || eventIdx === 0}
+              >
+                ◀
+              </button>
+              <h4 className="text-sm font-medium text-center flex-1">
+                {hasAnyEvents
+                  ? v(currentEvent?.title ?? `Repair Event ${eventIdx + 1}`)
+                  : "Repair Event"}
+              </h4>
+              <button
+                type="button"
+                className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEventIdx((i) => Math.min(events.length - 1, i + 1));
+                }}
+                disabled={!hasAnyEvents || eventIdx === events.length - 1}
+              >
+                ▶
+              </button>
             </div>
-          )}
-
-          {/* Toggle buttons underneath */}
-          <div className="flex justify-center gap-2 border-b px-3 py-2">
-            <Toggle
-              small
-              active={tab === "repair"}
-              onClick={(e) => {
-                e?.stopPropagation();
-                setTab("repair");
-              }}
-            >
-              Repair Details
-            </Toggle>
-            <Toggle
-              small
-              active={tab === "condition"}
-              onClick={(e) => {
-                e?.stopPropagation();
-                setTab("condition");
-              }}
-            >
-              Condition Details
-            </Toggle>
-          </div>
-
-          <div className={`px-3 py-3 text-sm transition-all duration-500 ease-in-out ${
-            isRepairEventExpanded ? 'min-h-[400px]' : 'min-h-24'
-          }`}>
-            {!hasAnyEvents ? (
-              <p className="text-muted-foreground">No repair events.</p>
-            ) : bothNull ? (
-              <p className="text-muted-foreground">No details for this event.</p>
-            ) : tab === "repair" ? (
-              <p className={`${hasRepair ? "" : "text-muted-foreground"} transition-all duration-500 ${
-                isRepairEventExpanded ? 'text-base leading-relaxed' : 'text-sm'
-              }`}>
-                {v(currentEvent?.repairDetails)}
-              </p>
-            ) : (
-              <p className={`${hasCondition ? "" : "text-muted-foreground"} transition-all duration-500 ${
-                isRepairEventExpanded ? 'text-base leading-relaxed' : 'text-sm'
-              }`}>
-                {v(currentEvent?.conditionDetails)}
-              </p>
+            {hasAnyEvents && (
+              <div className="text-center text-xs text-muted-foreground border-b py-1">
+                {eventIdx + 1} / {events.length}
+              </div>
             )}
+
+            {/* Toggle buttons underneath */}
+            <div className="flex justify-center gap-2 border-b px-3 py-2">
+              <Toggle
+                small
+                active={tab === "repair"}
+                onClick={(e) => {
+                  e?.stopPropagation();
+                  setTab("repair");
+                }}
+              >
+                Repair Details
+              </Toggle>
+              <Toggle
+                small
+                active={tab === "condition"}
+                onClick={(e) => {
+                  e?.stopPropagation();
+                  setTab("condition");
+                }}
+              >
+                Condition Details
+              </Toggle>
+            </div>
+
+            <div className={`px-3 py-3 text-sm transition-all duration-500 ease-in-out flex-1 ${
+              isRepairEventExpanded ? 'min-h-[432px]' : ''
+            }`}>
+              {!hasAnyEvents ? (
+                <p className="text-muted-foreground">No repair events.</p>
+              ) : bothNull ? (
+                <p className="text-muted-foreground">No details for this event.</p>
+              ) : tab === "repair" ? (
+                <p className={`${hasRepair ? "" : "text-muted-foreground"} transition-all duration-500 ${
+                  isRepairEventExpanded ? 'text-base leading-relaxed' : 'text-sm'
+                }`}>
+                  {v(currentEvent?.repairDetails)}
+                </p>
+              ) : (
+                <p className={`${hasCondition ? "" : "text-muted-foreground"} transition-all duration-500 ${
+                  isRepairEventExpanded ? 'text-base leading-relaxed' : 'text-sm'
+                }`}>
+                  {v(currentEvent?.conditionDetails)}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -286,7 +314,7 @@ function Toggle({
         small ? "px-2 py-1 text-xs" : "px-2.5 py-1.5 text-sm",
         "rounded-md",
         active
-          ? "bg-primary text-primary-foreground"
+          ? "bg-black text-white"
           : "bg-muted hover:bg-muted/70",
       ].join(" ")}
       onClick={onClick}
