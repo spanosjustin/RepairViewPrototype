@@ -2,6 +2,9 @@
 
 import * as React from "react";
 import type { InventoryItem } from "@/lib/inventory/types";
+import { useStatusColors } from "@/hooks/useStatusColors";
+import { getTone, getColorName, getBadgeClasses } from "@/lib/settings/colorMapper";
+import { ChevronDown } from "lucide-react";
 
 type RepairEvent = {
   title?: string | null;
@@ -18,6 +21,10 @@ type ItemWithExtras = InventoryItem & {
 
 export default function PieceInfoCard({ item }: { item: ItemWithExtras }) {
   const [tab, setTab] = React.useState<"repair" | "condition">("repair");
+  const [isRepairEventExpanded, setIsRepairEventExpanded] = React.useState(false);
+  
+  // Load color settings from IndexedDB
+  const { data: colorSettings = [] } = useStatusColors();
 
   /* ---------- Notes State ---------- */
   const notes = item.notes ?? [];
@@ -46,6 +53,18 @@ export default function PieceInfoCard({ item }: { item: ItemWithExtras }) {
   const hasRepair = !!currentEvent?.repairDetails;
   const hasCondition = !!currentEvent?.conditionDetails;
   const bothNull = currentEvent ? !hasRepair && !hasCondition : true;
+  
+  // Get color information for status and state
+  const statusValue = v(item.status);
+  const stateValue = v(item.state);
+  const statusTone = getTone(statusValue, 'status', colorSettings);
+  const stateTone = getTone(stateValue, 'state', colorSettings);
+  const statusColor = getColorName(statusValue, 'status', colorSettings);
+  const stateColor = getColorName(stateValue, 'state', colorSettings);
+
+  const handleRepairEventClick = () => {
+    setIsRepairEventExpanded(prev => !prev);
+  };
 
   return (
     <div className="rounded-xl border p-6 space-y-6">
@@ -53,28 +72,47 @@ export default function PieceInfoCard({ item }: { item: ItemWithExtras }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <InfoCard
           rows={[
-            ["Status", v(item.status)],
+            ["Status", statusValue, statusTone, statusColor],
             ["SN", v(item.sn)],
             ["PN", v(item.pn)],
             ["Component", v(item.component)],
             ["Turbine", v(item.turbine)],
           ]}
         />
-        <InfoCard
-          rows={[
-            ["State", v(item.state)],
-            ["Position", v(item.position)],
-            ["Hours", v(item.hours)],
-            ["Starts", v(item.starts)],
-            ["Trips", v(item.trips)],
-          ]}
-        />
+        <div className="transition-all duration-500 ease-in-out">
+          {isRepairEventExpanded ? (
+            <div className="rounded-lg border p-3">
+              <div className="flex items-center justify-center gap-2 text-sm relative">
+                <div className="flex items-center gap-4 flex-wrap justify-center">
+                  <span className={getBadgeClasses(stateTone, stateColor)}>{stateValue}</span>
+                  <span className="text-muted-foreground">Hrs:</span>
+                  <span className="font-medium">{v(item.hours)}</span>
+                  <span className="text-muted-foreground">Strt:</span>
+                  <span className="font-medium">{v(item.starts)}</span>
+                  <span className="text-muted-foreground">Trp:</span>
+                  <span className="font-medium">{v(item.trips)}</span>
+                </div>
+                <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0 absolute right-0" />
+              </div>
+            </div>
+          ) : (
+            <InfoCard
+              rows={[
+                ["State", stateValue, stateTone, stateColor],
+                ["Position", v(item.position)],
+                ["Hours", v(item.hours)],
+                ["Starts", v(item.starts)],
+                ["Trips", v(item.trips)],
+              ]}
+            />
+          )}
+        </div>
       </div>
 
       {/* Bottom: Notes + Repair Events */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
         {/* Notes (left) */}
-        <div className="rounded-lg border">
+        <div className="rounded-lg border self-start">
           <div className="flex items-center justify-between border-b px-3 py-2">
             <button
               type="button"
@@ -109,12 +147,18 @@ export default function PieceInfoCard({ item }: { item: ItemWithExtras }) {
         </div>
 
         {/* Repair Events (right) */}
-        <div className="rounded-lg border">
+        <div 
+          className="rounded-lg border cursor-pointer transition-all duration-500 ease-in-out hover:border-primary/50"
+          onClick={handleRepairEventClick}
+        >
           <div className="flex items-center justify-between border-b px-3 py-2">
             <button
               type="button"
               className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
-              onClick={() => setEventIdx((i) => Math.max(0, i - 1))}
+              onClick={(e) => {
+                e.stopPropagation();
+                setEventIdx((i) => Math.max(0, i - 1));
+              }}
               disabled={!hasAnyEvents || eventIdx === 0}
             >
               ◀
@@ -127,9 +171,10 @@ export default function PieceInfoCard({ item }: { item: ItemWithExtras }) {
             <button
               type="button"
               className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
-              onClick={() =>
-                setEventIdx((i) => Math.min(events.length - 1, i + 1))
-              }
+              onClick={(e) => {
+                e.stopPropagation();
+                setEventIdx((i) => Math.min(events.length - 1, i + 1));
+              }}
               disabled={!hasAnyEvents || eventIdx === events.length - 1}
             >
               ▶
@@ -146,30 +191,42 @@ export default function PieceInfoCard({ item }: { item: ItemWithExtras }) {
             <Toggle
               small
               active={tab === "repair"}
-              onClick={() => setTab("repair")}
+              onClick={(e) => {
+                e?.stopPropagation();
+                setTab("repair");
+              }}
             >
               Repair Details
             </Toggle>
             <Toggle
               small
               active={tab === "condition"}
-              onClick={() => setTab("condition")}
+              onClick={(e) => {
+                e?.stopPropagation();
+                setTab("condition");
+              }}
             >
               Condition Details
             </Toggle>
           </div>
 
-          <div className="px-3 py-3 text-sm min-h-24">
+          <div className={`px-3 py-3 text-sm transition-all duration-500 ease-in-out ${
+            isRepairEventExpanded ? 'min-h-[400px]' : 'min-h-24'
+          }`}>
             {!hasAnyEvents ? (
               <p className="text-muted-foreground">No repair events.</p>
             ) : bothNull ? (
               <p className="text-muted-foreground">No details for this event.</p>
             ) : tab === "repair" ? (
-              <p className={hasRepair ? "" : "text-muted-foreground"}>
+              <p className={`${hasRepair ? "" : "text-muted-foreground"} transition-all duration-500 ${
+                isRepairEventExpanded ? 'text-base leading-relaxed' : 'text-sm'
+              }`}>
                 {v(currentEvent?.repairDetails)}
               </p>
             ) : (
-              <p className={hasCondition ? "" : "text-muted-foreground"}>
+              <p className={`${hasCondition ? "" : "text-muted-foreground"} transition-all duration-500 ${
+                isRepairEventExpanded ? 'text-base leading-relaxed' : 'text-sm'
+              }`}>
                 {v(currentEvent?.conditionDetails)}
               </p>
             )}
@@ -182,19 +239,30 @@ export default function PieceInfoCard({ item }: { item: ItemWithExtras }) {
 
 /* ---------- helpers ---------- */
 
-function InfoCard({ rows }: { rows: Array<[label: string, value: string]> }) {
+function InfoCard({ rows }: { rows: Array<[label: string, value: string, tone?: any, colorName?: string]> }) {
   return (
     <div className="rounded-lg border p-3">
       <dl className="space-y-2 text-sm">
-        {rows.map(([label, value]) => (
-          <div
-            key={label}
-            className="flex items-center justify-between gap-3 border-b last:border-b-0 pb-1.5"
-          >
-            <dt className="text-muted-foreground">{label}</dt>
-            <dd className="font-medium text-right truncate">{value}</dd>
-          </div>
-        ))}
+        {rows.map(([label, value, tone, colorName]) => {
+          const isStatusOrState = label === "Status" || label === "State";
+          const shouldShowBadge = isStatusOrState && tone !== undefined;
+          
+          return (
+            <div
+              key={label}
+              className="flex items-center justify-between gap-3 border-b last:border-b-0 pb-1.5"
+            >
+              <dt className="text-muted-foreground">{label}</dt>
+              <dd className="font-medium text-right truncate">
+                {shouldShowBadge ? (
+                  <span className={getBadgeClasses(tone, colorName)}>{value}</span>
+                ) : (
+                  value
+                )}
+              </dd>
+            </div>
+          );
+        })}
       </dl>
     </div>
   );
@@ -207,7 +275,7 @@ function Toggle({
   small = false,
 }: {
   active: boolean;
-  onClick: () => void;
+  onClick: (e?: React.MouseEvent) => void;
   children: React.ReactNode;
   small?: boolean;
 }) {
