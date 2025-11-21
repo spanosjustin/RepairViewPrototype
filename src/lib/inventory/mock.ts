@@ -33,6 +33,12 @@ const generateComponentData = (turbineId: string, componentType: string, index: 
     const pn = `${prefix}-${turbineNum}${String(index).padStart(2, '0')}`;
     const sn = `SN-${turbineNum}${String(index).padStart(3, '0')}`;
     
+    // Generate component name in format like "CP-14B", "TP-16A", "1S-17A"
+    // Number is based on turbine number and component index, letter is A or B
+    const componentNumber = parseInt(turbineNum) * 10 + index;
+    const componentLetter = Math.random() < 0.5 ? 'A' : 'B';
+    const componentName = `${prefix}-${componentNumber}${componentLetter}`;
+    
     // Generate realistic hours, trips, and starts with some variation
     const baseHours = Math.floor(Math.random() * 20000) + 5000;
     const trips = Math.floor(baseHours / 100) + Math.floor(Math.random() * 50);
@@ -55,7 +61,8 @@ const generateComponentData = (turbineId: string, componentType: string, index: 
         starts,
         status,
         state,
-        component: componentType,
+        component: componentName,
+        componentName: componentName,
         componentType: componentType,
         turbine: turbineId,
         position: `${turbineId}-${componentType.replace(/\s+/g, '')}`
