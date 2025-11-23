@@ -346,6 +346,134 @@ export const piecesStorage = {
   async count(): Promise<number> {
     return IndexedDBStorage.count(STORES.PIECES);
   },
+
+  /**
+   * Assign sequential positions to all pieces grouped by component.
+   * Pieces within each component will be assigned positions 1, 2, 3, etc.
+   * 
+   * @param options - Optional configuration
+   * @param options.positionFormat - Format for positions: 'number' (1, 2, 3) or 'string' ('1', '2', '3') or 'descriptive' ('Position 1', 'Position 2')
+   * @param options.overwriteExisting - If true, overwrite existing positions. If false, skip pieces that already have positions.
+   * @returns Object with success status, total pieces processed, and pieces updated
+   */
+  async assignPositionsByComponent(options?: {
+    positionFormat?: 'number' | 'string' | 'descriptive';
+    overwriteExisting?: boolean;
+  }): Promise<{
+    success: boolean;
+    totalPieces: number;
+    piecesUpdated: number;
+    componentsProcessed: number;
+    error?: string;
+  }> {
+    try {
+      const format = options?.positionFormat || 'string';
+      const overwrite = options?.overwriteExisting ?? true;
+
+      // Get all pieces
+      const allPieces = await this.getAll();
+
+      if (allPieces.length === 0) {
+        return {
+          success: true,
+          totalPieces: 0,
+          piecesUpdated: 0,
+          componentsProcessed: 0,
+        };
+      }
+
+      // Group pieces by component
+      const componentMap = new Map<string, InventoryItem[]>();
+      
+      allPieces.forEach(piece => {
+        const componentName = piece.component;
+        if (!componentName) {
+          // Skip pieces without a component
+          return;
+        }
+
+        if (!componentMap.has(componentName)) {
+          componentMap.set(componentName, []);
+        }
+        componentMap.get(componentName)!.push(piece);
+      });
+
+      // Assign positions to pieces within each component
+      const updatedPieces: InventoryItem[] = [];
+      let piecesUpdated = 0;
+
+      componentMap.forEach((pieces, componentName) => {
+        // Sort pieces by SN or ID for consistent ordering
+        const sortedPieces = [...pieces].sort((a, b) => {
+          const aKey = a.sn || String(a.id || a.pn || '');
+          const bKey = b.sn || String(b.id || b.pn || '');
+          return aKey.localeCompare(bKey);
+        });
+
+        sortedPieces.forEach((piece, index) => {
+          // Skip if piece already has a position and we're not overwriting
+          if (!overwrite && piece.position && piece.position.trim() !== '') {
+            return;
+          }
+
+          // Assign position based on format
+          let position: string;
+          switch (format) {
+            case 'number':
+              position = String(index + 1);
+              break;
+            case 'descriptive':
+              position = `Position ${index + 1}`;
+              break;
+            case 'string':
+            default:
+              position = String(index + 1);
+              break;
+          }
+
+          // Update piece with new position
+          const updatedPiece: InventoryItem = {
+            ...piece,
+            position,
+          };
+
+          updatedPieces.push(updatedPiece);
+          piecesUpdated++;
+        });
+      });
+
+      // Save all updated pieces
+      if (updatedPieces.length > 0) {
+        const saveSuccess = await this.saveAll(updatedPieces);
+        
+        if (!saveSuccess) {
+          return {
+            success: false,
+            totalPieces: allPieces.length,
+            piecesUpdated: 0,
+            componentsProcessed: componentMap.size,
+            error: 'Failed to save updated pieces to database',
+          };
+        }
+      }
+
+      return {
+        success: true,
+        totalPieces: allPieces.length,
+        piecesUpdated,
+        componentsProcessed: componentMap.size,
+      };
+    } catch (error) {
+      console.error('Error assigning positions to pieces:', error);
+      return {
+        success: false,
+        totalPieces: 0,
+        piecesUpdated: 0,
+        componentsProcessed: 0,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  },
 };
 
 /**

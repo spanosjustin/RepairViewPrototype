@@ -5,6 +5,7 @@ import * as React from "react";
 import InventoryMatrix from "@/components/inventory/InventoryMatrix";
 import { MOCK_INVENTORY } from "@/lib/inventory/mock";
 import type { InventoryItem } from "@/lib/inventory/types";
+import { MOCK_TURBINES } from "@/lib/matrix/mock";
 
 // shadcn/ui dialog (modal) to show the card
 import {
@@ -29,6 +30,7 @@ import PieceInfoCard from "@/components/inventory/PieceInfoCard";
 import ComponentInfoCard from "@/components/inventory/ComponentInfoCard";
 import TreeView from "@/components/TreeView";
 import VisualTreeView from "@/components/VisualTreeView";
+import { piecesStorage, componentsStorage } from "@/lib/storage/indexedDB";
 
 type ViewMode = "pieces" | "components" | "turbines" | "tree";
 
@@ -127,39 +129,70 @@ export default function InventoryListPage() {
   const [components, setComponents] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   
+  // Store updated notes by piece SN (serial number)
+  const [updatedNotes, setUpdatedNotes] = React.useState<Record<string, string[]>>({});
+  
+  // Create a mutable copy of MOCK_TURBINES for updates
+  const [mutableTurbines, setMutableTurbines] = React.useState(() => {
+    try {
+      // Deep clone the mock turbines to make them mutable
+      return MOCK_TURBINES.map(turbine => ({
+        ...turbine,
+        pieces: turbine.pieces.map(piece => ({
+          ...piece,
+          cells: piece.cells ? [...piece.cells] : [],
+        })),
+      }));
+    } catch (error) {
+      console.error("Error initializing mutableTurbines:", error);
+      return [];
+    }
+  });
+  
   // Pagination state
   const [currentPage, setCurrentPage] = React.useState(1);
   const itemsPerPage = 50;
 
-  // Generate pieces based on components (12 pieces per component)
+  // Load pieces from database or generate them
   React.useEffect(() => {
-    if (components.length > 0) {
-      const generatedPieces = generatePiecesForComponents(components);
-      setPieces(generatedPieces);
-    } else {
-      // Fallback to API or mock data if no components available
-      const fetchPieces = async () => {
-        try {
-          const response = await fetch('/api/pieces');
-          if (response.ok) {
-            const data = await response.json();
-            setPieces(data);
-          } else {
-            // Fallback to mock data if API fails
-            setPieces(MOCK_INVENTORY);
-          }
-        } catch (error) {
-          // Fallback to mock data if API fails
+    const loadPieces = async () => {
+      try {
+        // Try to load from database first
+        const dbPieces = await piecesStorage.getAll();
+        
+        if (dbPieces.length > 0) {
+          // Use pieces from database
+          setPieces(dbPieces);
+        } else if (components.length > 0) {
+          // Generate pieces if we have components but no database pieces
+          const generatedPieces = generatePiecesForComponents(components);
+          // Save generated pieces to database
+          await piecesStorage.saveAll(generatedPieces);
+          setPieces(generatedPieces);
+        } else {
+          // Fallback to mock data
           setPieces(MOCK_INVENTORY);
         }
-      };
+      } catch (error) {
+        console.error('Error loading pieces:', error);
+        // Fallback to mock data on error
+        if (components.length > 0) {
+          const generatedPieces = generatePiecesForComponents(components);
+          setPieces(generatedPieces);
+        } else {
+          setPieces(MOCK_INVENTORY);
+        }
+      }
+    };
 
-      fetchPieces();
-    }
+    loadPieces();
   }, [components]);
 
-  // Fetch components from database
+  // Fetch components from database (or use mock data)
   React.useEffect(() => {
+    // For now, use mock data directly since API routes don't exist
+    // TODO: Uncomment when API routes are available
+    /*
     const fetchComponents = async () => {
       try {
         const response = await fetch('/api/components');
@@ -167,18 +200,20 @@ export default function InventoryListPage() {
           const data = await response.json();
           setComponents(data);
         } else {
-          // Fallback to mock data if API fails
           setComponents(MOCK_INVENTORY);
         }
       } catch (error) {
-        // Fallback to mock data if API fails
         setComponents(MOCK_INVENTORY);
       } finally {
         setLoading(false);
       }
     };
-
     fetchComponents();
+    */
+    
+    // Use mock data directly
+    setComponents(MOCK_INVENTORY);
+    setLoading(false);
   }, []);
 
   const componentStats = React.useMemo(
@@ -214,23 +249,210 @@ export default function InventoryListPage() {
     setCurrentPage(prev => Math.min(totalPages, prev + 1));
   };
 
+  // Helper function to find notes for a piece from matrix data
+  const findNotesForPiece = React.useCallback((piece: any): string[] | null => {
+    if (!piece) return null;
+    
+    const sn = piece.sn || "";
+    const pieceId = sn || piece.id || String(piece.pn);
+    
+    // Check if we have updated notes for this piece first
+    if (updatedNotes[pieceId]) {
+      return updatedNotes[pieceId];
+    }
+    
+    // Special case: SN-001-01 gets 3 notes
+    if (sn === "SN-001-01") {
+      return [
+        "Initial installation completed on 2024-01-15. All clearances verified within specification.",
+        "Routine inspection on 2024-06-20: Component performing within normal parameters. No anomalies detected.",
+        "Last maintenance check on 2024-11-10: Thermal barrier coating intact. Operating hours tracking as expected."
+      ];
+    }
+    
+    const turbineId = piece.turbine || piece.turbineName || piece.turbine_name;
+    const componentType = piece.componentType || piece.component || piece.type;
+    
+    if (!turbineId || !componentType) return null;
+    
+    // Find the matching turbine in matrix data (use mutable copy if available)
+    if (!mutableTurbines || mutableTurbines.length === 0) {
+      return null;
+    }
+    const turbine = mutableTurbines.find(t => t.id === turbineId);
+    if (!turbine) return null;
+    
+    // Find the matching piece in the turbine's pieces array
+    // The piece name in matrix data matches componentType
+    const matrixPiece = turbine.pieces.find(p => {
+      const pieceName = p.label; // e.g., "Liner Caps", "S1N", etc.
+      return pieceName === componentType;
+    });
+    
+    if (!matrixPiece) return null;
+    
+    // Extract notes from the piece cells (column 5 is notes)
+    // Column order: piece | position | condition | setIn | setOut | notes
+    if (!matrixPiece.cells || matrixPiece.cells.length < 6) {
+      return null;
+    }
+    
+    const notesValue = matrixPiece.cells[5]?.value;
+    
+    // Convert to string and check if it's not empty
+    const notesString = notesValue ? String(notesValue) : "";
+    
+    // Return as array if notes exist, null otherwise
+    return notesString && notesString.trim() ? [notesString] : null;
+  }, [updatedNotes, mutableTurbines]);
+
   // ---------- Piece Details modal state ----------
   const [pieceOpen, setPieceOpen] = React.useState(false);
   const [selectedPiece, setSelectedPiece] = React.useState<any | null>(null);
 
   const openPieceCard = React.useCallback((item: any) => {
-    setSelectedPiece(item);
+    // Enrich the piece with notes from matrix data
+    const notes = findNotesForPiece(item);
+    const enrichedPiece = {
+      ...item,
+      notes: notes,
+    };
+    setSelectedPiece(enrichedPiece);
     setPieceOpen(true);
+  }, [findNotesForPiece]);
+
+  // Handle notes updates from PieceInfoCard
+  const handleNotesUpdate = React.useCallback((pieceId: string, notes: string[]) => {
+    // Store the updated notes (create new array to ensure reference change)
+    setUpdatedNotes(prev => ({
+      ...prev,
+      [pieceId]: [...notes], // Create new array reference
+    }));
+    
+    // Update the selected piece if it's the one being edited
+    setSelectedPiece((prev: any) => {
+      if (!prev) return prev;
+      
+      const currentPieceId = prev.sn || prev.id || String(prev.pn);
+      
+      if (currentPieceId === pieceId) {
+        // Create new object with new notes array to trigger re-render
+        return {
+          ...prev,
+          notes: [...notes], // Create new array reference
+        };
+      }
+      
+      // Also update the mutable turbines data (for matrix pieces with single notes)
+      const turbineId = prev.turbine || prev.turbineName || prev.turbine_name;
+      const componentType = prev.componentType || prev.component || prev.type;
+      
+      if (turbineId && componentType && pieceId !== "SN-001-01") {
+        // Only update matrix data for pieces that come from matrix (not special cases like SN-001-01)
+        setMutableTurbines(prevTurbines => prevTurbines.map(turbine => {
+          if (turbine.id === turbineId) {
+            return {
+              ...turbine,
+              pieces: turbine.pieces.map(piece => {
+                const pieceName = piece.label;
+                if (pieceName === componentType) {
+                  // Update the notes cell (column 5)
+                  // For matrix pieces, we typically have a single note, so use the first one
+                  const updatedCells = [...piece.cells];
+                  const notesString = notes.length > 0 ? notes[0] : "";
+                  if (updatedCells[5]) {
+                    updatedCells[5] = {
+                      ...updatedCells[5],
+                      value: notesString,
+                      note: notesString || null,
+                    };
+                  }
+                  return {
+                    ...piece,
+                    cells: updatedCells,
+                  };
+                }
+                return piece;
+              }),
+            };
+          }
+          return turbine;
+        }));
+      }
+      
+      return prev;
+    });
   }, []);
 
   // ---------- Component Details modal state ----------
   const [componentOpen, setComponentOpen] = React.useState(false);
   const [selectedComponent, setSelectedComponent] = React.useState<any | null>(null);
+  const [componentPieces, setComponentPieces] = React.useState<InventoryItem[]>([]);
 
-  const openComponentCard = React.useCallback((item: any) => {
+  const openComponentCard = React.useCallback(async (item: any) => {
     setSelectedComponent(item);
     setComponentOpen(true);
-  }, []);
+    
+    // Fetch pieces for this component
+    try {
+      const componentName = item.componentName || item.name || item.component;
+      if (componentName) {
+        const piecesForComponent = pieces.filter(
+          (p) => p.component === componentName
+        );
+        setComponentPieces(piecesForComponent);
+      } else {
+        setComponentPieces([]);
+      }
+    } catch (error) {
+      console.error('Error loading pieces for component:', error);
+      setComponentPieces([]);
+    }
+  }, [pieces]);
+
+  // Handle piece added - refresh pieces from database
+  const handlePieceAdded = React.useCallback(async () => {
+    try {
+      const dbPieces = await piecesStorage.getAll();
+      setPieces(dbPieces);
+      
+      // Also refresh component pieces if dialog is open
+      if (selectedComponent) {
+        const componentName = selectedComponent.componentName || selectedComponent.name || selectedComponent.component;
+        if (componentName) {
+          const piecesForComponent = dbPieces.filter(
+            (p) => p.component === componentName
+          );
+          setComponentPieces(piecesForComponent);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing pieces:', error);
+    }
+  }, [selectedComponent]);
+
+  // Handle component updated - refresh component data
+  const handleComponentUpdated = React.useCallback(async () => {
+    try {
+      // Refresh components list
+      const dbComponents = await componentsStorage.getAll();
+      setComponents(dbComponents);
+      
+      // Update selected component if dialog is open
+      if (selectedComponent?.id) {
+        const updatedComponent = await componentsStorage.get(selectedComponent.id);
+        if (updatedComponent) {
+          setSelectedComponent({
+            ...updatedComponent,
+            componentName: updatedComponent.name,
+            componentType: updatedComponent.type || updatedComponent.componentType,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing component:', error);
+    }
+  }, [selectedComponent]);
 
   return (
     <div className="p-6 space-y-4">
@@ -432,7 +654,7 @@ export default function InventoryListPage() {
           <div className="px-6 pb-6 max-h-[80vh] overflow-auto">
             {selectedPiece ? (
               <div className="w-full">
-                <PieceInfoCard item={selectedPiece} />
+                <PieceInfoCard item={selectedPiece} onNotesUpdate={handleNotesUpdate} />
               </div>
             ) : (
               <div className="text-sm text-muted-foreground">No piece selected.</div>
@@ -460,7 +682,13 @@ export default function InventoryListPage() {
           <div className="px-6 pb-6 max-h-[80vh] overflow-auto">
             {selectedComponent ? (
               <div className="w-full">
-                <ComponentInfoCard item={selectedComponent} />
+                <ComponentInfoCard 
+                  item={selectedComponent} 
+                  pieces={componentPieces}
+                  allPieces={pieces}
+                  onPieceAdded={handlePieceAdded}
+                  onComponentUpdated={handleComponentUpdated}
+                />
               </div>
             ) : (
               <div className="text-sm text-muted-foreground">No component selected.</div>
