@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { piecesStorage, componentsStorage, type Component } from "@/lib/storage/indexedDB";
-import { Pencil, Check, X } from "lucide-react";
+import { Pencil, Check, X, Trash2 } from "lucide-react";
 
 interface ComponentInfoCardProps {
   item: {
@@ -58,6 +58,7 @@ export default function ComponentInfoCard({
   const [editedPieceSNs, setEditedPieceSNs] = React.useState<Record<string, string>>({}); // pieceId -> newPieceId
   const [snSearchTerms, setSnSearchTerms] = React.useState<Record<string, string>>({}); // pieceId -> search term
   const [openSnDropdowns, setOpenSnDropdowns] = React.useState<Record<string, boolean>>({}); // pieceId -> isOpen
+  const [deletedPieceIds, setDeletedPieceIds] = React.useState<Set<string>>(new Set()); // pieceIds to delete
 
   // Sort pieces by position (treating position as number if possible, otherwise string)
   const sortedPieces = React.useMemo(() => {
@@ -224,6 +225,7 @@ export default function ComponentInfoCard({
     setEditedPieceSNs(initialSNs);
     setSnSearchTerms(initialSearchTerms);
     setOpenSnDropdowns({});
+    setDeletedPieceIds(new Set());
     setIsEditing(true);
   };
 
@@ -240,6 +242,35 @@ export default function ComponentInfoCard({
     setEditedPieceSNs({});
     setSnSearchTerms({});
     setOpenSnDropdowns({});
+    setDeletedPieceIds(new Set());
+  };
+
+  const handleDeletePiece = (pieceId: string) => {
+    setDeletedPieceIds(prev => new Set(prev).add(pieceId));
+    // Also clear any edits for this piece
+    setEditedPiecePositions(prev => {
+      const newPositions = { ...prev };
+      delete newPositions[pieceId];
+      return newPositions;
+    });
+    setEditedPieceSNs(prev => {
+      const newSNs = { ...prev };
+      delete newSNs[pieceId];
+      return newSNs;
+    });
+    setSnSearchTerms(prev => {
+      const newTerms = { ...prev };
+      delete newTerms[pieceId];
+      return newTerms;
+    });
+  };
+
+  const handleUndeletePiece = (pieceId: string) => {
+    setDeletedPieceIds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(pieceId);
+      return newSet;
+    });
   };
 
   const handleSaveComponent = async () => {
@@ -264,11 +295,32 @@ export default function ComponentInfoCard({
         return;
       }
 
-      // Save piece position changes and SN replacements
+      // Save piece position changes, SN replacements, and deletions
       const pieceUpdates: InventoryItem[] = [];
       const componentName = editedComponent.componentName || item.componentName || "";
       
+      // First, handle deleted pieces - remove them from component
+      for (const pieceId of deletedPieceIds) {
+        const piece = pieces.find(
+          p => (p.id?.toString() === pieceId) || 
+               (p.sn === pieceId) ||
+               (String(p.pn) === pieceId)
+        );
+        
+        if (piece) {
+          pieceUpdates.push({
+            ...piece,
+            component: undefined,
+            position: undefined,
+          });
+        }
+      }
+      
+      // Then handle position changes and SN replacements (skip deleted pieces)
       for (const [pieceId, newPosition] of Object.entries(editedPiecePositions)) {
+        // Skip if this piece is marked for deletion
+        if (deletedPieceIds.has(pieceId)) continue;
+        
         const piece = pieces.find(
           p => (p.id?.toString() === pieceId) || 
                (p.sn === pieceId) ||
@@ -324,6 +376,10 @@ export default function ComponentInfoCard({
 
       setIsEditing(false);
       setEditedPiecePositions({});
+      setEditedPieceSNs({});
+      setSnSearchTerms({});
+      setOpenSnDropdowns({});
+      setDeletedPieceIds(new Set());
       
       // Notify parent to refresh
       if (onComponentUpdated) {
@@ -500,23 +556,35 @@ export default function ComponentInfoCard({
       {/* Bottom Section: Component Parts Table */}
       <div className="space-y-3">
         {/* Table Header */}
-        <div className="grid grid-cols-3 gap-4 text-sm font-medium text-gray-700 border-b border-gray-300 pb-2">
+        <div className={`grid gap-4 text-sm font-medium text-gray-700 border-b border-gray-300 pb-2 ${isEditing ? 'grid-cols-4' : 'grid-cols-3'}`}>
           <div>Position</div>
           <div>PN</div>
           <div>SN</div>
+          {isEditing && <div className="text-center">Actions</div>}
         </div>
 
         {/* Table Rows */}
         <div className="space-y-2">
           {sortedPieces.length > 0 ? (
-            sortedPieces.map((piece, index) => {
+            sortedPieces
+              .filter(piece => {
+                // Filter out deleted pieces in edit mode
+                if (!isEditing) return true;
+                const pieceId = piece.id?.toString() || piece.sn || String(piece.pn);
+                return !deletedPieceIds.has(pieceId);
+              })
+              .map((piece, index) => {
               const pieceId = piece.id?.toString() || piece.sn || String(piece.pn);
               const currentPosition = isEditing 
                 ? (editedPiecePositions[pieceId] ?? piece.position ?? "")
                 : piece.position;
+              const isDeleted = deletedPieceIds.has(pieceId);
               
               return (
-                <div key={piece.id || piece.sn || index} className="grid grid-cols-3 gap-4 text-sm text-gray-900">
+                <div 
+                  key={piece.id || piece.sn || index} 
+                  className={`grid gap-4 text-sm text-gray-900 ${isEditing ? 'grid-cols-4' : 'grid-cols-3'} ${isDeleted ? 'opacity-50 line-through' : ''}`}
+                >
                   {isEditing ? (
                     <Input
                       value={currentPosition}
@@ -641,6 +709,17 @@ export default function ComponentInfoCard({
                     </div>
                   ) : (
                     <div>{v(piece.sn)}</div>
+                  )}
+                  {isEditing && (
+                    <div className="flex justify-center items-center">
+                      <button
+                        onClick={() => handleDeletePiece(pieceId)}
+                        className="p-1.5 rounded-md text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                        title="Remove piece from component"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   )}
                 </div>
               );
