@@ -410,6 +410,31 @@ export default function InventoryListPage() {
     }
   }, [pieces]);
 
+  // Wrapper for TreeView that looks up full component data from componentStats
+  const handleTreeViewComponentSelect = React.useCallback((componentName: string, piecesForComponent: InventoryItem[]) => {
+    // Find the full component data from componentStats
+    const fullComponentData = componentStats.find(
+      (comp) => comp.componentName === componentName
+    );
+    
+    if (fullComponentData) {
+      // Use the full component data from componentStats
+      openComponentCard(fullComponentData);
+    } else {
+      // Fallback: create a minimal component object from the pieces
+      const firstPiece = piecesForComponent[0];
+      const fallbackComponent = {
+        componentName: componentName,
+        componentType: firstPiece?.componentType || "—",
+        hours: "—",
+        trips: "—",
+        starts: "—",
+        turbine: firstPiece?.turbine || "—",
+      };
+      openComponentCard(fallbackComponent);
+    }
+  }, [componentStats, openComponentCard]);
+
   // Handle piece added - refresh pieces from database
   const handlePieceAdded = React.useCallback(async () => {
     try {
@@ -620,7 +645,7 @@ export default function InventoryListPage() {
             <TreeView
               items={pieces}
               onSelectPiece={openPieceCard}
-              onSelectComponent={openComponentCard}
+              onSelectComponent={handleTreeViewComponentSelect}
             />
           </div>
         ) : (
@@ -629,7 +654,7 @@ export default function InventoryListPage() {
             <VisualTreeView
               items={pieces}
               onSelectPiece={openPieceCard}
-              onSelectComponent={openComponentCard}
+              onSelectComponent={handleTreeViewComponentSelect}
             />
           </div>
         )}
