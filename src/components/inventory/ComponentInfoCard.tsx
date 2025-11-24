@@ -12,6 +12,21 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { piecesStorage, componentsStorage, type Component } from "@/lib/storage/indexedDB";
 import { Pencil, Check, X, Trash2 } from "lucide-react";
+import { useStatusColors } from "@/hooks/useStatusColors";
+import { getTone, getColorName, getBadgeClasses } from "@/lib/settings/colorMapper";
+
+// Badge component for displaying status/state with colors
+const Badge = ({ 
+  text, 
+  tone, 
+  colorName 
+}: { 
+  text: React.ReactNode; 
+  tone: "ok" | "warn" | "bad" | "info" | "neutral";
+  colorName?: string;
+}) => (
+  <span className={getBadgeClasses(tone, colorName)}>{text}</span>
+);
 
 interface ComponentInfoCardProps {
   item: {
@@ -37,6 +52,7 @@ export default function ComponentInfoCard({
   onPieceAdded,
   onComponentUpdated
 }: ComponentInfoCardProps) {
+  const { data: colorSettings = [] } = useStatusColors();
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
   const [selectedPieceId, setSelectedPieceId] = React.useState<string>("");
   const [positionInput, setPositionInput] = React.useState<string>("");
@@ -556,10 +572,12 @@ export default function ComponentInfoCard({
       {/* Bottom Section: Component Parts Table */}
       <div className="space-y-3">
         {/* Table Header */}
-        <div className={`grid gap-4 text-sm font-medium text-gray-700 border-b border-gray-300 pb-2 ${isEditing ? 'grid-cols-4' : 'grid-cols-3'}`}>
+        <div className={`grid gap-4 text-sm font-medium text-gray-700 border-b border-gray-300 pb-2 ${isEditing ? 'grid-cols-6' : 'grid-cols-5'}`}>
           <div>Position</div>
           <div>PN</div>
           <div>SN</div>
+          <div>Status</div>
+          <div>State</div>
           {isEditing && <div className="text-center">Actions</div>}
         </div>
 
@@ -580,10 +598,16 @@ export default function ComponentInfoCard({
                 : piece.position;
               const isDeleted = deletedPieceIds.has(pieceId);
               
+              // Get status and state colors
+              const statusTone = getTone(piece.status || "", 'status', colorSettings);
+              const stateTone = getTone(piece.state || "", 'state', colorSettings);
+              const statusColor = getColorName(piece.status || "", 'status', colorSettings);
+              const stateColor = getColorName(piece.state || "", 'state', colorSettings);
+              
               return (
                 <div 
                   key={piece.id || piece.sn || index} 
-                  className={`grid gap-4 text-sm text-gray-900 ${isEditing ? 'grid-cols-4' : 'grid-cols-3'} ${isDeleted ? 'opacity-50 line-through' : ''}`}
+                  className={`grid gap-4 text-sm text-gray-900 ${isEditing ? 'grid-cols-6' : 'grid-cols-5'} ${isDeleted ? 'opacity-50 line-through' : ''}`}
                 >
                   {isEditing ? (
                     <Input
@@ -710,6 +734,20 @@ export default function ComponentInfoCard({
                   ) : (
                     <div>{v(piece.sn)}</div>
                   )}
+                  <div>
+                    <Badge 
+                      text={piece.status || "—"} 
+                      tone={statusTone} 
+                      colorName={statusColor} 
+                    />
+                  </div>
+                  <div>
+                    <Badge 
+                      text={piece.state || "—"} 
+                      tone={stateTone} 
+                      colorName={stateColor} 
+                    />
+                  </div>
                   {isEditing && (
                     <div className="flex justify-center items-center">
                       <button
@@ -731,18 +769,16 @@ export default function ComponentInfoCard({
           )}
           
           {/* Add Row */}
-          <div className="grid grid-cols-3 gap-4 text-sm pt-2">
-            <div></div>
-            <div className="flex justify-center">
+          <div className={`grid gap-4 text-sm pt-2 ${isEditing ? 'grid-cols-6' : 'grid-cols-5'}`}>
+            <div className={`${isEditing ? 'col-span-6' : 'col-span-5'} flex justify-center`}>
               <button
                 onClick={handleOpenDialog}
-                className="px-3 py-1.5 rounded-md border border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400 text-gray-700 hover:text-gray-900 transition-all cursor-pointer font-semibold text-sm shadow-sm hover:shadow"
+                className="px-6 py-2.5 rounded-sm border border-gray-200 bg-gray-50 hover:bg-gray-100 hover:border-gray-300 text-gray-600 hover:text-gray-700 transition-all cursor-pointer font-medium text-sm min-w-[140px]"
                 title="Add new piece"
               >
                 + Add Piece
               </button>
             </div>
-            <div></div>
           </div>
         </div>
       </div>
