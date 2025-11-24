@@ -10,6 +10,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { piecesStorage, componentsStorage, type Component } from "@/lib/storage/indexedDB";
 import { Pencil, Check, X, Trash2 } from "lucide-react";
 import { useStatusColors } from "@/hooks/useStatusColors";
@@ -37,6 +44,8 @@ interface ComponentInfoCardProps {
     starts?: number | string;
     trips?: number | string;
     turbine?: string;
+    status?: string;
+    state?: string;
     // Add more fields as needed for the component data
   };
   pieces?: InventoryItem[];
@@ -69,12 +78,29 @@ export default function ComponentInfoCard({
     hours: item.hours || "",
     starts: item.starts || "",
     trips: item.trips || "",
+    turbine: item.turbine || "",
+    status: item.status || "",
+    state: item.state || "",
   });
   const [editedPiecePositions, setEditedPiecePositions] = React.useState<Record<string, string>>({});
   const [editedPieceSNs, setEditedPieceSNs] = React.useState<Record<string, string>>({}); // pieceId -> newPieceId
   const [snSearchTerms, setSnSearchTerms] = React.useState<Record<string, string>>({}); // pieceId -> search term
   const [openSnDropdowns, setOpenSnDropdowns] = React.useState<Record<string, boolean>>({}); // pieceId -> isOpen
   const [deletedPieceIds, setDeletedPieceIds] = React.useState<Set<string>>(new Set()); // pieceIds to delete
+  
+  // Store original values when entering edit mode to restore on cancel
+  const [originalComponent, setOriginalComponent] = React.useState<{
+    componentName: string;
+    componentType: string;
+    hours: string | number;
+    starts: string | number;
+    trips: string | number;
+    turbine: string;
+    status: string;
+    state: string;
+  } | null>(null);
+  const [originalPiecePositions, setOriginalPiecePositions] = React.useState<Record<string, string>>({});
+  const [originalPieceSNs, setOriginalPieceSNs] = React.useState<Record<string, string>>({});
 
   // Sort pieces by position (treating position as number if possible, otherwise string)
   const sortedPieces = React.useMemo(() => {
@@ -220,23 +246,46 @@ export default function ComponentInfoCard({
   };
 
   const handleStartEdit = () => {
-    setEditedComponent({
+    // Store original component values
+    const originalComp = {
       componentName: item.componentName || "",
       componentType: item.componentType || "",
       hours: item.hours || "",
       starts: item.starts || "",
       trips: item.trips || "",
-    });
-    // Initialize edited piece positions
+      turbine: item.turbine || "",
+      status: item.status || "",
+      state: item.state || "",
+    };
+    setOriginalComponent(originalComp);
+    
+    // Initialize edited component with original values
+    setEditedComponent(originalComp);
+    
+    // Initialize edited piece positions and store originals
     const initialPositions: Record<string, string> = {};
     const initialSNs: Record<string, string> = {};
     const initialSearchTerms: Record<string, string> = {};
+    const originalPositions: Record<string, string> = {};
+    const originalSNs: Record<string, string> = {};
+    
     pieces.forEach(piece => {
       const pieceId = piece.id?.toString() || piece.sn || String(piece.pn);
-      initialPositions[pieceId] = piece.position || "";
+      const position = piece.position || "";
+      const sn = piece.sn || piece.pn?.toString() || "";
+      
+      // Store original values
+      originalPositions[pieceId] = position;
+      originalSNs[pieceId] = pieceId; // Store original piece ID
+      
+      // Initialize edited values with originals
+      initialPositions[pieceId] = position;
       initialSNs[pieceId] = pieceId; // Start with current piece
-      initialSearchTerms[pieceId] = piece.sn || piece.pn?.toString() || ""; // Use SN for display
+      initialSearchTerms[pieceId] = sn; // Use SN for display
     });
+    
+    setOriginalPiecePositions(originalPositions);
+    setOriginalPieceSNs(originalSNs);
     setEditedPiecePositions(initialPositions);
     setEditedPieceSNs(initialSNs);
     setSnSearchTerms(initialSearchTerms);
@@ -247,18 +296,51 @@ export default function ComponentInfoCard({
 
   const handleCancelEdit = () => {
     setIsEditing(false);
-    setEditedComponent({
-      componentName: item.componentName || "",
-      componentType: item.componentType || "",
-      hours: item.hours || "",
-      starts: item.starts || "",
-      trips: item.trips || "",
+    
+    // Restore original component values if they were stored
+    if (originalComponent) {
+      setEditedComponent({
+        componentName: originalComponent.componentName,
+        componentType: originalComponent.componentType,
+        hours: originalComponent.hours,
+        starts: originalComponent.starts,
+        trips: originalComponent.trips,
+        turbine: originalComponent.turbine,
+        status: originalComponent.status,
+        state: originalComponent.state,
+      });
+    } else {
+      // Fallback to current item values if no original was stored
+      setEditedComponent({
+        componentName: item.componentName || "",
+        componentType: item.componentType || "",
+        hours: item.hours || "",
+        starts: item.starts || "",
+        trips: item.trips || "",
+        turbine: item.turbine || "",
+        status: item.status || "",
+        state: item.state || "",
+      });
+    }
+    
+    // Restore original piece positions and SNs
+    setEditedPiecePositions({ ...originalPiecePositions });
+    setEditedPieceSNs({ ...originalPieceSNs });
+    
+    // Reset search terms and other edit state
+    const resetSearchTerms: Record<string, string> = {};
+    pieces.forEach(piece => {
+      const pieceId = piece.id?.toString() || piece.sn || String(piece.pn);
+      resetSearchTerms[pieceId] = piece.sn || piece.pn?.toString() || "";
     });
-    setEditedPiecePositions({});
-    setEditedPieceSNs({});
-    setSnSearchTerms({});
+    setSnSearchTerms(resetSearchTerms);
     setOpenSnDropdowns({});
     setDeletedPieceIds(new Set());
+    
+    // Clear original values
+    setOriginalComponent(null);
+    setOriginalPiecePositions({});
+    setOriginalPieceSNs({});
   };
 
   const handleDeletePiece = (pieceId: string) => {
@@ -292,28 +374,50 @@ export default function ComponentInfoCard({
   const handleSaveComponent = async () => {
     setIsSavingComponent(true);
     try {
-      // Save component
+      // Try to find existing component by ID first, or by name if ID doesn't exist
+      let existingComponent: Component | null = null;
+      if (item.id) {
+        existingComponent = await componentsStorage.get(item.id);
+      }
+      
+      // If not found by ID, try to find by name (in case component was created from mock data)
+      if (!existingComponent && editedComponent.componentName) {
+        const allComponents = await componentsStorage.getAll();
+        existingComponent = allComponents.find(
+          c => c.name === editedComponent.componentName
+        ) || null;
+      }
+      
+      // Prepare component data to save
       const componentToSave: Component = {
-        id: item.id,
+        // Use existing ID if found, otherwise let IndexedDB auto-generate
+        id: existingComponent?.id || item.id,
         name: editedComponent.componentName,
         type: editedComponent.componentType,
         componentType: editedComponent.componentType,
-        turbine: item.turbine,
+        turbine: editedComponent.turbine || undefined,
+        status: item.status || undefined, // Status is read-only, use original value
+        state: editedComponent.state || undefined,
         hours: editedComponent.hours ? Number(editedComponent.hours) : undefined,
         starts: editedComponent.starts ? Number(editedComponent.starts) : undefined,
         trips: editedComponent.trips ? Number(editedComponent.trips) : undefined,
       };
 
+      // Save component to database
       const componentSuccess = await componentsStorage.save(componentToSave);
       
       if (!componentSuccess) {
         alert("Failed to save component. Please try again.");
+        setIsSavingComponent(false);
         return;
       }
+      
+      console.log("Component saved successfully:", componentToSave);
 
       // Save piece position changes, SN replacements, and deletions
       const pieceUpdates: InventoryItem[] = [];
       const componentName = editedComponent.componentName || item.componentName || "";
+      const componentType = editedComponent.componentType || item.componentType || "";
       
       // First, handle deleted pieces - remove them from component
       for (const pieceId of deletedPieceIds) {
@@ -367,26 +471,60 @@ export default function ComponentInfoCard({
             pieceUpdates.push({
               ...newPiece,
               component: componentName,
-              componentType: editedComponent.componentType || item.componentType || newPiece.componentType,
+              componentType: componentType || newPiece.componentType,
               position: newPosition.trim() || undefined,
             });
           }
-        } else if (piece.position !== newPosition) {
-          // Just update position if SN didn't change
-          pieceUpdates.push({
+        } else {
+          // Update piece with new position and ensure component name/type are updated
+          const updatedPiece: InventoryItem = {
             ...piece,
-            position: newPosition.trim() || undefined,
-          });
+            component: componentName,
+            componentType: componentType || piece.componentType,
+            position: newPosition.trim() || piece.position || undefined,
+          };
+          
+          // Only add to updates if something actually changed
+          if (piece.position !== newPosition.trim() || 
+              piece.component !== componentName ||
+              piece.componentType !== componentType) {
+            pieceUpdates.push(updatedPiece);
+          }
         }
       }
 
-      // Save all piece updates
+      // If component name changed, update all pieces that belong to this component
+      const oldComponentName = item.componentName || "";
+      if (componentName !== oldComponentName && oldComponentName) {
+        // Find all pieces that belong to the old component name
+        const piecesToUpdate = pieces.filter(p => p.component === oldComponentName);
+        piecesToUpdate.forEach(piece => {
+          // Only add if not already in updates
+          const alreadyInUpdates = pieceUpdates.some(
+            p => (p.id?.toString() === piece.id?.toString()) ||
+                 (p.sn === piece.sn) ||
+                 (String(p.pn) === String(piece.pn))
+          );
+          
+          if (!alreadyInUpdates) {
+            pieceUpdates.push({
+              ...piece,
+              component: componentName,
+              componentType: componentType || piece.componentType,
+            });
+          }
+        });
+      }
+
+      // Save all piece updates to database
       if (pieceUpdates.length > 0) {
         const piecesSuccess = await piecesStorage.saveAll(pieceUpdates);
         if (!piecesSuccess) {
           console.error("Failed to save some piece position changes");
           // Still show success for component, but warn about pieces
           alert("Component saved, but some piece position changes may not have been saved.");
+        } else {
+          console.log(`Successfully saved ${pieceUpdates.length} piece updates`);
         }
       }
 
@@ -396,6 +534,11 @@ export default function ComponentInfoCard({
       setSnSearchTerms({});
       setOpenSnDropdowns({});
       setDeletedPieceIds(new Set());
+      
+      // Clear original values after successful save
+      setOriginalComponent(null);
+      setOriginalPiecePositions({});
+      setOriginalPieceSNs({});
       
       // Notify parent to refresh
       if (onComponentUpdated) {
@@ -515,6 +658,73 @@ export default function ComponentInfoCard({
             </div>
           </div>
         )}
+
+        {/* Component Status Section */}
+        <div className="bg-white rounded-md p-4 space-y-3 border border-gray-200">
+          <div className="flex items-center justify-between py-1">
+            <span className="text-sm font-medium text-gray-700">Turbine Engine</span>
+            {isEditing ? (
+              <Input
+                value={editedComponent.turbine}
+                onChange={(e) => setEditedComponent(prev => ({ ...prev, turbine: e.target.value }))}
+                className="w-48"
+                placeholder="Turbine Engine"
+              />
+            ) : (
+              <span className="text-sm font-bold text-gray-900 bg-gray-50 px-3 py-1 rounded">
+                {v(item.turbine)}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center justify-between py-1">
+            <span className="text-sm font-medium text-gray-700">Status</span>
+            {(() => {
+              const statusValue = v(item.status);
+              const statusTone = getTone(statusValue, 'status', colorSettings);
+              const statusColor = getColorName(statusValue, 'status', colorSettings);
+              return (
+                <Badge 
+                  text={statusValue} 
+                  tone={statusTone} 
+                  colorName={statusColor} 
+                />
+              );
+            })()}
+          </div>
+          <div className="flex items-center justify-between py-1">
+            <span className="text-sm font-medium text-gray-700">State</span>
+            {isEditing ? (
+              <Select
+                value={editedComponent.state}
+                onValueChange={(value) => setEditedComponent(prev => ({ ...prev, state: value }))}
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Select state" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="In Service">In Service</SelectItem>
+                  <SelectItem value="Out of Service">Out of Service</SelectItem>
+                  <SelectItem value="Standby">Standby</SelectItem>
+                  <SelectItem value="Repair">Repair</SelectItem>
+                  <SelectItem value="On Order">On Order</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              (() => {
+                const stateValue = v(item.state);
+                const stateTone = getTone(stateValue, 'state', colorSettings);
+                const stateColor = getColorName(stateValue, 'state', colorSettings);
+                return (
+                  <Badge 
+                    text={stateValue} 
+                    tone={stateTone} 
+                    colorName={stateColor} 
+                  />
+                );
+              })()
+            )}
+          </div>
+        </div>
 
         {/* Intervals Section */}
         <div className="bg-white rounded-md p-4 space-y-3 border border-gray-200">
