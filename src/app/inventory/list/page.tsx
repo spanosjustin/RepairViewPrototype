@@ -46,6 +46,9 @@ type ComponentRow = {
   id?: string | number;
 };
 
+type SortableColumn = keyof ComponentRow;
+type SortDirection = "asc" | "desc" | null;
+
 function buildComponentStatsFromMock(mock: any[]): ComponentRow[] {
   return (mock ?? []).map((it) => ({
     componentType: it.componentType ?? it.type ?? "—",
@@ -343,6 +346,10 @@ export default function InventoryListPage() {
   const [currentPage, setCurrentPage] = React.useState(1);
   const itemsPerPage = 50;
 
+  // Sorting state (only for components view)
+  const [sortColumn, setSortColumn] = React.useState<SortableColumn | undefined>(undefined);
+  const [sortDirection, setSortDirection] = React.useState<SortDirection>(null);
+
   // Load pieces from database or generate them
   React.useEffect(() => {
     const loadPieces = async () => {
@@ -427,14 +434,68 @@ export default function InventoryListPage() {
     [pieces, dbComponents]
   );
 
-  // Reset page when switching view modes
+  // Sort component stats based on sortColumn and sortDirection
+  const sortedComponentStats = React.useMemo(() => {
+    if (!sortColumn || !sortDirection) {
+      return componentStats;
+    }
+
+    return [...componentStats].sort((a, b) => {
+      let aValue = a[sortColumn];
+      let bValue = b[sortColumn];
+
+      // Handle numeric columns (hours, trips, starts)
+      if (sortColumn === "hours" || sortColumn === "trips" || sortColumn === "starts") {
+        let aNum = typeof aValue === "number" ? aValue : typeof aValue === "string" && aValue !== "—" ? parseFloat(aValue) : -Infinity;
+        let bNum = typeof bValue === "number" ? bValue : typeof bValue === "string" && bValue !== "—" ? parseFloat(bValue) : -Infinity;
+        
+        if (isNaN(aNum)) aNum = -Infinity;
+        if (isNaN(bNum)) bNum = -Infinity;
+        
+        if (sortDirection === "asc") {
+          return aNum - bNum;
+        } else {
+          return bNum - aNum;
+        }
+      }
+
+      // Handle string columns (componentType, componentName, status, state, turbine)
+      const aStr = String(aValue || "—").toLowerCase();
+      const bStr = String(bValue || "—").toLowerCase();
+
+      if (sortDirection === "asc") {
+        return aStr.localeCompare(bStr);
+      } else {
+        return bStr.localeCompare(aStr);
+      }
+    });
+  }, [componentStats, sortColumn, sortDirection]);
+
+  // Handle sort column click
+  const handleSort = React.useCallback((column: SortableColumn) => {
+    if (sortColumn === column) {
+      // Toggle direction: asc -> desc -> null
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else if (sortDirection === "desc") {
+        setSortDirection(null);
+        setSortColumn(undefined);
+      }
+    } else {
+      // New column, start with ascending
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  }, [sortColumn, sortDirection]);
+
+  // Reset page when switching view modes or sorting
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [viewMode]);
+  }, [viewMode, sortColumn, sortDirection]);
 
   // Pagination logic - only apply pagination to pieces and components views
   const currentData = viewMode === "pieces" ? pieces : 
-                     viewMode === "components" ? componentStats : 
+                     viewMode === "components" ? sortedComponentStats : 
                      pieces; // For turbines and tree views, use pieces data
   
   const shouldPaginate = viewMode === "pieces" || viewMode === "components";
@@ -872,6 +933,9 @@ export default function InventoryListPage() {
               dataset="components"
               componentStats={paginatedData}
               onSelectComponent={openComponentCard}
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={handleSort}
             />
             
             {/* Pagination Controls */}
