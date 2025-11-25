@@ -30,9 +30,9 @@ import PieceInfoCard from "@/components/inventory/PieceInfoCard";
 import ComponentInfoCard from "@/components/inventory/ComponentInfoCard";
 import TreeView from "@/components/TreeView";
 import VisualTreeView from "@/components/VisualTreeView";
-import { piecesStorage, componentsStorage } from "@/lib/storage/indexedDB";
+import { piecesStorage, componentsStorage, type Component } from "@/lib/storage/indexedDB";
 
-type ViewMode = "pieces" | "components" | "turbines" | "tree";
+type ViewMode = "pieces" | "components" | "list" | "tree";
 
 type ComponentRow = {
   componentType: string;
@@ -181,6 +181,74 @@ function aggregatePiecesIntoComponentStats(pieces: InventoryItem[]): ComponentRo
   return componentStats;
 }
 
+// Function to merge database components with aggregated piece stats
+function mergeComponentsWithPieceStats(
+  pieces: InventoryItem[],
+  dbComponents: Component[]
+): ComponentRow[] {
+  // First, aggregate stats from pieces
+  const aggregatedStats = aggregatePiecesIntoComponentStats(pieces);
+  
+  // Create a map of database components by name for quick lookup
+  const dbComponentMap = new Map<string, Component>();
+  dbComponents.forEach(comp => {
+    const name = comp.name || "";
+    if (name) {
+      dbComponentMap.set(name, comp);
+    }
+  });
+  
+  // Merge: use database component data for component-level fields,
+  // but keep aggregated status/state from pieces
+  const mergedStats: ComponentRow[] = aggregatedStats.map(aggregated => {
+    const dbComponent = dbComponentMap.get(aggregated.componentName);
+    
+    if (dbComponent) {
+      // Component exists in database - use its data for component-level fields
+      return {
+        componentName: dbComponent.name || aggregated.componentName,
+        componentType: dbComponent.type || dbComponent.componentType || aggregated.componentType,
+        hours: dbComponent.hours !== undefined && dbComponent.hours !== null 
+          ? dbComponent.hours 
+          : aggregated.hours,
+        trips: dbComponent.trips !== undefined && dbComponent.trips !== null
+          ? dbComponent.trips
+          : aggregated.trips,
+        starts: dbComponent.starts !== undefined && dbComponent.starts !== null
+          ? dbComponent.starts
+          : aggregated.starts,
+        status: aggregated.status, // Always use aggregated status from pieces
+        state: dbComponent.state || aggregated.state, // Use DB state if available, otherwise aggregated
+        turbine: dbComponent.turbine || aggregated.turbine,
+        id: dbComponent.id || aggregated.id || aggregated.componentName,
+      };
+    } else {
+      // Component not in database - use aggregated data
+      return aggregated;
+    }
+  });
+  
+  // Also include components from database that don't have any pieces yet
+  dbComponents.forEach(dbComponent => {
+    const name = dbComponent.name || "";
+    if (name && !mergedStats.some(stat => stat.componentName === name)) {
+      mergedStats.push({
+        componentName: name,
+        componentType: dbComponent.type || dbComponent.componentType || "—",
+        hours: dbComponent.hours !== undefined && dbComponent.hours !== null ? dbComponent.hours : "—",
+        trips: dbComponent.trips !== undefined && dbComponent.trips !== null ? dbComponent.trips : "—",
+        starts: dbComponent.starts !== undefined && dbComponent.starts !== null ? dbComponent.starts : "—",
+        status: "—", // No pieces, so no status
+        state: dbComponent.state || "—",
+        turbine: dbComponent.turbine || "—",
+        id: dbComponent.id || name,
+      });
+    }
+  });
+  
+  return mergedStats;
+}
+
 // Function to generate 12 pieces per component
 function generatePiecesForComponents(components: any[]): InventoryItem[] {
   const generatedPieces: InventoryItem[] = [];
@@ -248,6 +316,7 @@ export default function InventoryListPage() {
   const [viewMode, setViewMode] = React.useState<ViewMode>("pieces");
   const [pieces, setPieces] = React.useState<any[]>([]);
   const [components, setComponents] = React.useState<any[]>([]);
+  const [dbComponents, setDbComponents] = React.useState<Component[]>([]);
   const [loading, setLoading] = React.useState(true);
   
   // Store updated notes by piece SN (serial number)
@@ -309,6 +378,21 @@ export default function InventoryListPage() {
     loadPieces();
   }, [components]);
 
+  // Load components from database
+  React.useEffect(() => {
+    const loadComponents = async () => {
+      try {
+        const dbComps = await componentsStorage.getAll();
+        setDbComponents(dbComps);
+      } catch (error) {
+        console.error('Error loading components from database:', error);
+        setDbComponents([]);
+      }
+    };
+    
+    loadComponents();
+  }, []);
+
   // Fetch components from database (or use mock data)
   React.useEffect(() => {
     // For now, use mock data directly since API routes don't exist
@@ -337,10 +421,10 @@ export default function InventoryListPage() {
     setLoading(false);
   }, []);
 
-  // Build component stats from actual pieces (aggregated by component name)
+  // Build component stats by merging database components with aggregated piece stats
   const componentStats = React.useMemo(
-    () => aggregatePiecesIntoComponentStats(pieces),
-    [pieces]
+    () => mergeComponentsWithPieceStats(pieces, dbComponents),
+    [pieces, dbComponents]
   );
 
   // Reset page when switching view modes
@@ -667,9 +751,9 @@ export default function InventoryListPage() {
   // Handle component updated - refresh component data
   const handleComponentUpdated = React.useCallback(async () => {
     try {
-      // Refresh components list
-      const dbComponents = await componentsStorage.getAll();
-      setComponents(dbComponents);
+      // Refresh components list from database
+      const dbComps = await componentsStorage.getAll();
+      setDbComponents(dbComps);
       
       // Update selected component if dialog is open
       if (selectedComponent?.id) {
@@ -703,7 +787,7 @@ export default function InventoryListPage() {
               <SelectContent align="end">
                 <SelectItem value="pieces">Pieces</SelectItem>
                 <SelectItem value="components">Components</SelectItem>
-                <SelectItem value="turbines">Turbines</SelectItem>
+                <SelectItem value="list">List</SelectItem>
                 <SelectItem value="tree">Tree</SelectItem>
               </SelectContent>
             </Select>
@@ -847,7 +931,7 @@ export default function InventoryListPage() {
               </div>
             )}
           </div>
-        ) : viewMode === "turbines" ? (
+        ) : viewMode === "list" ? (
           /* Turbine View (Tree View) */
           <div className="p-4">
             <TreeView
