@@ -106,13 +106,13 @@ function TurbineBox({ turbine, onSelectPiece, onSelectComponent, colorSettings =
                 return (
                   <div
                     key={piece.id}
-                    className={`rounded-full px-4 py-2 min-w-[80px] text-center cursor-pointer transition-colors ${hoverClasses}`}
+                    className={`rounded-full px-4 py-2 min-w-[80px] text-center cursor-pointer transition-colors flex flex-col gap-0.5 ${hoverClasses}`}
                     onClick={() => onSelectPiece?.(piece.item)}
                   >
-                    <div className="text-xs font-medium">
+                    <div className="text-xs font-medium leading-tight">
                       {piece.item.sn}
                     </div>
-                    <div className="text-xs opacity-75">
+                    <div className="text-xs opacity-75 leading-tight">
                       {piece.item.pn}
                     </div>
                   </div>

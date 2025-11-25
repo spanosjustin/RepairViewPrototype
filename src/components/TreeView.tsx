@@ -124,15 +124,23 @@ function TreeNode({ node, level, isExpanded, onToggle, onSelectPiece, onSelectCo
         {!hasChildren && <div className="w-4" />}
 
         <div className="flex-1 flex items-center justify-between">
-          <span className="text-sm">
-            {isTurbine && "🏭"}
-            {isComponent && "⚙️"}
-            {isPiece && "🔧"}
-            {" "}
-            {isTurbine && node.name}
-            {isComponent && node.name}
-            {isPiece && `${node.item.sn} (${node.item.pn})`}
-          </span>
+          {isPiece ? (
+            <div className="flex items-start gap-2">
+              <span className="text-sm pt-0.5">🔧</span>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm block">{node.item.sn}</span>
+                <span className="text-xs text-muted-foreground block">{node.item.pn}</span>
+              </div>
+            </div>
+          ) : (
+            <span className="text-sm">
+              {isTurbine && "🏭"}
+              {isComponent && "⚙️"}
+              {" "}
+              {isTurbine && node.name}
+              {isComponent && node.name}
+            </span>
+          )}
 
           {isComponent && (
             <button

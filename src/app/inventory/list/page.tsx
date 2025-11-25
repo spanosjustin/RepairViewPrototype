@@ -60,6 +60,127 @@ function buildComponentStatsFromMock(mock: any[]): ComponentRow[] {
   }));
 }
 
+// Function to aggregate pieces into component stats
+function aggregatePiecesIntoComponentStats(pieces: InventoryItem[]): ComponentRow[] {
+  if (!pieces || pieces.length === 0) {
+    return [];
+  }
+
+  // Group pieces by component name
+  const componentMap = new Map<string, InventoryItem[]>();
+  
+  pieces.forEach((piece) => {
+    const componentName = piece.component || "";
+    if (!componentName) return;
+    
+    if (!componentMap.has(componentName)) {
+      componentMap.set(componentName, []);
+    }
+    componentMap.get(componentName)!.push(piece);
+  });
+
+  // Aggregate stats for each component
+  const componentStats: ComponentRow[] = Array.from(componentMap.entries()).map(([componentName, componentPieces]) => {
+    if (componentPieces.length === 0) {
+      return {
+        componentName,
+        componentType: "—",
+        hours: "—",
+        trips: "—",
+        starts: "—",
+        status: "—",
+        state: "—",
+        turbine: "—",
+      };
+    }
+
+    // Get metadata from first piece
+    const firstPiece = componentPieces[0];
+    const componentType = firstPiece.componentType || "—";
+    const turbine = firstPiece.turbine || "—";
+
+    // Aggregate numeric values (average)
+    const validHours = componentPieces
+      .map(p => typeof p.hours === 'number' ? p.hours : null)
+      .filter((h): h is number => h !== null);
+    const validTrips = componentPieces
+      .map(p => typeof p.trips === 'number' ? p.trips : null)
+      .filter((t): t is number => t !== null);
+    const validStarts = componentPieces
+      .map(p => typeof p.starts === 'number' ? p.starts : null)
+      .filter((s): s is number => s !== null);
+
+    const avgHours = validHours.length > 0 
+      ? Math.round(validHours.reduce((sum, h) => sum + h, 0) / validHours.length)
+      : "—";
+    const avgTrips = validTrips.length > 0
+      ? Math.round(validTrips.reduce((sum, t) => sum + t, 0) / validTrips.length)
+      : "—";
+    const avgStarts = validStarts.length > 0
+      ? Math.round(validStarts.reduce((sum, s) => sum + s, 0) / validStarts.length)
+      : "—";
+
+    // Determine status: use worst status if multiple pieces have different statuses
+    // Priority: Replace Now > Replace Soon > Degraded > Monitor > Unknown > Spare > OK
+    const statusPriority: Record<string, number> = {
+      "Replace Now": 7,
+      "Replace Soon": 6,
+      "Degraded": 5,
+      "Monitor": 4,
+      "Unknown": 3,
+      "Spare": 2,
+      "OK": 1,
+    };
+    
+    const statuses = componentPieces
+      .map(p => p.status)
+      .filter((s): s is InventoryItem['status'] => !!s);
+    
+    let status = "—";
+    if (statuses.length > 0) {
+      status = statuses.reduce((worst, current) => {
+        const worstPriority = statusPriority[worst] || 0;
+        const currentPriority = statusPriority[current] || 0;
+        return currentPriority > worstPriority ? current : worst;
+      }, statuses[0]);
+    }
+
+    // Determine state: use most common state, or worst case
+    const stateCounts = new Map<string, number>();
+    componentPieces.forEach(piece => {
+      if (piece.state) {
+        stateCounts.set(piece.state, (stateCounts.get(piece.state) || 0) + 1);
+      }
+    });
+    
+    let state = "—";
+    if (stateCounts.size > 0) {
+      // Find most common state
+      let maxCount = 0;
+      stateCounts.forEach((count, stateValue) => {
+        if (count > maxCount) {
+          maxCount = count;
+          state = stateValue;
+        }
+      });
+    }
+
+    return {
+      componentName,
+      componentType,
+      hours: avgHours,
+      trips: avgTrips,
+      starts: avgStarts,
+      status,
+      state,
+      turbine,
+      id: componentName, // Use component name as ID
+    };
+  });
+
+  return componentStats;
+}
+
 // Function to generate 12 pieces per component
 function generatePiecesForComponents(components: any[]): InventoryItem[] {
   const generatedPieces: InventoryItem[] = [];
@@ -216,9 +337,10 @@ export default function InventoryListPage() {
     setLoading(false);
   }, []);
 
+  // Build component stats from actual pieces (aggregated by component name)
   const componentStats = React.useMemo(
-    () => buildComponentStatsFromMock(components),
-    [components]
+    () => aggregatePiecesIntoComponentStats(pieces),
+    [pieces]
   );
 
   // Reset page when switching view modes
@@ -421,15 +543,101 @@ export default function InventoryListPage() {
       // Use the full component data from componentStats
       openComponentCard(fullComponentData);
     } else {
-      // Fallback: create a minimal component object from the pieces
+      // Fallback: aggregate stats from the pieces provided
+      if (piecesForComponent.length === 0) {
+        // No pieces available, create minimal component
+        const fallbackComponent = {
+          componentName: componentName,
+          componentType: "—",
+          hours: "—",
+          trips: "—",
+          starts: "—",
+          status: "—",
+          state: "—",
+          turbine: "—",
+        };
+        openComponentCard(fallbackComponent);
+        return;
+      }
+
+      // Aggregate stats from pieces
       const firstPiece = piecesForComponent[0];
+      const componentType = firstPiece.componentType || "—";
+      const turbine = firstPiece.turbine || "—";
+
+      // Aggregate numeric values (average)
+      const validHours = piecesForComponent
+        .map(p => typeof p.hours === 'number' ? p.hours : null)
+        .filter((h): h is number => h !== null);
+      const validTrips = piecesForComponent
+        .map(p => typeof p.trips === 'number' ? p.trips : null)
+        .filter((t): t is number => t !== null);
+      const validStarts = piecesForComponent
+        .map(p => typeof p.starts === 'number' ? p.starts : null)
+        .filter((s): s is number => s !== null);
+
+      const avgHours = validHours.length > 0 
+        ? Math.round(validHours.reduce((sum, h) => sum + h, 0) / validHours.length)
+        : "—";
+      const avgTrips = validTrips.length > 0
+        ? Math.round(validTrips.reduce((sum, t) => sum + t, 0) / validTrips.length)
+        : "—";
+      const avgStarts = validStarts.length > 0
+        ? Math.round(validStarts.reduce((sum, s) => sum + s, 0) / validStarts.length)
+        : "—";
+
+      // Determine status: use worst status
+      const statusPriority: Record<string, number> = {
+        "Replace Now": 7,
+        "Replace Soon": 6,
+        "Degraded": 5,
+        "Monitor": 4,
+        "Unknown": 3,
+        "Spare": 2,
+        "OK": 1,
+      };
+      
+      const statuses = piecesForComponent
+        .map(p => p.status)
+        .filter((s): s is InventoryItem['status'] => !!s);
+      
+      let status = "—";
+      if (statuses.length > 0) {
+        status = statuses.reduce((worst, current) => {
+          const worstPriority = statusPriority[worst] || 0;
+          const currentPriority = statusPriority[current] || 0;
+          return currentPriority > worstPriority ? current : worst;
+        }, statuses[0]);
+      }
+
+      // Determine state: use most common state
+      const stateCounts = new Map<string, number>();
+      piecesForComponent.forEach(piece => {
+        if (piece.state) {
+          stateCounts.set(piece.state, (stateCounts.get(piece.state) || 0) + 1);
+        }
+      });
+      
+      let state = "—";
+      if (stateCounts.size > 0) {
+        let maxCount = 0;
+        stateCounts.forEach((count, stateValue) => {
+          if (count > maxCount) {
+            maxCount = count;
+            state = stateValue;
+          }
+        });
+      }
+
       const fallbackComponent = {
         componentName: componentName,
-        componentType: firstPiece?.componentType || "—",
-        hours: "—",
-        trips: "—",
-        starts: "—",
-        turbine: firstPiece?.turbine || "—",
+        componentType: componentType,
+        hours: avgHours,
+        trips: avgTrips,
+        starts: avgStarts,
+        status: status,
+        state: state,
+        turbine: turbine,
       };
       openComponentCard(fallbackComponent);
     }
