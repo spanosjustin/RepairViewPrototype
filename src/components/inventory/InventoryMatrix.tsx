@@ -238,7 +238,14 @@ function ComponentsTable({
                   >
                     {r.componentType}
                   </td>
-                  <td className="py-2 pr-3">{r.componentName}</td>
+                  <td className="py-2 pr-3">
+                    <div className="flex items-center gap-2">
+                      <span>{r.componentName}</span>
+                      {r.componentType && r.componentType !== "—" && (
+                        <span className="text-xs text-muted-foreground">({r.componentType})</span>
+                      )}
+                    </div>
+                  </td>
                   <td className="py-2 pr-3">{r.hours}</td>
                   <td className="py-2 pr-3">{r.trips}</td>
                   <td className="py-2 pr-3">{r.starts}</td>
@@ -317,7 +324,12 @@ function PiecesTable({
                   className={`${firstCellBase} before:bg-[var(--dot-color)] before:shadow-[0_0_0_2px_var(--dot-ring)]`}
                   data-piece-id={it.id ?? it.sn ?? it.piece ?? it.name}
                 >
-                  {it.piece ?? it.name ?? "—"}
+                  <div className="flex items-center gap-2">
+                    <span>{it.piece ?? it.name ?? "—"}</span>
+                    {it.componentType && it.componentType !== "—" && (
+                      <span className="text-xs text-muted-foreground">({it.componentType})</span>
+                    )}
+                  </div>
                 </td>
                 <td className="py-2 pr-3">{it.sn ?? it.serial ?? "—"}</td>
                 <td className="py-2 pr-3">{it.hours ?? "—"}</td>

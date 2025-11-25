@@ -189,13 +189,21 @@ function TurbineBox({ turbine, onSelectPiece, onSelectComponent, colorSettings =
                       <ChevronRight className="w-3 h-3 text-gray-600 transform skew-x-12" />
                     )}
                     <div 
-                      className="font-medium text-gray-800 text-sm transform skew-x-12"
+                      className="font-medium text-gray-800 text-sm transform skew-x-12 flex items-center gap-1"
                       onClick={(e) => {
                         e.stopPropagation();
                         onSelectComponent?.(component.name, component.pieces.map(p => p.item));
                       }}
                     >
-                      {component.name}
+                      <span>{component.name}</span>
+                      {(() => {
+                        // Get componentType from the first piece in this component
+                        const firstPiece = component.pieces[0]?.item;
+                        const componentType = firstPiece?.componentType;
+                        return componentType && componentType !== "—" ? (
+                          <span className="text-xs opacity-75">({componentType})</span>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
                 </div>

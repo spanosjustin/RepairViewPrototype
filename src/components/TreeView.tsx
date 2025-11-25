@@ -143,23 +143,67 @@ function TreeNode({ node, level, isExpanded, onToggle, onSelectPiece, onSelectCo
               </div>
             </div>
           ) : (
-            <span className="text-sm">
-              {isTurbine && "🏭"}
-              {isComponent && "⚙️"}
-              {" "}
-              {isTurbine && node.name}
-              {isComponent && node.name}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm">
+                {isTurbine && "🏭"}
+                {isComponent && "⚙️"}
+                {" "}
+                {isTurbine && node.name}
+                {isComponent && node.name}
+              </span>
+              {isComponent && (() => {
+                // Get componentType from the first piece in this component
+                const firstPiece = node.pieces[0]?.item;
+                const componentType = firstPiece?.componentType;
+                return componentType && componentType !== "—" ? (
+                  <span className="text-xs text-muted-foreground">({componentType})</span>
+                ) : null;
+              })()}
+            </div>
           )}
 
-          {isComponent && (
-            <button
-              onClick={handleComponentClick}
-              className="text-xs px-2 py-1 bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors"
-            >
-              View Details
-            </button>
-          )}
+          {isComponent && (() => {
+            // Calculate component status from pieces (worst status)
+            const statusPriority: Record<string, number> = {
+              "Replace Now": 7,
+              "Replace Soon": 6,
+              "Degraded": 5,
+              "Monitor": 4,
+              "Unknown": 3,
+              "Spare": 2,
+              "OK": 1,
+            };
+            
+            const statuses = node.pieces
+              .map(p => p.item.status)
+              .filter((s): s is InventoryItem['status'] => !!s);
+            
+            let componentStatus = "—";
+            if (statuses.length > 0) {
+              componentStatus = statuses.reduce((worst, current) => {
+                const worstPriority = statusPriority[worst] || 0;
+                const currentPriority = statusPriority[current] || 0;
+                return currentPriority > worstPriority ? current : worst;
+              }, statuses[0]);
+            }
+            
+            const statusTone = getTone(componentStatus || "", 'status', colorSettings);
+            const statusColor = getColorName(componentStatus || "", 'status', colorSettings);
+            
+            return (
+              <div className="flex items-center gap-2">
+                <span className={getBadgeClasses(statusTone, statusColor)}>
+                  {componentStatus}
+                </span>
+                <button
+                  onClick={handleComponentClick}
+                  className="text-xs px-2 py-1 bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors"
+                >
+                  View Details
+                </button>
+              </div>
+            );
+          })()}
 
           {isPiece && (() => {
             const statusTone = getTone(node.item.status || "", 'status', colorSettings);
