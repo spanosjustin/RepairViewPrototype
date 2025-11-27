@@ -642,6 +642,67 @@ export default function InventoryListPage() {
     return filtered;
   }, [pieces, pieceSearchQuery, searchTerms, searchQuery]);
 
+  // Filter pieces for List view (TreeView) - drills down to only matching pieces
+  const filteredPiecesForListView = React.useMemo(() => {
+    // If no search, return all pieces
+    const hasSearch = (searchTerms.length > 0) || (searchQuery.trim().length > 0);
+    if (!hasSearch) {
+      return pieces;
+    }
+
+    // Helper function to check if piece matches search
+    const pieceMatchesSearch = (piece: any, searchText: string) => {
+      const searchableText = [
+        String(piece.pn || ""),
+        String(piece.sn || piece.serial || ""),
+        String(piece.component || piece.piece || piece.name || ""),
+        String(piece.componentType || ""),
+        String(piece.status || piece.health || ""),
+        String(piece.state || piece.condition || ""),
+        String(piece.turbine || ""),
+        String(piece.position || ""),
+      ].join(" ").toLowerCase();
+      
+      return searchableText.includes(searchText.toLowerCase());
+    };
+
+    // Find all matching pieces
+    const matchingPieces = new Set<string>();
+
+    // Check search terms (bubbles)
+    searchTerms.forEach(term => {
+      pieces.forEach(piece => {
+        if (pieceMatchesSearch(piece, term)) {
+          const pieceId = piece.sn || piece.id || String(piece.pn);
+          matchingPieces.add(pieceId);
+        }
+      });
+    });
+
+    // Check current search query
+    if (searchQuery.trim()) {
+      pieces.forEach(piece => {
+        if (pieceMatchesSearch(piece, searchQuery)) {
+          const pieceId = piece.sn || piece.id || String(piece.pn);
+          matchingPieces.add(pieceId);
+        }
+      });
+    }
+
+    // If no matches, return empty array
+    if (matchingPieces.size === 0) {
+      return [];
+    }
+
+    // Only include the matching pieces themselves (drill down to just the piece)
+    const filteredPieces = pieces.filter(piece => {
+      const pieceId = piece.sn || piece.id || String(piece.pn);
+      return matchingPieces.has(pieceId);
+    });
+
+    return filteredPieces;
+  }, [pieces, searchTerms, searchQuery]);
+
   // Sort pieces based on pieceSortColumn and pieceSortDirection
   const sortedPieces = React.useMemo(() => {
     if (!pieceSortColumn || !pieceSortDirection) {
@@ -1366,7 +1427,7 @@ export default function InventoryListPage() {
           /* Turbine View (Tree View) */
           <div className="p-4">
             <TreeView
-              items={pieces}
+              items={filteredPiecesForListView}
               onSelectPiece={openPieceCard}
               onSelectComponent={handleTreeViewComponentSelect}
             />
@@ -1375,7 +1436,7 @@ export default function InventoryListPage() {
           /* Visual Tree View */
           <div className="p-4">
             <VisualTreeView
-              items={pieces}
+              items={filteredPiecesForListView}
               onSelectPiece={openPieceCard}
               onSelectComponent={handleTreeViewComponentSelect}
             />

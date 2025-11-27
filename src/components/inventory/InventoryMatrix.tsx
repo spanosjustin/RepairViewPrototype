@@ -321,7 +321,7 @@ function PiecesTable({
             />
             <SortableHeader
               column="piece"
-              label="Piece"
+              label="Component"
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={onSort}
