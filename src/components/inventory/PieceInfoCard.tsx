@@ -31,11 +31,13 @@ type ItemWithExtras = InventoryItem & {
 export default function PieceInfoCard({ 
   item,
   onNotesUpdate,
-  onPieceUpdated
+  onPieceUpdated,
+  onRepairEventsUpdate
 }: { 
   item: ItemWithExtras;
   onNotesUpdate?: (pieceId: string, notes: string[]) => void;
   onPieceUpdated?: () => void;
+  onRepairEventsUpdate?: (pieceId: string, repairEvents: RepairEvent[]) => void;
 }) {
   const [tab, setTab] = React.useState<"repair" | "condition">("repair");
   const [isRepairEventExpanded, setIsRepairEventExpanded] = React.useState(false);
@@ -74,6 +76,10 @@ export default function PieceInfoCard({
   const events = item.repairEvents ?? [];
   const [eventIdx, setEventIdx] = React.useState(0);
   const currentEvent = events[eventIdx] ?? null;
+  const [localEvents, setLocalEvents] = React.useState<RepairEvent[]>(events);
+  const [isEditingRepairEvent, setIsEditingRepairEvent] = React.useState(false);
+  const [editedRepairDetails, setEditedRepairDetails] = React.useState("");
+  const [editedConditionDetails, setEditedConditionDetails] = React.useState("");
 
   // Update local notes when item.notes changes
   React.useEffect(() => {
@@ -106,15 +112,30 @@ export default function PieceInfoCard({
     if (eventIdx >= events.length) setEventIdx(Math.max(0, events.length - 1));
   }, [events.length, eventIdx]);
 
+  // Update local events when item.repairEvents changes
+  React.useEffect(() => {
+    const newEvents = item.repairEvents ?? [];
+    setLocalEvents(newEvents);
+  }, [item.repairEvents]);
+
+  // Initialize edited repair/condition details when entering edit mode
+  React.useEffect(() => {
+    if (isEditingRepairEvent && currentEvent) {
+      setEditedRepairDetails(currentEvent.repairDetails ?? "");
+      setEditedConditionDetails(currentEvent.conditionDetails ?? "");
+    }
+  }, [isEditingRepairEvent, currentEvent]);
+
   const v = (x: unknown) =>
     x === null || x === undefined || x === "" ? "—" : String(x);
 
   const hasAnyNotes = localNotes.length > 0;
   const currentNoteValue = localNotes[noteIdx] ?? null;
-  const hasAnyEvents = events.length > 0;
-  const hasRepair = !!currentEvent?.repairDetails;
-  const hasCondition = !!currentEvent?.conditionDetails;
-  const bothNull = currentEvent ? !hasRepair && !hasCondition : true;
+  const hasAnyEvents = localEvents.length > 0;
+  const currentLocalEvent = localEvents[eventIdx] ?? null;
+  const hasRepair = !!currentLocalEvent?.repairDetails;
+  const hasCondition = !!currentLocalEvent?.conditionDetails;
+  const bothNull = currentLocalEvent ? !hasRepair && !hasCondition : true;
   
   // Get color information for status and state
   const statusValue = v(item.status);
@@ -168,6 +189,40 @@ export default function PieceInfoCard({
   const handleCancelEdit = () => {
     setIsEditingNote(false);
     setEditedNote(localNotes[noteIdx] ?? "");
+  };
+
+  const handleEditRepairEvent = () => {
+    if (!isEditing && currentLocalEvent) {
+      setIsEditingRepairEvent(true);
+    }
+  };
+
+  const handleSaveRepairEvent = () => {
+    if (!currentLocalEvent) return;
+    
+    const updatedEvents = [...localEvents];
+    updatedEvents[eventIdx] = {
+      ...currentLocalEvent,
+      repairDetails: editedRepairDetails.trim() || null,
+      conditionDetails: editedConditionDetails.trim() || null,
+    };
+    
+    setLocalEvents(updatedEvents);
+    setIsEditingRepairEvent(false);
+    
+    // Notify parent component of the update
+    if (onRepairEventsUpdate) {
+      const pieceId = item.sn || item.id || String(item.pn);
+      onRepairEventsUpdate(pieceId, updatedEvents);
+    }
+  };
+
+  const handleCancelRepairEventEdit = () => {
+    setIsEditingRepairEvent(false);
+    if (currentLocalEvent) {
+      setEditedRepairDetails(currentLocalEvent.repairDetails ?? "");
+      setEditedConditionDetails(currentLocalEvent.conditionDetails ?? "");
+    }
   };
 
   /* ---------- Piece Edit Handlers ---------- */
@@ -431,7 +486,7 @@ export default function PieceInfoCard({
         </div>
 
         {/* Row 2, Column 1: Notes Card */}
-        <div className="md:row-start-2 md:col-start-1 rounded-lg border">
+        <div className="md:row-start-2 md:col-start-1 rounded-lg border relative">
           {isEditing ? (
             /* Edit Mode: Show all notes as editable */
             <div className="flex flex-col h-full">
@@ -520,21 +575,64 @@ export default function PieceInfoCard({
                   {noteIdx + 1} / {localNotes.length}
                 </div>
               )}
-              <div className="px-3 py-3 min-h-[136px]">
+              <div className="px-3 py-3 min-h-[136px] flex flex-col">
                 {isEditingNote ? (
-                  <textarea
-                    value={editedNote}
-                    onChange={(e) => setEditedNote(e.target.value)}
-                    className="w-full h-32 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Enter note text..."
-                    autoFocus
-                  />
+                  <div className="space-y-3 flex-1" onClick={(e) => e.stopPropagation()}>
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-muted-foreground">Note</label>
+                      <textarea
+                        value={editedNote}
+                        onChange={(e) => setEditedNote(e.target.value)}
+                        className="w-full h-32 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="Enter note text..."
+                        autoFocus
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveNote}
+                        className="px-3 py-1.5 rounded-md text-xs bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50 flex items-center gap-1"
+                        title="Save changes"
+                      >
+                        <Check className="h-3 w-3" />
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelEdit}
+                        className="px-3 py-1.5 rounded-md text-xs bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 flex items-center gap-1"
+                        title="Cancel editing"
+                      >
+                        <X className="h-3 w-3" />
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
                 ) : (
-                  <div className="text-sm text-muted-foreground">
-                    {hasAnyNotes ? v(currentNoteValue) : "No notes available."}
+                  <div className="flex-1">
+                    <p className={`${hasAnyNotes ? "" : "text-muted-foreground"} text-sm`}>
+                      {hasAnyNotes ? v(currentNoteValue) : "No notes available."}
+                    </p>
                   </div>
                 )}
               </div>
+              {!isEditing && !isEditingNote && (
+                <div className="absolute bottom-3 left-3">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditNote();
+                    }}
+                    className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1"
+                    title="Edit note"
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Edit
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -550,37 +648,74 @@ export default function PieceInfoCard({
             onClick={handleRepairEventClick}
           >
             <div className="flex items-center justify-between border-b px-3 py-2">
-              <button
-                type="button"
-                className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEventIdx((i) => Math.max(0, i - 1));
-                }}
-                disabled={!hasAnyEvents || eventIdx === 0}
-              >
-                ◀
-              </button>
-              <h4 className="text-sm font-medium text-center flex-1">
-                {hasAnyEvents
-                  ? v(currentEvent?.title ?? `Repair Event ${eventIdx + 1}`)
-                  : "Repair Event"}
-              </h4>
-              <button
-                type="button"
-                className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEventIdx((i) => Math.min(events.length - 1, i + 1));
-                }}
-                disabled={!hasAnyEvents || eventIdx === events.length - 1}
-              >
-                ▶
-              </button>
+              {isEditingRepairEvent ? (
+                <div className="flex-1" onClick={(e) => e.stopPropagation()}>
+                  <Select
+                    value={String(eventIdx)}
+                    onValueChange={(value) => {
+                      const newIdx = parseInt(value, 10);
+                      if (!isNaN(newIdx) && newIdx >= 0 && newIdx < localEvents.length) {
+                        setEventIdx(newIdx);
+                        // Update edited values when switching events
+                        const selectedEvent = localEvents[newIdx];
+                        if (selectedEvent) {
+                          setEditedRepairDetails(selectedEvent.repairDetails ?? "");
+                          setEditedConditionDetails(selectedEvent.conditionDetails ?? "");
+                        }
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue>
+                        {hasAnyEvents
+                          ? v(currentLocalEvent?.title ?? `Repair Event ${eventIdx + 1}`)
+                          : "Repair Event"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {localEvents.map((event, idx) => (
+                        <SelectItem key={idx} value={String(idx)}>
+                          {v(event.title ?? `Repair Event ${idx + 1}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEventIdx((i) => Math.max(0, i - 1));
+                    }}
+                    disabled={!hasAnyEvents || eventIdx === 0}
+                  >
+                    ◀
+                  </button>
+                  <h4 className="text-sm font-medium text-center flex-1">
+                    {hasAnyEvents
+                      ? v(currentLocalEvent?.title ?? `Repair Event ${eventIdx + 1}`)
+                      : "Repair Event"}
+                  </h4>
+                  <button
+                    type="button"
+                    className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEventIdx((i) => Math.min(localEvents.length - 1, i + 1));
+                    }}
+                    disabled={!hasAnyEvents || eventIdx === localEvents.length - 1}
+                  >
+                    ▶
+                  </button>
+                </>
+              )}
             </div>
             {hasAnyEvents && (
               <div className="text-center text-xs text-muted-foreground border-b py-1">
-                {eventIdx + 1} / {events.length}
+                {eventIdx + 1} / {localEvents.length}
               </div>
             )}
 
@@ -613,20 +748,94 @@ export default function PieceInfoCard({
             }`}>
               {!hasAnyEvents ? (
                 <p className="text-muted-foreground">No repair events.</p>
-              ) : bothNull ? (
+              ) : bothNull && !isEditingRepairEvent ? (
                 <p className="text-muted-foreground">No details for this event.</p>
+              ) : isEditingRepairEvent ? (
+                <div className="space-y-3" onClick={(e) => e.stopPropagation()}>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">Repair Details</label>
+                    <textarea
+                      value={editedRepairDetails}
+                      onChange={(e) => setEditedRepairDetails(e.target.value)}
+                      className="w-full h-32 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="Enter repair details..."
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">Condition Details</label>
+                    <textarea
+                      value={editedConditionDetails}
+                      onChange={(e) => setEditedConditionDetails(e.target.value)}
+                      className="w-full h-32 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="Enter condition details..."
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={handleSaveRepairEvent}
+                      className="px-3 py-1.5 rounded-md text-xs bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50 flex items-center gap-1"
+                      title="Save changes"
+                    >
+                      <Check className="h-3 w-3" />
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelRepairEventEdit}
+                      className="px-3 py-1.5 rounded-md text-xs bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 flex items-center gap-1"
+                      title="Cancel editing"
+                    >
+                      <X className="h-3 w-3" />
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               ) : tab === "repair" ? (
-                <p className={`${hasRepair ? "" : "text-muted-foreground"} transition-all duration-500 ${
-                  isRepairEventExpanded ? 'text-base leading-relaxed' : 'text-sm'
-                }`}>
-                  {v(currentEvent?.repairDetails)}
-                </p>
+                <div className="space-y-2">
+                  <p className={`${hasRepair ? "" : "text-muted-foreground"} transition-all duration-500 ${
+                    isRepairEventExpanded ? 'text-base leading-relaxed' : 'text-sm'
+                  }`}>
+                    {v(currentLocalEvent?.repairDetails)}
+                  </p>
+                  {!isEditing && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditRepairEvent();
+                      }}
+                      className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1 mt-2"
+                      title="Edit repair details"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Edit
+                    </button>
+                  )}
+                </div>
               ) : (
-                <p className={`${hasCondition ? "" : "text-muted-foreground"} transition-all duration-500 ${
-                  isRepairEventExpanded ? 'text-base leading-relaxed' : 'text-sm'
-                }`}>
-                  {v(currentEvent?.conditionDetails)}
-                </p>
+                <div className="space-y-2">
+                  <p className={`${hasCondition ? "" : "text-muted-foreground"} transition-all duration-500 ${
+                    isRepairEventExpanded ? 'text-base leading-relaxed' : 'text-sm'
+                  }`}>
+                    {v(currentLocalEvent?.conditionDetails)}
+                  </p>
+                  {!isEditing && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditRepairEvent();
+                      }}
+                      className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1 mt-2"
+                      title="Edit condition details"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Edit
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </div>

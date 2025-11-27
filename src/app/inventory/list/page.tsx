@@ -329,6 +329,9 @@ export default function InventoryListPage() {
   // Store updated notes by piece SN (serial number)
   const [updatedNotes, setUpdatedNotes] = React.useState<Record<string, string[]>>({});
   
+  // Store updated repair events by piece SN (serial number)
+  const [updatedRepairEvents, setUpdatedRepairEvents] = React.useState<Record<string, any[]>>({});
+  
   // Create a mutable copy of MOCK_TURBINES for updates
   const [mutableTurbines, setMutableTurbines] = React.useState(() => {
     try {
@@ -692,8 +695,14 @@ export default function InventoryListPage() {
   const openPieceCard = React.useCallback((item: any) => {
     // Enrich the piece with notes from matrix data
     const notes = findNotesForPiece(item);
-    // Get mock repair events for this piece
-    const repairEvents = getMockRepairEvents(item);
+    
+    // Check if we have updated repair events for this piece first
+    const pieceId = item.sn || item.id || String(item.pn);
+    const updatedEvents = updatedRepairEvents[pieceId];
+    
+    // Get mock repair events for this piece (if no updated events exist)
+    const repairEvents = updatedEvents || getMockRepairEvents(item);
+    
     const enrichedPiece = {
       ...item,
       notes: notes,
@@ -701,7 +710,7 @@ export default function InventoryListPage() {
     };
     setSelectedPiece(enrichedPiece);
     setPieceOpen(true);
-  }, [findNotesForPiece]);
+  }, [findNotesForPiece, updatedRepairEvents]);
 
   // Handle notes updates from PieceInfoCard
   const handleNotesUpdate = React.useCallback((pieceId: string, notes: string[]) => {
@@ -760,6 +769,32 @@ export default function InventoryListPage() {
           }
           return turbine;
         }));
+      }
+      
+      return prev;
+    });
+  }, []);
+
+  // Handle repair events updates from PieceInfoCard
+  const handleRepairEventsUpdate = React.useCallback((pieceId: string, repairEvents: any[]) => {
+    // Store the updated repair events
+    setUpdatedRepairEvents(prev => ({
+      ...prev,
+      [pieceId]: [...repairEvents], // Create new array reference
+    }));
+    
+    // Update the selected piece if it's the one being edited
+    setSelectedPiece((prev: any) => {
+      if (!prev) return prev;
+      
+      const currentPieceId = prev.sn || prev.id || String(prev.pn);
+      
+      if (currentPieceId === pieceId) {
+        // Create new object with new repair events array to trigger re-render
+        return {
+          ...prev,
+          repairEvents: [...repairEvents], // Create new array reference
+        };
       }
       
       return prev;
@@ -941,7 +976,9 @@ export default function InventoryListPage() {
         if (updatedPiece) {
           // Enrich with notes and repair events
           const notes = findNotesForPiece(updatedPiece);
-          const repairEvents = getMockRepairEvents(updatedPiece);
+          const pieceId = updatedPiece.sn || updatedPiece.id || String(updatedPiece.pn);
+          const updatedEvents = updatedRepairEvents[pieceId];
+          const repairEvents = updatedEvents || getMockRepairEvents(updatedPiece);
           setSelectedPiece({
             ...updatedPiece,
             notes: notes,
@@ -1198,6 +1235,7 @@ export default function InventoryListPage() {
                   item={selectedPiece} 
                   onNotesUpdate={handleNotesUpdate}
                   onPieceUpdated={handlePieceUpdated}
+                  onRepairEventsUpdate={handleRepairEventsUpdate}
                 />
               </div>
             ) : (
