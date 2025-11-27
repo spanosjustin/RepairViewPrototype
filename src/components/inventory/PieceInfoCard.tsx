@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { InventoryItem } from "@/lib/inventory/types";
+import type { InventoryItem, RepairEvent } from "@/lib/inventory/types";
 import { useStatusColors } from "@/hooks/useStatusColors";
 import { getTone, getColorName, getBadgeClasses } from "@/lib/settings/colorMapper";
 import { ChevronDown, Pencil, Check, X } from "lucide-react";
@@ -14,13 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { piecesStorage } from "@/lib/storage/indexedDB";
-
-type RepairEvent = {
-  title?: string | null;
-  date?: string | null;
-  repairDetails?: string | null;
-  conditionDetails?: string | null;
-};
 
 type ItemWithExtras = InventoryItem & {
   turbine?: string | null;
@@ -71,7 +64,11 @@ export default function PieceInfoCard({
   const currentNote = notes[noteIdx] ?? null;
   const [isEditingNote, setIsEditingNote] = React.useState(false);
   const [editedNote, setEditedNote] = React.useState("");
-  const [localNotes, setLocalNotes] = React.useState<string[]>(notes.map(n => n ?? ""));
+  // Initialize localNotes with valid notes only (filter out empty/null)
+  const initialNotes = (item.notes ?? [])
+    .filter(n => n != null && String(n).trim() !== "")
+    .map(n => String(n));
+  const [localNotes, setLocalNotes] = React.useState<string[]>(initialNotes);
 
   /* ---------- Repair Events State ---------- */
   const events = item.repairEvents ?? [];
@@ -85,10 +82,14 @@ export default function PieceInfoCard({
   // Update local notes when item.notes changes
   React.useEffect(() => {
     const newNotes = item.notes ?? [];
-    setLocalNotes(newNotes.map(n => n ?? ""));
+    // Filter out null/undefined and empty strings, then map to strings
+    const validNotes = newNotes
+      .filter(n => n != null && String(n).trim() !== "")
+      .map(n => String(n));
+    setLocalNotes(validNotes);
     // Also update editedNotes if not in edit mode (to sync after save)
     if (!isEditing) {
-      setEditedNotes(newNotes.map(n => n ?? "").filter(n => n !== ""));
+      setEditedNotes(validNotes);
     }
   }, [item.notes, isEditing]);
 
@@ -191,7 +192,7 @@ export default function PieceInfoCard({
     }
   };
 
-  const handleSaveNote = () => {
+  const handleSaveNote = async () => {
     const trimmedNote = editedNote.trim();
     
     // If there are no notes and we're adding one, create a new array
@@ -211,13 +212,42 @@ export default function PieceInfoCard({
       }
     }
     
+    // Filter out empty notes before saving
+    const notesToSave = updatedNotes.filter(n => n.trim() !== "");
+    
     setLocalNotes(updatedNotes);
     setIsEditingNote(false);
     
-    // Notify parent component of the update
-    if (onNotesUpdate) {
-      const pieceId = item.sn || item.id || String(item.pn);
-      onNotesUpdate(pieceId, updatedNotes);
+    // Save notes to the database by updating the piece
+    try {
+      const pieceToSave: InventoryItem = {
+        ...item,
+        notes: notesToSave.length > 0 ? notesToSave : undefined,
+      };
+      
+      const success = await piecesStorage.save(pieceToSave);
+      if (!success) {
+        console.error("Failed to save notes to database");
+        // Still update UI even if database save fails
+      }
+      
+      // Notify parent component of the update
+      if (onNotesUpdate) {
+        const pieceId = item.sn || item.id || String(item.pn);
+        onNotesUpdate(pieceId, notesToSave);
+      }
+      
+      // Notify parent to refresh piece data
+      if (onPieceUpdated) {
+        onPieceUpdated();
+      }
+    } catch (error) {
+      console.error("Error saving notes:", error);
+      // Still update UI even if database save fails
+      if (onNotesUpdate) {
+        const pieceId = item.sn || item.id || String(item.pn);
+        onNotesUpdate(pieceId, notesToSave);
+      }
     }
   };
 
@@ -232,7 +262,7 @@ export default function PieceInfoCard({
     }
   };
 
-  const handleSaveRepairEvent = () => {
+  const handleSaveRepairEvent = async () => {
     if (!currentLocalEvent) return;
     
     const updatedEvents = [...localEvents];
@@ -245,10 +275,36 @@ export default function PieceInfoCard({
     setLocalEvents(updatedEvents);
     setIsEditingRepairEvent(false);
     
-    // Notify parent component of the update
-    if (onRepairEventsUpdate) {
-      const pieceId = item.sn || item.id || String(item.pn);
-      onRepairEventsUpdate(pieceId, updatedEvents);
+    // Save repair events to the database by updating the piece
+    try {
+      const pieceToSave: InventoryItem = {
+        ...item,
+        repairEvents: updatedEvents.length > 0 ? updatedEvents : undefined,
+      };
+      
+      const success = await piecesStorage.save(pieceToSave);
+      if (!success) {
+        console.error("Failed to save repair events to database");
+        // Still update UI even if database save fails
+      }
+      
+      // Notify parent component of the update
+      if (onRepairEventsUpdate) {
+        const pieceId = item.sn || item.id || String(item.pn);
+        onRepairEventsUpdate(pieceId, updatedEvents);
+      }
+      
+      // Notify parent to refresh piece data
+      if (onPieceUpdated) {
+        onPieceUpdated();
+      }
+    } catch (error) {
+      console.error("Error saving repair events:", error);
+      // Still update UI even if database save fails
+      if (onRepairEventsUpdate) {
+        const pieceId = item.sn || item.id || String(item.pn);
+        onRepairEventsUpdate(pieceId, updatedEvents);
+      }
     }
   };
 
@@ -314,13 +370,18 @@ export default function PieceInfoCard({
         starts: Number(editedPiece.starts) || 0,
       };
 
-      const success = await piecesStorage.save(pieceToSave);
+      // Include notes in the piece to save
+      const notesToSave = editedNotes.filter(n => n.trim() !== "");
+      const pieceWithNotes: InventoryItem = {
+        ...pieceToSave,
+        notes: notesToSave.length > 0 ? notesToSave : undefined,
+      };
+
+      const success = await piecesStorage.save(pieceWithNotes);
       if (success) {
         // Save notes via callback
         if (onNotesUpdate) {
           const pieceId = item.sn || item.id || String(item.pn);
-          // Filter out empty notes
-          const notesToSave = editedNotes.filter(n => n.trim() !== "");
           onNotesUpdate(pieceId, notesToSave);
         }
         

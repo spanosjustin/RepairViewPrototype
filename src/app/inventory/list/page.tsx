@@ -701,7 +701,12 @@ export default function InventoryListPage() {
     const sn = piece.sn || "";
     const pieceId = sn || piece.id || String(piece.pn);
     
-    // Check if we have updated notes for this piece first
+    // First, check if the piece has notes from the database
+    if (piece.notes && Array.isArray(piece.notes) && piece.notes.length > 0) {
+      return piece.notes.filter((n: any) => n && String(n).trim() !== "");
+    }
+    
+    // Check if we have updated notes for this piece
     if (updatedNotes[pieceId]) {
       return updatedNotes[pieceId];
     }
@@ -756,15 +761,16 @@ export default function InventoryListPage() {
   const [selectedPiece, setSelectedPiece] = React.useState<any | null>(null);
 
   const openPieceCard = React.useCallback((item: any) => {
-    // Enrich the piece with notes from matrix data
-    const notes = findNotesForPiece(item);
+    // Enrich the piece with notes - prioritize database notes, then fall back to findNotesForPiece
+    const notes = (item.notes && item.notes.length > 0) 
+      ? item.notes 
+      : findNotesForPiece(item);
     
-    // Check if we have updated repair events for this piece first
+    // Enrich the piece with repair events - prioritize database repair events, then updated state, then mock
     const pieceId = item.sn || item.id || String(item.pn);
-    const updatedEvents = updatedRepairEvents[pieceId];
-    
-    // Get mock repair events for this piece (if no updated events exist)
-    const repairEvents = updatedEvents || getMockRepairEvents(item);
+    const repairEvents = (item.repairEvents && item.repairEvents.length > 0)
+      ? item.repairEvents
+      : (updatedRepairEvents[pieceId] || getMockRepairEvents(item));
     
     const enrichedPiece = {
       ...item,
@@ -1038,10 +1044,15 @@ export default function InventoryListPage() {
         );
         if (updatedPiece) {
           // Enrich with notes and repair events
-          const notes = findNotesForPiece(updatedPiece);
+          // Notes from database take priority, then fall back to findNotesForPiece
           const pieceId = updatedPiece.sn || updatedPiece.id || String(updatedPiece.pn);
-          const updatedEvents = updatedRepairEvents[pieceId];
-          const repairEvents = updatedEvents || getMockRepairEvents(updatedPiece);
+          const notes = updatedPiece.notes && updatedPiece.notes.length > 0 
+            ? updatedPiece.notes 
+            : findNotesForPiece(updatedPiece);
+          // Repair events from database take priority, then updated state, then mock
+          const repairEvents = (updatedPiece.repairEvents && updatedPiece.repairEvents.length > 0)
+            ? updatedPiece.repairEvents
+            : (updatedRepairEvents[pieceId] || getMockRepairEvents(updatedPiece));
           setSelectedPiece({
             ...updatedPiece,
             notes: notes,
