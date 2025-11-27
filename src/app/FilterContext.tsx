@@ -25,6 +25,8 @@ type FilterContextType = {
     setPowerPlantId: (id: string | null) => void;
     drilldownFilters: DrilldownFilters;
     setDrilldownFilters: (filters: DrilldownFilters | ((prev: DrilldownFilters) => DrilldownFilters)) => void;
+    componentFilters: Set<string>;
+    setComponentFilters: (filters: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
 };
 
 const FilterContext = createContext<FilterContextType | undefined>(undefined);
@@ -39,6 +41,7 @@ export function FilterProvider({ children }: { children: ReactNode }) {
         trips: null,
         starts: null,
     });
+    const [componentFilters, setComponentFilters] = useState<Set<string>>(new Set());
 
     return (
         <FilterContext.Provider value={{ 
@@ -52,6 +55,8 @@ export function FilterProvider({ children }: { children: ReactNode }) {
             setPowerPlantId,
             drilldownFilters,
             setDrilldownFilters,
+            componentFilters,
+            setComponentFilters,
         }}>
             {children}
         </FilterContext.Provider>

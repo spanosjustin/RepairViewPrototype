@@ -36,6 +36,8 @@ export default function FilterbarContainer() {
         setPowerPlantId,
         drilldownFilters,
         setDrilldownFilters,
+        componentFilters,
+        setComponentFilters,
     } = useFilter();
 
     // Sync local filter state with context when filter changes
@@ -91,6 +93,14 @@ export default function FilterbarContainer() {
         }
     };
 
+    const removeComponentFilter = (componentType: string) => {
+        setComponentFilters(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(componentType);
+            return newSet;
+        });
+    };
+
     return (
         <div className="sticky top-0 z-10 border-b bg-white/70 p-2 dark:bg-zinc-900/70">
             <div className="mx-auto max-w-6xl">
@@ -123,8 +133,9 @@ export default function FilterbarContainer() {
                             className="w-full rounded-xl bg-white/70 pl-9 dark:bg-zinc-900/70"
                         />
                     </div>
-                    {searchTerms.length > 0 && (
+                    {(searchTerms.length > 0 || componentFilters.size > 0) && (
                         <div className="mt-2 flex flex-wrap gap-2">
+                            {/* Search term badges */}
                             {searchTerms.map((term) => (
                                 <Badge
                                     key={term}
@@ -141,6 +152,25 @@ export default function FilterbarContainer() {
                                     </button>
                                 </Badge>
                             ))}
+                            {/* Component filter badges */}
+                            {Array.from(componentFilters)
+                                .filter(componentType => componentType !== "All") // Don't show "All" as a badge
+                                .map((componentType) => (
+                                    <Badge
+                                        key={componentType}
+                                        variant="secondary"
+                                        className="flex items-center gap-1.5 rounded-xl px-3 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                                    >
+                                        <span>{componentType}</span>
+                                        <button
+                                            onClick={() => removeComponentFilter(componentType)}
+                                            className="hover:bg-blue-200 dark:hover:bg-blue-800 rounded-full p-0.5 transition-colors"
+                                            aria-label={`Remove ${componentType} filter`}
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </Badge>
+                                ))}
                         </div>
                     )}
                 </div>

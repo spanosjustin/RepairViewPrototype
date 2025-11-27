@@ -164,6 +164,54 @@ function DrilldownSwitch({ label }: { label: string }) {
     );
 }
 
+function ComponentFilterSwitch({ label }: { label: string }) {
+    const id = useId();
+    const { componentFilters, setComponentFilters } = useFilter();
+    
+    // For "All", check if all components (except "All") are selected
+    // For individual components, check if this specific component is selected
+    const checked = label === "All" 
+        ? COMPONENT_ITEMS.filter(item => item !== "All").every(item => componentFilters.has(item))
+        : componentFilters.has(label);
+    
+    const handleCheckedChange = (newChecked: boolean) => {
+        if (label === "All") {
+            // When "All" is toggled, select/deselect all components
+            if (newChecked) {
+                // Add all components except "All"
+                const allComponents = new Set(COMPONENT_ITEMS.filter(item => item !== "All"));
+                setComponentFilters(allComponents);
+            } else {
+                // Remove all components
+                setComponentFilters(new Set());
+            }
+        } else {
+            // For individual components, just toggle this one
+            setComponentFilters(prev => {
+                const newSet = new Set(prev);
+                if (newChecked) {
+                    newSet.add(label);
+                } else {
+                    newSet.delete(label);
+                }
+                return newSet;
+            });
+        }
+    };
+    
+    return (
+        <div className="flex items-center justify-between rounded-xl border border-transparent px-3 py-2 hover:border-zinc-200 hover:bg-white/70 dark:hover:border-zinc-800 dark:hover:bg-zinc-900/50">
+            <Label
+                htmlFor={id}
+                className="text-sm font-medium text-zinc-800 dark:text-zinc-200"
+            >
+                {label}
+            </Label>
+            <Switch id={id} checked={checked} onCheckedChange={handleCheckedChange} />
+        </div>
+    );
+}
+
 function DateFilterRow({
     mainLabel,
 }: {
@@ -285,7 +333,7 @@ type DrilldownCardProps = {
 };
 
 export default function DrilldownCard({ onClose }: DrilldownCardProps) {
-    const { drilldownFilters, setDrilldownFilters, setSearchTerms, searchTerms } = useFilter();
+    const { drilldownFilters, setDrilldownFilters, setSearchTerms, searchTerms, componentFilters, setComponentFilters } = useFilter();
 
     const handleReset = () => {
         setDrilldownFilters({
@@ -293,6 +341,7 @@ export default function DrilldownCard({ onClose }: DrilldownCardProps) {
             trips: null,
             starts: null,
         });
+        setComponentFilters(new Set());
     };
 
     // Convert drilldown operator to search term format
@@ -380,7 +429,7 @@ export default function DrilldownCard({ onClose }: DrilldownCardProps) {
                     <SectionShell icon={Layers3} title="Components" tone="slate">
                         <div className="grid grid-cols-2 gap-2">
                             {COMPONENT_ITEMS.map(
-                                (item) => <DrilldownSwitch key={item} label={item} />
+                                (item) => <ComponentFilterSwitch key={item} label={item} />
                             )}
                         </div>
                     </SectionShell>
