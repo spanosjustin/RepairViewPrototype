@@ -31,6 +31,7 @@ import ComponentInfoCard from "@/components/inventory/ComponentInfoCard";
 import TreeView from "@/components/TreeView";
 import VisualTreeView from "@/components/VisualTreeView";
 import { piecesStorage, componentsStorage, type Component } from "@/lib/storage/indexedDB";
+import { getMockRepairEvents } from "@/lib/inventory/mockRepairEvents";
 
 type ViewMode = "pieces" | "components" | "list" | "tree";
 
@@ -691,9 +692,12 @@ export default function InventoryListPage() {
   const openPieceCard = React.useCallback((item: any) => {
     // Enrich the piece with notes from matrix data
     const notes = findNotesForPiece(item);
+    // Get mock repair events for this piece
+    const repairEvents = getMockRepairEvents(item);
     const enrichedPiece = {
       ...item,
       notes: notes,
+      repairEvents: repairEvents.length > 0 ? repairEvents : null,
     };
     setSelectedPiece(enrichedPiece);
     setPieceOpen(true);
@@ -935,11 +939,13 @@ export default function InventoryListPage() {
                (String(p.pn) === pieceId)
         );
         if (updatedPiece) {
-          // Enrich with notes
+          // Enrich with notes and repair events
           const notes = findNotesForPiece(updatedPiece);
+          const repairEvents = getMockRepairEvents(updatedPiece);
           setSelectedPiece({
             ...updatedPiece,
             notes: notes,
+            repairEvents: repairEvents.length > 0 ? repairEvents : null,
           });
         }
       }

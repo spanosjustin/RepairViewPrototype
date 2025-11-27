@@ -60,6 +60,7 @@ export default function PieceInfoCard({
     turbine: item.turbine || "",
     position: item.position || "",
   });
+  const [editedNotes, setEditedNotes] = React.useState<string[]>([]);
 
   /* ---------- Notes State ---------- */
   const notes = item.notes ?? [];
@@ -78,7 +79,11 @@ export default function PieceInfoCard({
   React.useEffect(() => {
     const newNotes = item.notes ?? [];
     setLocalNotes(newNotes.map(n => n ?? ""));
-  }, [item.notes]);
+    // Also update editedNotes if not in edit mode (to sync after save)
+    if (!isEditing) {
+      setEditedNotes(newNotes.map(n => n ?? "").filter(n => n !== ""));
+    }
+  }, [item.notes, isEditing]);
 
   // clamp indices if data changes
   React.useEffect(() => {
@@ -124,7 +129,10 @@ export default function PieceInfoCard({
   };
 
   const handleEditNote = () => {
-    setIsEditingNote(true);
+    // Don't allow individual note editing when in main edit mode
+    if (!isEditing) {
+      setIsEditingNote(true);
+    }
   };
 
   const handleSaveNote = () => {
@@ -178,6 +186,9 @@ export default function PieceInfoCard({
       turbine: item.turbine || "",
       position: item.position || "",
     });
+    // Initialize edited notes from current notes
+    const currentNotes = item.notes ?? [];
+    setEditedNotes(currentNotes.map(n => n ?? "").filter(n => n !== ""));
     setIsEditing(true);
   };
 
@@ -198,6 +209,9 @@ export default function PieceInfoCard({
       turbine: item.turbine || "",
       position: item.position || "",
     });
+    // Reset edited notes to original values
+    const currentNotes = item.notes ?? [];
+    setEditedNotes(currentNotes.map(n => n ?? "").filter(n => n !== ""));
   };
 
   const handleSavePiece = async () => {
@@ -212,6 +226,14 @@ export default function PieceInfoCard({
 
       const success = await piecesStorage.save(pieceToSave);
       if (success) {
+        // Save notes via callback
+        if (onNotesUpdate) {
+          const pieceId = item.sn || item.id || String(item.pn);
+          // Filter out empty notes
+          const notesToSave = editedNotes.filter(n => n.trim() !== "");
+          onNotesUpdate(pieceId, notesToSave);
+        }
+        
         setIsEditing(false);
         // Notify parent to refresh
         if (onPieceUpdated) {
@@ -410,52 +432,112 @@ export default function PieceInfoCard({
 
         {/* Row 2, Column 1: Notes Card */}
         <div className="md:row-start-2 md:col-start-1 rounded-lg border">
-            <div className="flex items-center justify-between border-b px-3 py-2">
-              <button
-                type="button"
-                className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
-                onClick={() => setNoteIdx((i) => Math.max(0, i - 1))}
-                disabled={!hasAnyNotes || noteIdx === 0 || isEditingNote}
-              >
-                ◀
-              </button>
-              <h4 className="text-sm font-medium text-center flex-1">
-                Note
-              </h4>
-              <div className="flex items-center gap-1">
+          {isEditing ? (
+            /* Edit Mode: Show all notes as editable */
+            <div className="flex flex-col h-full">
+              <div className="flex items-center justify-between border-b px-3 py-2">
+                <h4 className="text-sm font-medium">Notes</h4>
+                <button
+                  type="button"
+                  onClick={() => setEditedNotes([...editedNotes, ""])}
+                  className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1"
+                  title="Add note"
+                >
+                  + Add Note
+                </button>
+              </div>
+              <div className="px-3 py-3 space-y-3 max-h-[400px] overflow-y-auto">
+                {editedNotes.length === 0 ? (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    No notes. Click "Add Note" to create one.
+                  </div>
+                ) : (
+                  editedNotes.map((note, index) => (
+                    <div key={index} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Note {index + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newNotes = editedNotes.filter((_, i) => i !== index);
+                            setEditedNotes(newNotes);
+                            // Adjust noteIdx if needed
+                            if (noteIdx >= newNotes.length && newNotes.length > 0) {
+                              setNoteIdx(newNotes.length - 1);
+                            }
+                          }}
+                          className="px-1.5 py-0.5 rounded text-xs bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300"
+                          title="Delete note"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                      <textarea
+                        value={note}
+                        onChange={(e) => {
+                          const newNotes = [...editedNotes];
+                          newNotes[index] = e.target.value;
+                          setEditedNotes(newNotes);
+                        }}
+                        className="w-full h-24 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="Enter note text..."
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : (
+            /* View Mode: Show notes with navigation */
+            <>
+              <div className="flex items-center justify-between border-b px-3 py-2">
                 <button
                   type="button"
                   className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
-                  onClick={() =>
-                    setNoteIdx((i) => Math.min(localNotes.length - 1, i + 1))
-                  }
-                  disabled={!hasAnyNotes || noteIdx === localNotes.length - 1 || isEditingNote}
+                  onClick={() => setNoteIdx((i) => Math.max(0, i - 1))}
+                  disabled={!hasAnyNotes || noteIdx === 0 || isEditingNote}
                 >
-                  ▶
+                  ◀
                 </button>
+                <h4 className="text-sm font-medium text-center flex-1">
+                  Note
+                </h4>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
+                    onClick={() =>
+                      setNoteIdx((i) => Math.min(localNotes.length - 1, i + 1))
+                    }
+                    disabled={!hasAnyNotes || noteIdx === localNotes.length - 1 || isEditingNote}
+                  >
+                    ▶
+                  </button>
+                </div>
               </div>
-            </div>
-            {hasAnyNotes && (
-              <div className="text-center text-xs text-muted-foreground border-b py-1">
-                {noteIdx + 1} / {localNotes.length}
-              </div>
-            )}
-            <div className="px-3 py-3 min-h-[136px]">
-              {isEditingNote ? (
-                <textarea
-                  value={editedNote}
-                  onChange={(e) => setEditedNote(e.target.value)}
-                  className="w-full h-32 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Enter note text..."
-                  autoFocus
-                />
-              ) : (
-                <div className="text-sm text-muted-foreground">
-                  {hasAnyNotes ? v(currentNoteValue) : "No notes available."}
+              {hasAnyNotes && (
+                <div className="text-center text-xs text-muted-foreground border-b py-1">
+                  {noteIdx + 1} / {localNotes.length}
                 </div>
               )}
-            </div>
-          </div>
+              <div className="px-3 py-3 min-h-[136px]">
+                {isEditingNote ? (
+                  <textarea
+                    value={editedNote}
+                    onChange={(e) => setEditedNote(e.target.value)}
+                    className="w-full h-32 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="Enter note text..."
+                    autoFocus
+                  />
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    {hasAnyNotes ? v(currentNoteValue) : "No notes available."}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Row 2, Column 2: Repair Events Card - spans rows 1-2 when expanded */}
         <div className={`md:col-start-2 flex flex-col ${
