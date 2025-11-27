@@ -343,8 +343,7 @@ export default function PieceInfoCard({
   return (
     <div className="rounded-xl border p-6 space-y-6">
       {/* Header with Edit Button */}
-      <div className="flex justify-between items-center border-b pb-4">
-        <h2 className="text-lg font-semibold">Piece Details</h2>
+      <div className="flex justify-end items-center border-b pb-4">
         {!isEditing ? (
           <button
             onClick={handleStartEdit}

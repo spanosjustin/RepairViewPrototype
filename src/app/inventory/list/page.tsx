@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 // ← import your card
 import PieceInfoCard from "@/components/inventory/PieceInfoCard";
@@ -357,6 +358,12 @@ export default function InventoryListPage() {
   const [sortColumn, setSortColumn] = React.useState<SortableColumn | undefined>(undefined);
   const [sortDirection, setSortDirection] = React.useState<SortDirection>(null);
   
+  // Search state for components view
+  const [componentSearchQuery, setComponentSearchQuery] = React.useState("");
+  
+  // Search state for pieces view
+  const [pieceSearchQuery, setPieceSearchQuery] = React.useState("");
+  
   // Sorting state for pieces view
   const [pieceSortColumn, setPieceSortColumn] = React.useState<SortablePieceColumn | undefined>(undefined);
   const [pieceSortDirection, setPieceSortDirection] = React.useState<SortDirection>(null);
@@ -445,13 +452,38 @@ export default function InventoryListPage() {
     [pieces, dbComponents]
   );
 
-  // Sort component stats based on sortColumn and sortDirection
-  const sortedComponentStats = React.useMemo(() => {
-    if (!sortColumn || !sortDirection) {
+  // Filter component stats based on search query
+  const filteredComponentStats = React.useMemo(() => {
+    if (!componentSearchQuery.trim()) {
       return componentStats;
     }
 
-    return [...componentStats].sort((a, b) => {
+    const query = componentSearchQuery.toLowerCase().trim();
+    return componentStats.filter((component) => {
+      // Search across multiple fields
+      const componentName = String(component.componentName || "").toLowerCase();
+      const componentType = String(component.componentType || "").toLowerCase();
+      const status = String(component.status || "").toLowerCase();
+      const state = String(component.state || "").toLowerCase();
+      const turbine = String(component.turbine || "").toLowerCase();
+      
+      return (
+        componentName.includes(query) ||
+        componentType.includes(query) ||
+        status.includes(query) ||
+        state.includes(query) ||
+        turbine.includes(query)
+      );
+    });
+  }, [componentStats, componentSearchQuery]);
+
+  // Sort component stats based on sortColumn and sortDirection
+  const sortedComponentStats = React.useMemo(() => {
+    if (!sortColumn || !sortDirection) {
+      return filteredComponentStats;
+    }
+
+    return [...filteredComponentStats].sort((a, b) => {
       let aValue = a[sortColumn];
       let bValue = b[sortColumn];
 
@@ -480,15 +512,46 @@ export default function InventoryListPage() {
         return bStr.localeCompare(aStr);
       }
     });
-  }, [componentStats, sortColumn, sortDirection]);
+  }, [filteredComponentStats, sortColumn, sortDirection]);
+
+  // Filter pieces based on search query
+  const filteredPieces = React.useMemo(() => {
+    if (!pieceSearchQuery.trim()) {
+      return pieces;
+    }
+
+    const query = pieceSearchQuery.toLowerCase().trim();
+    return pieces.filter((piece) => {
+      // Search across multiple fields
+      const pn = String(piece.pn || "").toLowerCase();
+      const sn = String(piece.sn || piece.serial || "").toLowerCase();
+      const component = String(piece.component || piece.piece || piece.name || "").toLowerCase();
+      const componentType = String(piece.componentType || "").toLowerCase();
+      const status = String(piece.status || piece.health || "").toLowerCase();
+      const state = String(piece.state || piece.condition || "").toLowerCase();
+      const turbine = String(piece.turbine || "").toLowerCase();
+      const position = String(piece.position || "").toLowerCase();
+      
+      return (
+        pn.includes(query) ||
+        sn.includes(query) ||
+        component.includes(query) ||
+        componentType.includes(query) ||
+        status.includes(query) ||
+        state.includes(query) ||
+        turbine.includes(query) ||
+        position.includes(query)
+      );
+    });
+  }, [pieces, pieceSearchQuery]);
 
   // Sort pieces based on pieceSortColumn and pieceSortDirection
   const sortedPieces = React.useMemo(() => {
     if (!pieceSortColumn || !pieceSortDirection) {
-      return pieces;
+      return filteredPieces;
     }
 
-    return [...pieces].sort((a, b) => {
+    return [...filteredPieces].sort((a, b) => {
       let aValue: any;
       let bValue: any;
 
@@ -567,7 +630,7 @@ export default function InventoryListPage() {
         return bStr.localeCompare(aStr);
       }
     });
-  }, [pieces, pieceSortColumn, pieceSortDirection]);
+  }, [filteredPieces, pieceSortColumn, pieceSortDirection]);
 
   // Handle sort column click for components
   const handleSort = React.useCallback((column: SortableColumn) => {
@@ -603,10 +666,10 @@ export default function InventoryListPage() {
     }
   }, [pieceSortColumn, pieceSortDirection]);
 
-  // Reset page when switching view modes or sorting
+  // Reset page when switching view modes, sorting, or search
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [viewMode, sortColumn, sortDirection, pieceSortColumn, pieceSortDirection]);
+  }, [viewMode, sortColumn, sortDirection, pieceSortColumn, pieceSortDirection, componentSearchQuery, pieceSearchQuery]);
 
   // Pagination logic - only apply pagination to pieces and components views
   const currentData = viewMode === "pieces" ? sortedPieces : 
@@ -1056,6 +1119,17 @@ export default function InventoryListPage() {
         ) : viewMode === "pieces" ? (
           /* Pieces Matrix View */
           <div className="space-y-4">
+            {/* Search Input */}
+            <div className="px-4">
+              <Input
+                type="text"
+                placeholder="Search pieces by PN, SN, component, type, status, state, turbine, or position..."
+                value={pieceSearchQuery}
+                onChange={(e) => setPieceSearchQuery(e.target.value)}
+                className="w-full"
+              />
+            </div>
+            
             <InventoryMatrix
               dataset="pieces"
               items={paginatedData}
@@ -1125,6 +1199,17 @@ export default function InventoryListPage() {
         ) : viewMode === "components" ? (
           /* Components Matrix View */
           <div className="space-y-4">
+            {/* Search Input */}
+            <div className="px-4">
+              <Input
+                type="text"
+                placeholder="Search components by name, type, status, state, or turbine..."
+                value={componentSearchQuery}
+                onChange={(e) => setComponentSearchQuery(e.target.value)}
+                className="w-full"
+              />
+            </div>
+            
             <InventoryMatrix
               dataset="components"
               componentStats={paginatedData}

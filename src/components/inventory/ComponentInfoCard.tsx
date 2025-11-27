@@ -594,7 +594,7 @@ export default function ComponentInfoCard({
       {/* Top Section: General Component Information */}
       <div className="space-y-4">
         {/* Header Row with Edit Button */}
-        <div className="flex justify-between items-center">
+        <div className="flex justify-end items-center">
           {!isEditing ? (
             <button
               onClick={handleStartEdit}
