@@ -595,10 +595,6 @@ export default function ComponentInfoCard({
       <div className="space-y-4">
         {/* Header Row with Edit Button */}
         <div className="flex justify-between items-center">
-          <div className="flex gap-4 flex-1">
-            <div className="text-sm font-medium text-gray-700 flex-1">Component Name</div>
-            <div className="text-sm font-medium text-gray-700 flex-1">Component Type</div>
-          </div>
           {!isEditing ? (
             <button
               onClick={handleStartEdit}
