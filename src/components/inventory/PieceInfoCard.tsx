@@ -553,8 +553,7 @@ export default function PieceInfoCard({
           {/* Repair Summary Header - shown when State/Position card is collapsed */}
           {isRepairEventExpanded && (
             <div 
-              className="rounded-lg border p-3 transition-all duration-500 ease-in-out cursor-pointer hover:border-primary/50 opacity-100"
-              onClick={handleRepairEventClick}
+              className="rounded-lg border p-3 transition-all duration-500 ease-in-out opacity-100"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4 flex-wrap">
@@ -629,7 +628,7 @@ export default function PieceInfoCard({
                           newNotes[index] = e.target.value;
                           setEditedNotes(newNotes);
                         }}
-                        className="w-full h-24 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="w-full h-40 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
                         placeholder="Enter note text..."
                       />
                     </div>
@@ -676,7 +675,7 @@ export default function PieceInfoCard({
                   {noteIdx + 1} / {localNotes.length}
                 </div>
               )}
-              <div className="px-3 py-3 min-h-[136px] flex flex-col">
+              <div className="px-3 py-3 min-h-[240px] flex flex-col">
                 {isEditingNote ? (
                   <div className="space-y-3 flex-1" onClick={(e) => e.stopPropagation()}>
                     <div className="space-y-2">
@@ -684,7 +683,7 @@ export default function PieceInfoCard({
                       <textarea
                         value={editedNote}
                         onChange={(e) => setEditedNote(e.target.value)}
-                        className="w-full h-32 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="w-full h-48 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
                         placeholder="Enter note text..."
                         autoFocus
                       />
@@ -743,10 +742,9 @@ export default function PieceInfoCard({
           isRepairEventExpanded ? 'md:row-start-1 md:row-span-2' : 'md:row-start-2'
         }`}>
           <div 
-            className={`rounded-lg border cursor-pointer transition-all duration-500 ease-in-out hover:border-primary/50 flex flex-col flex-1 ${
+            className={`rounded-lg border transition-all duration-500 ease-in-out flex flex-col flex-1 ${
               isRepairEventExpanded ? 'h-full' : 'min-h-[136px]'
             }`}
-            onClick={handleRepairEventClick}
           >
             <div className="flex items-center justify-between border-b px-3 py-2">
               {isEditingRepairEvent ? (
@@ -849,8 +847,8 @@ export default function PieceInfoCard({
               </Toggle>
             </div>
 
-            <div className={`px-3 py-3 text-sm transition-all duration-500 ease-in-out ${
-              isRepairEventExpanded ? 'flex-1 overflow-auto' : ''
+            <div className={`px-3 py-3 text-sm transition-all duration-500 ease-in-out relative ${
+              isRepairEventExpanded ? 'flex-1 overflow-auto' : 'min-h-[240px]'
             }`}>
               {!hasAnyEvents ? (
                 <p className="text-muted-foreground">No repair events.</p>
@@ -863,7 +861,7 @@ export default function PieceInfoCard({
                     <textarea
                       value={editedRepairDetails}
                       onChange={(e) => setEditedRepairDetails(e.target.value)}
-                      className="w-full h-32 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full h-48 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
                       placeholder="Enter repair details..."
                       autoFocus
                     />
@@ -873,7 +871,7 @@ export default function PieceInfoCard({
                     <textarea
                       value={editedConditionDetails}
                       onChange={(e) => setEditedConditionDetails(e.target.value)}
-                      className="w-full h-32 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full h-48 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
                       placeholder="Enter condition details..."
                     />
                   </div>
@@ -905,20 +903,6 @@ export default function PieceInfoCard({
                   }`}>
                     {v(currentLocalEvent?.repairDetails)}
                   </p>
-                  {!isEditing && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditRepairEvent();
-                      }}
-                      className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1 mt-2"
-                      title="Edit repair details"
-                    >
-                      <Pencil className="h-3 w-3" />
-                      Edit
-                    </button>
-                  )}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -927,20 +911,22 @@ export default function PieceInfoCard({
                   }`}>
                     {v(currentLocalEvent?.conditionDetails)}
                   </p>
-                  {!isEditing && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditRepairEvent();
-                      }}
-                      className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1 mt-2"
-                      title="Edit condition details"
-                    >
-                      <Pencil className="h-3 w-3" />
-                      Edit
-                    </button>
-                  )}
+                </div>
+              )}
+              {!isEditing && !isEditingRepairEvent && hasAnyEvents && !bothNull && (
+                <div className="absolute bottom-3 left-3">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditRepairEvent();
+                    }}
+                    className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1"
+                    title={tab === "repair" ? "Edit repair details" : "Edit condition details"}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Edit
+                  </button>
                 </div>
               )}
             </div>
