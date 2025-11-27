@@ -6,6 +6,7 @@ import InventoryMatrix from "@/components/inventory/InventoryMatrix";
 import { MOCK_INVENTORY } from "@/lib/inventory/mock";
 import type { InventoryItem } from "@/lib/inventory/types";
 import { MOCK_TURBINES } from "@/lib/matrix/mock";
+import { useFilter } from "@/app/FilterContext";
 
 // shadcn/ui dialog (modal) to show the card
 import {
@@ -321,6 +322,7 @@ function generatePiecesForComponents(components: any[]): InventoryItem[] {
 }
 
 export default function InventoryListPage() {
+  const { searchTerms, searchQuery } = useFilter();
   const [viewMode, setViewMode] = React.useState<ViewMode>("pieces");
   const [pieces, setPieces] = React.useState<any[]>([]);
   const [components, setComponents] = React.useState<any[]>([]);
@@ -452,30 +454,91 @@ export default function InventoryListPage() {
     [pieces, dbComponents]
   );
 
-  // Filter component stats based on search query
+  // Filter component stats based on search query and FilterBarContainer search terms
   const filteredComponentStats = React.useMemo(() => {
-    if (!componentSearchQuery.trim()) {
-      return componentStats;
+    let filtered = componentStats;
+
+    // Helper function to check if component matches search criteria
+    const matchesSearch = (component: ComponentRow, searchText: string) => {
+      const searchableText = [
+        String(component.componentName || ""),
+        String(component.componentType || ""),
+        String(component.status || ""),
+        String(component.state || ""),
+        String(component.turbine || ""),
+      ].join(" ").toLowerCase();
+      
+      return searchableText.includes(searchText.toLowerCase());
+    };
+
+    // Helper function to check if any piece in a component matches search criteria
+    const hasMatchingPiece = (component: ComponentRow, searchText: string) => {
+      const componentName = component.componentName || "";
+      const matchingPieces = pieces.filter((piece) => {
+        const pieceComponent = piece.component || piece.piece || piece.name || "";
+        if (pieceComponent !== componentName) return false;
+        
+        const pieceSearchableText = [
+          String(piece.pn || ""),
+          String(piece.sn || piece.serial || ""),
+          String(piece.component || piece.piece || piece.name || ""),
+          String(piece.componentType || ""),
+          String(piece.status || piece.health || ""),
+          String(piece.state || piece.condition || ""),
+          String(piece.turbine || ""),
+          String(piece.position || ""),
+        ].join(" ").toLowerCase();
+        
+        return pieceSearchableText.includes(searchText.toLowerCase());
+      });
+      
+      return matchingPieces.length > 0;
+    };
+
+    // Apply FilterBarContainer search terms (all terms must match)
+    if (searchTerms.length > 0) {
+      filtered = filtered.filter((component) => {
+        // Check if component matches all terms OR if any piece matches all terms
+        const componentMatches = searchTerms.every(term => matchesSearch(component, term));
+        const pieceMatches = searchTerms.every(term => hasMatchingPiece(component, term));
+        return componentMatches || pieceMatches;
+      });
     }
 
-    const query = componentSearchQuery.toLowerCase().trim();
-    return componentStats.filter((component) => {
-      // Search across multiple fields
-      const componentName = String(component.componentName || "").toLowerCase();
-      const componentType = String(component.componentType || "").toLowerCase();
-      const status = String(component.status || "").toLowerCase();
-      const state = String(component.state || "").toLowerCase();
-      const turbine = String(component.turbine || "").toLowerCase();
-      
-      return (
-        componentName.includes(query) ||
-        componentType.includes(query) ||
-        status.includes(query) ||
-        state.includes(query) ||
-        turbine.includes(query)
-      );
-    });
-  }, [componentStats, componentSearchQuery]);
+    // Apply FilterBarContainer current search query (real-time filtering)
+    if (searchQuery.trim()) {
+      filtered = filtered.filter((component) => {
+        // Check if component matches OR if any piece matches
+        return matchesSearch(component, searchQuery) || hasMatchingPiece(component, searchQuery);
+      });
+    }
+
+    // Apply component search query
+    if (componentSearchQuery.trim()) {
+      const query = componentSearchQuery.toLowerCase().trim();
+      filtered = filtered.filter((component) => {
+        // Check component fields
+        const componentName = String(component.componentName || "").toLowerCase();
+        const componentType = String(component.componentType || "").toLowerCase();
+        const status = String(component.status || "").toLowerCase();
+        const state = String(component.state || "").toLowerCase();
+        const turbine = String(component.turbine || "").toLowerCase();
+        
+        const componentMatches = (
+          componentName.includes(query) ||
+          componentType.includes(query) ||
+          status.includes(query) ||
+          state.includes(query) ||
+          turbine.includes(query)
+        );
+        
+        // Also check if any piece matches
+        return componentMatches || hasMatchingPiece(component, query);
+      });
+    }
+
+    return filtered;
+  }, [componentStats, componentSearchQuery, searchTerms, searchQuery, pieces]);
 
   // Sort component stats based on sortColumn and sortDirection
   const sortedComponentStats = React.useMemo(() => {
@@ -514,36 +577,70 @@ export default function InventoryListPage() {
     });
   }, [filteredComponentStats, sortColumn, sortDirection]);
 
-  // Filter pieces based on search query
+  // Filter pieces based on search query and FilterBarContainer search terms
   const filteredPieces = React.useMemo(() => {
-    if (!pieceSearchQuery.trim()) {
-      return pieces;
+    let filtered = pieces;
+
+    // Helper function to check if piece matches search criteria
+    const matchesSearch = (piece: any, searchText: string) => {
+      const searchableText = [
+        String(piece.pn || ""),
+        String(piece.sn || piece.serial || ""),
+        String(piece.component || piece.piece || piece.name || ""),
+        String(piece.componentType || ""),
+        String(piece.status || piece.health || ""),
+        String(piece.state || piece.condition || ""),
+        String(piece.turbine || ""),
+        String(piece.position || ""),
+      ].join(" ").toLowerCase();
+      
+      return searchableText.includes(searchText.toLowerCase());
+    };
+
+    // Apply FilterBarContainer search terms (all terms must match)
+    if (searchTerms.length > 0) {
+      filtered = filtered.filter((piece) => {
+        // All search terms must be found in the searchable text
+        return searchTerms.every(term => matchesSearch(piece, term));
+      });
     }
 
-    const query = pieceSearchQuery.toLowerCase().trim();
-    return pieces.filter((piece) => {
-      // Search across multiple fields
-      const pn = String(piece.pn || "").toLowerCase();
-      const sn = String(piece.sn || piece.serial || "").toLowerCase();
-      const component = String(piece.component || piece.piece || piece.name || "").toLowerCase();
-      const componentType = String(piece.componentType || "").toLowerCase();
-      const status = String(piece.status || piece.health || "").toLowerCase();
-      const state = String(piece.state || piece.condition || "").toLowerCase();
-      const turbine = String(piece.turbine || "").toLowerCase();
-      const position = String(piece.position || "").toLowerCase();
-      
-      return (
-        pn.includes(query) ||
-        sn.includes(query) ||
-        component.includes(query) ||
-        componentType.includes(query) ||
-        status.includes(query) ||
-        state.includes(query) ||
-        turbine.includes(query) ||
-        position.includes(query)
-      );
-    });
-  }, [pieces, pieceSearchQuery]);
+    // Apply FilterBarContainer current search query (real-time filtering)
+    if (searchQuery.trim()) {
+      filtered = filtered.filter((piece) => {
+        return matchesSearch(piece, searchQuery);
+      });
+    }
+
+    // Apply piece search query
+    if (pieceSearchQuery.trim()) {
+      const query = pieceSearchQuery.toLowerCase().trim();
+      filtered = filtered.filter((piece) => {
+        // Search across multiple fields
+        const pn = String(piece.pn || "").toLowerCase();
+        const sn = String(piece.sn || piece.serial || "").toLowerCase();
+        const component = String(piece.component || piece.piece || piece.name || "").toLowerCase();
+        const componentType = String(piece.componentType || "").toLowerCase();
+        const status = String(piece.status || piece.health || "").toLowerCase();
+        const state = String(piece.state || piece.condition || "").toLowerCase();
+        const turbine = String(piece.turbine || "").toLowerCase();
+        const position = String(piece.position || "").toLowerCase();
+        
+        return (
+          pn.includes(query) ||
+          sn.includes(query) ||
+          component.includes(query) ||
+          componentType.includes(query) ||
+          status.includes(query) ||
+          state.includes(query) ||
+          turbine.includes(query) ||
+          position.includes(query)
+        );
+      });
+    }
+
+    return filtered;
+  }, [pieces, pieceSearchQuery, searchTerms, searchQuery]);
 
   // Sort pieces based on pieceSortColumn and pieceSortDirection
   const sortedPieces = React.useMemo(() => {
@@ -669,7 +766,7 @@ export default function InventoryListPage() {
   // Reset page when switching view modes, sorting, or search
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [viewMode, sortColumn, sortDirection, pieceSortColumn, pieceSortDirection, componentSearchQuery, pieceSearchQuery]);
+  }, [viewMode, sortColumn, sortDirection, pieceSortColumn, pieceSortDirection, componentSearchQuery, pieceSearchQuery, searchTerms, searchQuery]);
 
   // Pagination logic - only apply pagination to pieces and components views
   const currentData = viewMode === "pieces" ? sortedPieces : 
@@ -1130,17 +1227,6 @@ export default function InventoryListPage() {
         ) : viewMode === "pieces" ? (
           /* Pieces Matrix View */
           <div className="space-y-4">
-            {/* Search Input */}
-            <div className="px-4">
-              <Input
-                type="text"
-                placeholder="Search pieces by PN, SN, component, type, status, state, turbine, or position..."
-                value={pieceSearchQuery}
-                onChange={(e) => setPieceSearchQuery(e.target.value)}
-                className="w-full"
-              />
-            </div>
-            
             <InventoryMatrix
               dataset="pieces"
               items={paginatedData}
@@ -1210,17 +1296,6 @@ export default function InventoryListPage() {
         ) : viewMode === "components" ? (
           /* Components Matrix View */
           <div className="space-y-4">
-            {/* Search Input */}
-            <div className="px-4">
-              <Input
-                type="text"
-                placeholder="Search components by name, type, status, state, or turbine..."
-                value={componentSearchQuery}
-                onChange={(e) => setComponentSearchQuery(e.target.value)}
-                className="w-full"
-              />
-            </div>
-            
             <InventoryMatrix
               dataset="components"
               componentStats={paginatedData}
