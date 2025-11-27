@@ -49,6 +49,9 @@ type ComponentRow = {
 type SortableColumn = keyof ComponentRow;
 type SortDirection = "asc" | "desc" | null;
 
+// Sortable columns for pieces
+type SortablePieceColumn = "pn" | "piece" | "sn" | "hours" | "trips" | "starts" | "status" | "state" | "turbine" | "component" | "componentType";
+
 function buildComponentStatsFromMock(mock: any[]): ComponentRow[] {
   return (mock ?? []).map((it) => ({
     componentType: it.componentType ?? it.type ?? "—",
@@ -346,9 +349,13 @@ export default function InventoryListPage() {
   const [currentPage, setCurrentPage] = React.useState(1);
   const itemsPerPage = 50;
 
-  // Sorting state (only for components view)
+  // Sorting state for components view
   const [sortColumn, setSortColumn] = React.useState<SortableColumn | undefined>(undefined);
   const [sortDirection, setSortDirection] = React.useState<SortDirection>(null);
+  
+  // Sorting state for pieces view
+  const [pieceSortColumn, setPieceSortColumn] = React.useState<SortablePieceColumn | undefined>(undefined);
+  const [pieceSortDirection, setPieceSortDirection] = React.useState<SortDirection>(null);
 
   // Load pieces from database or generate them
   React.useEffect(() => {
@@ -471,7 +478,94 @@ export default function InventoryListPage() {
     });
   }, [componentStats, sortColumn, sortDirection]);
 
-  // Handle sort column click
+  // Sort pieces based on pieceSortColumn and pieceSortDirection
+  const sortedPieces = React.useMemo(() => {
+    if (!pieceSortColumn || !pieceSortDirection) {
+      return pieces;
+    }
+
+    return [...pieces].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      // Map column names to piece properties
+      switch (pieceSortColumn) {
+        case "pn":
+          aValue = a.pn ?? "—";
+          bValue = b.pn ?? "—";
+          break;
+        case "piece":
+          aValue = a.component ?? a.piece ?? a.name ?? "—";
+          bValue = b.component ?? b.piece ?? b.name ?? "—";
+          break;
+        case "sn":
+          aValue = a.sn ?? a.serial ?? "—";
+          bValue = b.sn ?? b.serial ?? "—";
+          break;
+        case "hours":
+          aValue = a.hours;
+          bValue = b.hours;
+          break;
+        case "trips":
+          aValue = a.trips;
+          bValue = b.trips;
+          break;
+        case "starts":
+          aValue = a.starts;
+          bValue = b.starts;
+          break;
+        case "status":
+          aValue = a.status ?? a.health ?? "—";
+          bValue = b.status ?? b.health ?? "—";
+          break;
+        case "state":
+          aValue = a.state ?? a.condition ?? "—";
+          bValue = b.state ?? b.condition ?? "—";
+          break;
+        case "turbine":
+          aValue = a.turbine ?? "—";
+          bValue = b.turbine ?? "—";
+          break;
+        case "component":
+          aValue = a.component ?? "—";
+          bValue = b.component ?? "—";
+          break;
+        case "componentType":
+          aValue = a.componentType ?? "—";
+          bValue = b.componentType ?? "—";
+          break;
+        default:
+          return 0;
+      }
+
+      // Handle numeric columns (hours, trips, starts)
+      if (pieceSortColumn === "hours" || pieceSortColumn === "trips" || pieceSortColumn === "starts") {
+        const aNum = typeof aValue === "number" ? aValue : typeof aValue === "string" && aValue !== "—" ? parseFloat(aValue) : -Infinity;
+        const bNum = typeof bValue === "number" ? bValue : typeof bValue === "string" && bValue !== "—" ? parseFloat(bValue) : -Infinity;
+        
+        const aFinal = isNaN(aNum) ? -Infinity : aNum;
+        const bFinal = isNaN(bNum) ? -Infinity : bNum;
+        
+        if (pieceSortDirection === "asc") {
+          return aFinal - bFinal;
+        } else {
+          return bFinal - aFinal;
+        }
+      }
+
+      // Handle string columns
+      const aStr = String(aValue || "—").toLowerCase();
+      const bStr = String(bValue || "—").toLowerCase();
+
+      if (pieceSortDirection === "asc") {
+        return aStr.localeCompare(bStr);
+      } else {
+        return bStr.localeCompare(aStr);
+      }
+    });
+  }, [pieces, pieceSortColumn, pieceSortDirection]);
+
+  // Handle sort column click for components
   const handleSort = React.useCallback((column: SortableColumn) => {
     if (sortColumn === column) {
       // Toggle direction: asc -> desc -> null
@@ -488,13 +582,30 @@ export default function InventoryListPage() {
     }
   }, [sortColumn, sortDirection]);
 
+  // Handle sort column click for pieces
+  const handlePieceSort = React.useCallback((column: SortablePieceColumn) => {
+    if (pieceSortColumn === column) {
+      // Toggle direction: asc -> desc -> null
+      if (pieceSortDirection === "asc") {
+        setPieceSortDirection("desc");
+      } else if (pieceSortDirection === "desc") {
+        setPieceSortDirection(null);
+        setPieceSortColumn(undefined);
+      }
+    } else {
+      // New column, start with ascending
+      setPieceSortColumn(column);
+      setPieceSortDirection("asc");
+    }
+  }, [pieceSortColumn, pieceSortDirection]);
+
   // Reset page when switching view modes or sorting
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [viewMode, sortColumn, sortDirection]);
+  }, [viewMode, sortColumn, sortDirection, pieceSortColumn, pieceSortDirection]);
 
   // Pagination logic - only apply pagination to pieces and components views
-  const currentData = viewMode === "pieces" ? pieces : 
+  const currentData = viewMode === "pieces" ? sortedPieces : 
                      viewMode === "components" ? sortedComponentStats : 
                      pieces; // For turbines and tree views, use pieces data
   
@@ -867,6 +978,9 @@ export default function InventoryListPage() {
               dataset="pieces"
               items={paginatedData}
               onSelectPiece={openPieceCard}
+              sortColumn={pieceSortColumn}
+              sortDirection={pieceSortDirection}
+              onSort={handlePieceSort}
             />
             
             {/* Pagination Controls */}

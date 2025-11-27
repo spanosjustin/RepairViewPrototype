@@ -25,12 +25,16 @@ type ComponentRow = {
 
 type SortDirection = "asc" | "desc" | null;
 type SortableColumn = keyof ComponentRow;
+type SortablePieceColumn = "pn" | "piece" | "sn" | "hours" | "trips" | "starts" | "status" | "state" | "turbine" | "component" | "componentType";
 
 type InventoryMatrixProps =
   | {
       dataset: "pieces";
       items: PieceItem[];
       onSelectPiece?: (item: PieceItem) => void;
+      sortColumn?: SortablePieceColumn;
+      sortDirection?: SortDirection;
+      onSort?: (column: SortablePieceColumn) => void;
     }
   | {
       dataset: "components";
@@ -65,18 +69,20 @@ const firstCellBase =
   "before:h-2.5 before:w-2.5 before:rounded-full before:pointer-events-none";
 
 /* -------------------- Sortable Header Component -------------------- */
-function SortableHeader({
+function SortableHeader<T extends string = SortableColumn>({
   column,
   label,
   sortColumn,
   sortDirection,
   onSort,
+  width,
 }: {
-  column: SortableColumn;
+  column: T;
   label: string;
-  sortColumn?: SortableColumn;
+  sortColumn?: T;
   sortDirection?: SortDirection;
-  onSort?: (column: SortableColumn) => void;
+  onSort?: (column: T) => void;
+  width?: string;
 }) {
   const isActive = sortColumn === column;
   const canSort = !!onSort;
@@ -94,6 +100,7 @@ function SortableHeader({
         canSort && "cursor-pointer hover:bg-muted/50 select-none",
         isActive && "bg-muted/30"
       )}
+      style={width ? { width } : undefined}
       onClick={handleClick}
     >
       <div className="flex items-center gap-1.5">
@@ -148,7 +155,7 @@ function ComponentsTable({
 
   return (
     <div className="w-full overflow-x-auto">
-      <table className="w-full text-sm" style={style}>
+      <table className="w-full text-sm table-fixed" style={style}>
         <thead className="text-left">
           <tr className="border-b">
             <SortableHeader
@@ -157,6 +164,7 @@ function ComponentsTable({
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={onSort}
+              width="12%"
             />
             <SortableHeader
               column="componentName"
@@ -164,6 +172,7 @@ function ComponentsTable({
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={onSort}
+              width="18%"
             />
             <SortableHeader
               column="hours"
@@ -171,6 +180,7 @@ function ComponentsTable({
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={onSort}
+              width="10%"
             />
             <SortableHeader
               column="trips"
@@ -178,6 +188,7 @@ function ComponentsTable({
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={onSort}
+              width="10%"
             />
             <SortableHeader
               column="starts"
@@ -185,6 +196,7 @@ function ComponentsTable({
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={onSort}
+              width="10%"
             />
             <SortableHeader
               column="status"
@@ -192,6 +204,7 @@ function ComponentsTable({
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={onSort}
+              width="12%"
             />
             <SortableHeader
               column="state"
@@ -199,6 +212,7 @@ function ComponentsTable({
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={onSort}
+              width="12%"
             />
             <SortableHeader
               column="turbine"
@@ -206,6 +220,7 @@ function ComponentsTable({
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={onSort}
+              width="16%"
             />
           </tr>
         </thead>
@@ -232,30 +247,33 @@ function ComponentsTable({
                   onClick={() => onSelect?.(r)}
                 >
                   <td
-                    className={`${firstCellBase} before:bg-[var(--dot-color)] before:shadow-[0_0_0_2px_var(--dot-ring)]`}
+                    className={`${firstCellBase} before:bg-[var(--dot-color)] before:shadow-[0_0_0_2px_var(--dot-ring)] overflow-hidden text-ellipsis`}
                     // optional data attribute if you do delegated clicks elsewhere
                     data-component-id={r.id ?? r.componentName}
+                    title={r.componentType}
                   >
-                    {r.componentType}
+                    <span className="truncate block">{r.componentType}</span>
                   </td>
-                  <td className="py-2 pr-3">
-                    <div className="flex items-center gap-2">
-                      <span>{r.componentName}</span>
+                  <td className="py-2 pr-3 overflow-hidden">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="truncate">{r.componentName}</span>
                       {r.componentType && r.componentType !== "—" && (
-                        <span className="text-xs text-muted-foreground">({r.componentType})</span>
+                        <span className="text-xs text-muted-foreground flex-shrink-0">({r.componentType})</span>
                       )}
                     </div>
                   </td>
-                  <td className="py-2 pr-3">{r.hours}</td>
-                  <td className="py-2 pr-3">{r.trips}</td>
-                  <td className="py-2 pr-3">{r.starts}</td>
-                  <td className={`py-2 pr-3 ${statusColor ? getCellBackgroundClasses(statusColor) : ''} rounded`}>
+                  <td className="py-2 pr-3 overflow-hidden text-ellipsis">{r.hours}</td>
+                  <td className="py-2 pr-3 overflow-hidden text-ellipsis">{r.trips}</td>
+                  <td className="py-2 pr-3 overflow-hidden text-ellipsis">{r.starts}</td>
+                  <td className={`py-2 pr-3 overflow-hidden ${statusColor ? getCellBackgroundClasses(statusColor) : ''} rounded`}>
                     <Badge text={r.status || "—"} tone={sTone} colorName={statusColor} />
                   </td>
-                  <td className={`py-2 pr-3 ${stateColor ? getCellBackgroundClasses(stateColor) : ''} rounded`}>
+                  <td className={`py-2 pr-3 overflow-hidden ${stateColor ? getCellBackgroundClasses(stateColor) : ''} rounded`}>
                     <Badge text={r.state || "—"} tone={stTone} colorName={stateColor} />
                   </td>
-                  <td className="py-2 pr-3">{r.turbine}</td>
+                  <td className="py-2 pr-3 overflow-hidden text-ellipsis" title={r.turbine}>
+                    <span className="truncate block">{r.turbine}</span>
+                  </td>
                 </tr>
               );
             })
@@ -271,10 +289,16 @@ function PiecesTable({
   items,
   onSelect,
   colorSettings = [],
+  sortColumn,
+  sortDirection,
+  onSort,
 }: {
   items: PieceItem[];
   onSelect?: (item: PieceItem) => void;
   colorSettings?: any[];
+  sortColumn?: SortablePieceColumn;
+  sortDirection?: SortDirection;
+  onSort?: (column: SortablePieceColumn) => void;
 }) {
   const style = {
     // @ts-ignore custom CSS vars
@@ -284,18 +308,81 @@ function PiecesTable({
 
   return (
     <div className="w-full overflow-x-auto">
-      <table className="w-full text-sm" style={style}>
+      <table className="w-full text-sm table-fixed" style={style}>
         <thead className="text-left">
           <tr className="border-b">
-            <th className="py-2 pr-3">PN</th>
-            <th className="py-2 pr-3">Piece</th>
-            <th className="py-2 pr-3">SN</th>
-            <th className="py-2 pr-3">Hours</th>
-            <th className="py-2 pr-3">Trips</th>
-            <th className="py-2 pr-3">Starts</th>
-            <th className="py-2 pr-3">Status</th>
-            <th className="py-2 pr-3">State</th>
-            <th className="py-2 pr-3">Turbine</th>
+            <SortableHeader
+              column="pn"
+              label="PN"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+              width="12%"
+            />
+            <SortableHeader
+              column="piece"
+              label="Piece"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+              width="16%"
+            />
+            <SortableHeader
+              column="sn"
+              label="SN"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+              width="12%"
+            />
+            <SortableHeader
+              column="hours"
+              label="Hours"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+              width="10%"
+            />
+            <SortableHeader
+              column="trips"
+              label="Trips"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+              width="10%"
+            />
+            <SortableHeader
+              column="starts"
+              label="Starts"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+              width="10%"
+            />
+            <SortableHeader
+              column="status"
+              label="Status"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+              width="12%"
+            />
+            <SortableHeader
+              column="state"
+              label="State"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+              width="12%"
+            />
+            <SortableHeader
+              column="turbine"
+              label="Turbine"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+              width="6%"
+            />
           </tr>
         </thead>
         <tbody>
@@ -322,30 +409,35 @@ function PiecesTable({
                 }}
               >
                 <td
-                  className={`${firstCellBase} before:bg-[var(--dot-color)] before:shadow-[0_0_0_2px_var(--dot-ring)]`}
+                  className={`${firstCellBase} before:bg-[var(--dot-color)] before:shadow-[0_0_0_2px_var(--dot-ring)] overflow-hidden text-ellipsis`}
                   data-piece-id={it.id ?? it.sn ?? it.piece ?? it.name}
+                  title={it.pn ?? "—"}
                 >
-                  {it.pn ?? "—"}
+                  <span className="truncate block">{it.pn ?? "—"}</span>
                 </td>
-                <td className="py-2 pr-3">
-                  <div className="flex items-center gap-2">
-                    <span>{it.piece ?? it.name ?? "—"}</span>
+                <td className="py-2 pr-3 overflow-hidden">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="truncate">{it.component ?? it.piece ?? it.name ?? "—"}</span>
                     {it.componentType && it.componentType !== "—" && (
-                      <span className="text-xs text-muted-foreground">({it.componentType})</span>
+                      <span className="text-xs text-muted-foreground flex-shrink-0">({it.componentType})</span>
                     )}
                   </div>
                 </td>
-                <td className="py-2 pr-3">{it.sn ?? it.serial ?? "—"}</td>
-                <td className="py-2 pr-3">{it.hours ?? "—"}</td>
-                <td className="py-2 pr-3">{it.trips ?? "—"}</td>
-                <td className="py-2 pr-3">{it.starts ?? "—"}</td>
-                <td className={`py-2 pr-3 ${statusColor ? getCellBackgroundClasses(statusColor) : ''} rounded`}>
+                <td className="py-2 pr-3 overflow-hidden text-ellipsis" title={it.sn ?? it.serial ?? "—"}>
+                  <span className="truncate block">{it.sn ?? it.serial ?? "—"}</span>
+                </td>
+                <td className="py-2 pr-3 overflow-hidden text-ellipsis">{it.hours ?? "—"}</td>
+                <td className="py-2 pr-3 overflow-hidden text-ellipsis">{it.trips ?? "—"}</td>
+                <td className="py-2 pr-3 overflow-hidden text-ellipsis">{it.starts ?? "—"}</td>
+                <td className={`py-2 pr-3 overflow-hidden ${statusColor ? getCellBackgroundClasses(statusColor) : ''} rounded`}>
                   <Badge text={it.status ?? it.health ?? "—"} tone={sTone} colorName={statusColor} />
                 </td>
-                <td className={`py-2 pr-3 ${stateColor ? getCellBackgroundClasses(stateColor) : ''} rounded`}>
+                <td className={`py-2 pr-3 overflow-hidden ${stateColor ? getCellBackgroundClasses(stateColor) : ''} rounded`}>
                   <Badge text={it.state ?? it.condition ?? "—"} tone={stTone} colorName={stateColor} />
                 </td>
-                <td className="py-2 pr-3">{it.turbine ?? "—"}</td>
+                <td className="py-2 pr-3 overflow-hidden text-ellipsis" title={it.turbine ?? "—"}>
+                  <span className="truncate block">{it.turbine ?? "—"}</span>
+                </td>
               </tr>
             );
           })}
@@ -377,6 +469,9 @@ export default function InventoryMatrix(props: InventoryMatrixProps) {
       items={props.items ?? []}
       onSelect={props.onSelectPiece}
       colorSettings={colorSettings}
+      sortColumn={props.sortColumn}
+      sortDirection={props.sortDirection}
+      onSort={props.onSort}
     />
   );
 }
