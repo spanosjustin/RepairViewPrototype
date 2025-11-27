@@ -1,10 +1,6 @@
 // src/lib/inventory/mockRepairEvents.ts
 
-type RepairEvent = {
-  title?: string | null;
-  repairDetails?: string | null;
-  conditionDetails?: string | null;
-};
+import type { RepairEvent } from "./types";
 
 /**
  * Mock repair events for pieces

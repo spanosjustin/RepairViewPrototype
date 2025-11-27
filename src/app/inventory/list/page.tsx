@@ -6,6 +6,7 @@ import InventoryMatrix from "@/components/inventory/InventoryMatrix";
 import { MOCK_INVENTORY } from "@/lib/inventory/mock";
 import type { InventoryItem } from "@/lib/inventory/types";
 import { MOCK_TURBINES } from "@/lib/matrix/mock";
+import { useFilter } from "@/app/FilterContext";
 
 // shadcn/ui dialog (modal) to show the card
 import {
@@ -24,6 +25,7 @@ import {
 } from "@/components/ui/select";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 // ← import your card
 import PieceInfoCard from "@/components/inventory/PieceInfoCard";
@@ -320,6 +322,7 @@ function generatePiecesForComponents(components: any[]): InventoryItem[] {
 }
 
 export default function InventoryListPage() {
+  const { searchTerms, searchQuery } = useFilter();
   const [viewMode, setViewMode] = React.useState<ViewMode>("pieces");
   const [pieces, setPieces] = React.useState<any[]>([]);
   const [components, setComponents] = React.useState<any[]>([]);
@@ -356,6 +359,12 @@ export default function InventoryListPage() {
   // Sorting state for components view
   const [sortColumn, setSortColumn] = React.useState<SortableColumn | undefined>(undefined);
   const [sortDirection, setSortDirection] = React.useState<SortDirection>(null);
+  
+  // Search state for components view
+  const [componentSearchQuery, setComponentSearchQuery] = React.useState("");
+  
+  // Search state for pieces view
+  const [pieceSearchQuery, setPieceSearchQuery] = React.useState("");
   
   // Sorting state for pieces view
   const [pieceSortColumn, setPieceSortColumn] = React.useState<SortablePieceColumn | undefined>(undefined);
@@ -445,13 +454,99 @@ export default function InventoryListPage() {
     [pieces, dbComponents]
   );
 
+  // Filter component stats based on search query and FilterBarContainer search terms
+  const filteredComponentStats = React.useMemo(() => {
+    let filtered = componentStats;
+
+    // Helper function to check if component matches search criteria
+    const matchesSearch = (component: ComponentRow, searchText: string) => {
+      const searchableText = [
+        String(component.componentName || ""),
+        String(component.componentType || ""),
+        String(component.status || ""),
+        String(component.state || ""),
+        String(component.turbine || ""),
+      ].join(" ").toLowerCase();
+      
+      return searchableText.includes(searchText.toLowerCase());
+    };
+
+    // Helper function to check if any piece in a component matches search criteria
+    const hasMatchingPiece = (component: ComponentRow, searchText: string) => {
+      const componentName = component.componentName || "";
+      const matchingPieces = pieces.filter((piece) => {
+        const pieceComponent = piece.component || piece.piece || piece.name || "";
+        if (pieceComponent !== componentName) return false;
+        
+        const pieceSearchableText = [
+          String(piece.pn || ""),
+          String(piece.sn || piece.serial || ""),
+          String(piece.component || piece.piece || piece.name || ""),
+          String(piece.componentType || ""),
+          String(piece.status || piece.health || ""),
+          String(piece.state || piece.condition || ""),
+          String(piece.turbine || ""),
+          String(piece.position || ""),
+        ].join(" ").toLowerCase();
+        
+        return pieceSearchableText.includes(searchText.toLowerCase());
+      });
+      
+      return matchingPieces.length > 0;
+    };
+
+    // Apply FilterBarContainer search terms (all terms must match)
+    if (searchTerms.length > 0) {
+      filtered = filtered.filter((component) => {
+        // Check if component matches all terms OR if any piece matches all terms
+        const componentMatches = searchTerms.every(term => matchesSearch(component, term));
+        const pieceMatches = searchTerms.every(term => hasMatchingPiece(component, term));
+        return componentMatches || pieceMatches;
+      });
+    }
+
+    // Apply FilterBarContainer current search query (real-time filtering)
+    if (searchQuery.trim()) {
+      filtered = filtered.filter((component) => {
+        // Check if component matches OR if any piece matches
+        return matchesSearch(component, searchQuery) || hasMatchingPiece(component, searchQuery);
+      });
+    }
+
+    // Apply component search query
+    if (componentSearchQuery.trim()) {
+      const query = componentSearchQuery.toLowerCase().trim();
+      filtered = filtered.filter((component) => {
+        // Check component fields
+        const componentName = String(component.componentName || "").toLowerCase();
+        const componentType = String(component.componentType || "").toLowerCase();
+        const status = String(component.status || "").toLowerCase();
+        const state = String(component.state || "").toLowerCase();
+        const turbine = String(component.turbine || "").toLowerCase();
+        
+        const componentMatches = (
+          componentName.includes(query) ||
+          componentType.includes(query) ||
+          status.includes(query) ||
+          state.includes(query) ||
+          turbine.includes(query)
+        );
+        
+        // Also check if any piece matches
+        return componentMatches || hasMatchingPiece(component, query);
+      });
+    }
+
+    return filtered;
+  }, [componentStats, componentSearchQuery, searchTerms, searchQuery, pieces]);
+
   // Sort component stats based on sortColumn and sortDirection
   const sortedComponentStats = React.useMemo(() => {
     if (!sortColumn || !sortDirection) {
-      return componentStats;
+      return filteredComponentStats;
     }
 
-    return [...componentStats].sort((a, b) => {
+    return [...filteredComponentStats].sort((a, b) => {
       let aValue = a[sortColumn];
       let bValue = b[sortColumn];
 
@@ -480,15 +575,141 @@ export default function InventoryListPage() {
         return bStr.localeCompare(aStr);
       }
     });
-  }, [componentStats, sortColumn, sortDirection]);
+  }, [filteredComponentStats, sortColumn, sortDirection]);
+
+  // Filter pieces based on search query and FilterBarContainer search terms
+  const filteredPieces = React.useMemo(() => {
+    let filtered = pieces;
+
+    // Helper function to check if piece matches search criteria
+    const matchesSearch = (piece: any, searchText: string) => {
+      const searchableText = [
+        String(piece.pn || ""),
+        String(piece.sn || piece.serial || ""),
+        String(piece.component || piece.piece || piece.name || ""),
+        String(piece.componentType || ""),
+        String(piece.status || piece.health || ""),
+        String(piece.state || piece.condition || ""),
+        String(piece.turbine || ""),
+        String(piece.position || ""),
+      ].join(" ").toLowerCase();
+      
+      return searchableText.includes(searchText.toLowerCase());
+    };
+
+    // Apply FilterBarContainer search terms (all terms must match)
+    if (searchTerms.length > 0) {
+      filtered = filtered.filter((piece) => {
+        // All search terms must be found in the searchable text
+        return searchTerms.every(term => matchesSearch(piece, term));
+      });
+    }
+
+    // Apply FilterBarContainer current search query (real-time filtering)
+    if (searchQuery.trim()) {
+      filtered = filtered.filter((piece) => {
+        return matchesSearch(piece, searchQuery);
+      });
+    }
+
+    // Apply piece search query
+    if (pieceSearchQuery.trim()) {
+      const query = pieceSearchQuery.toLowerCase().trim();
+      filtered = filtered.filter((piece) => {
+        // Search across multiple fields
+        const pn = String(piece.pn || "").toLowerCase();
+        const sn = String(piece.sn || piece.serial || "").toLowerCase();
+        const component = String(piece.component || piece.piece || piece.name || "").toLowerCase();
+        const componentType = String(piece.componentType || "").toLowerCase();
+        const status = String(piece.status || piece.health || "").toLowerCase();
+        const state = String(piece.state || piece.condition || "").toLowerCase();
+        const turbine = String(piece.turbine || "").toLowerCase();
+        const position = String(piece.position || "").toLowerCase();
+        
+        return (
+          pn.includes(query) ||
+          sn.includes(query) ||
+          component.includes(query) ||
+          componentType.includes(query) ||
+          status.includes(query) ||
+          state.includes(query) ||
+          turbine.includes(query) ||
+          position.includes(query)
+        );
+      });
+    }
+
+    return filtered;
+  }, [pieces, pieceSearchQuery, searchTerms, searchQuery]);
+
+  // Filter pieces for List view (TreeView) - drills down to only matching pieces
+  const filteredPiecesForListView = React.useMemo(() => {
+    // If no search, return all pieces
+    const hasSearch = (searchTerms.length > 0) || (searchQuery.trim().length > 0);
+    if (!hasSearch) {
+      return pieces;
+    }
+
+    // Helper function to check if piece matches search
+    const pieceMatchesSearch = (piece: any, searchText: string) => {
+      const searchableText = [
+        String(piece.pn || ""),
+        String(piece.sn || piece.serial || ""),
+        String(piece.component || piece.piece || piece.name || ""),
+        String(piece.componentType || ""),
+        String(piece.status || piece.health || ""),
+        String(piece.state || piece.condition || ""),
+        String(piece.turbine || ""),
+        String(piece.position || ""),
+      ].join(" ").toLowerCase();
+      
+      return searchableText.includes(searchText.toLowerCase());
+    };
+
+    // Find all matching pieces
+    const matchingPieces = new Set<string>();
+
+    // Check search terms (bubbles)
+    searchTerms.forEach(term => {
+      pieces.forEach(piece => {
+        if (pieceMatchesSearch(piece, term)) {
+          const pieceId = piece.sn || piece.id || String(piece.pn);
+          matchingPieces.add(pieceId);
+        }
+      });
+    });
+
+    // Check current search query
+    if (searchQuery.trim()) {
+      pieces.forEach(piece => {
+        if (pieceMatchesSearch(piece, searchQuery)) {
+          const pieceId = piece.sn || piece.id || String(piece.pn);
+          matchingPieces.add(pieceId);
+        }
+      });
+    }
+
+    // If no matches, return empty array
+    if (matchingPieces.size === 0) {
+      return [];
+    }
+
+    // Only include the matching pieces themselves (drill down to just the piece)
+    const filteredPieces = pieces.filter(piece => {
+      const pieceId = piece.sn || piece.id || String(piece.pn);
+      return matchingPieces.has(pieceId);
+    });
+
+    return filteredPieces;
+  }, [pieces, searchTerms, searchQuery]);
 
   // Sort pieces based on pieceSortColumn and pieceSortDirection
   const sortedPieces = React.useMemo(() => {
     if (!pieceSortColumn || !pieceSortDirection) {
-      return pieces;
+      return filteredPieces;
     }
 
-    return [...pieces].sort((a, b) => {
+    return [...filteredPieces].sort((a, b) => {
       let aValue: any;
       let bValue: any;
 
@@ -567,7 +788,7 @@ export default function InventoryListPage() {
         return bStr.localeCompare(aStr);
       }
     });
-  }, [pieces, pieceSortColumn, pieceSortDirection]);
+  }, [filteredPieces, pieceSortColumn, pieceSortDirection]);
 
   // Handle sort column click for components
   const handleSort = React.useCallback((column: SortableColumn) => {
@@ -603,10 +824,10 @@ export default function InventoryListPage() {
     }
   }, [pieceSortColumn, pieceSortDirection]);
 
-  // Reset page when switching view modes or sorting
+  // Reset page when switching view modes, sorting, or search
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [viewMode, sortColumn, sortDirection, pieceSortColumn, pieceSortDirection]);
+  }, [viewMode, sortColumn, sortDirection, pieceSortColumn, pieceSortDirection, componentSearchQuery, pieceSearchQuery, searchTerms, searchQuery]);
 
   // Pagination logic - only apply pagination to pieces and components views
   const currentData = viewMode === "pieces" ? sortedPieces : 
@@ -638,7 +859,12 @@ export default function InventoryListPage() {
     const sn = piece.sn || "";
     const pieceId = sn || piece.id || String(piece.pn);
     
-    // Check if we have updated notes for this piece first
+    // First, check if the piece has notes from the database
+    if (piece.notes && Array.isArray(piece.notes) && piece.notes.length > 0) {
+      return piece.notes.filter((n: any) => n && String(n).trim() !== "");
+    }
+    
+    // Check if we have updated notes for this piece
     if (updatedNotes[pieceId]) {
       return updatedNotes[pieceId];
     }
@@ -693,15 +919,16 @@ export default function InventoryListPage() {
   const [selectedPiece, setSelectedPiece] = React.useState<any | null>(null);
 
   const openPieceCard = React.useCallback((item: any) => {
-    // Enrich the piece with notes from matrix data
-    const notes = findNotesForPiece(item);
+    // Enrich the piece with notes - prioritize database notes, then fall back to findNotesForPiece
+    const notes = (item.notes && item.notes.length > 0) 
+      ? item.notes 
+      : findNotesForPiece(item);
     
-    // Check if we have updated repair events for this piece first
+    // Enrich the piece with repair events - prioritize database repair events, then updated state, then mock
     const pieceId = item.sn || item.id || String(item.pn);
-    const updatedEvents = updatedRepairEvents[pieceId];
-    
-    // Get mock repair events for this piece (if no updated events exist)
-    const repairEvents = updatedEvents || getMockRepairEvents(item);
+    const repairEvents = (item.repairEvents && item.repairEvents.length > 0)
+      ? item.repairEvents
+      : (updatedRepairEvents[pieceId] || getMockRepairEvents(item));
     
     const enrichedPiece = {
       ...item,
@@ -975,10 +1202,15 @@ export default function InventoryListPage() {
         );
         if (updatedPiece) {
           // Enrich with notes and repair events
-          const notes = findNotesForPiece(updatedPiece);
+          // Notes from database take priority, then fall back to findNotesForPiece
           const pieceId = updatedPiece.sn || updatedPiece.id || String(updatedPiece.pn);
-          const updatedEvents = updatedRepairEvents[pieceId];
-          const repairEvents = updatedEvents || getMockRepairEvents(updatedPiece);
+          const notes = updatedPiece.notes && updatedPiece.notes.length > 0 
+            ? updatedPiece.notes 
+            : findNotesForPiece(updatedPiece);
+          // Repair events from database take priority, then updated state, then mock
+          const repairEvents = (updatedPiece.repairEvents && updatedPiece.repairEvents.length > 0)
+            ? updatedPiece.repairEvents
+            : (updatedRepairEvents[pieceId] || getMockRepairEvents(updatedPiece));
           setSelectedPiece({
             ...updatedPiece,
             notes: notes,
@@ -1195,7 +1427,7 @@ export default function InventoryListPage() {
           /* Turbine View (Tree View) */
           <div className="p-4">
             <TreeView
-              items={pieces}
+              items={filteredPiecesForListView}
               onSelectPiece={openPieceCard}
               onSelectComponent={handleTreeViewComponentSelect}
             />
@@ -1204,7 +1436,7 @@ export default function InventoryListPage() {
           /* Visual Tree View */
           <div className="p-4">
             <VisualTreeView
-              items={pieces}
+              items={filteredPiecesForListView}
               onSelectPiece={openPieceCard}
               onSelectComponent={handleTreeViewComponentSelect}
             />

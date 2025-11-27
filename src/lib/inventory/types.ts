@@ -1,5 +1,12 @@
 import type { ID } from "@/lib/matrix/types";
 
+export type RepairEvent = {
+    title?: string | null;
+    date?: string | null;
+    repairDetails?: string | null;
+    conditionDetails?: string | null;
+};
+
 export type InventoryItem = {
     id?: ID;
     sn: string;
@@ -13,4 +20,6 @@ export type InventoryItem = {
     componentType: string;
     turbine: string;
     position: string;
+    notes?: string[]; // Optional array of notes
+    repairEvents?: RepairEvent[]; // Optional array of repair events
 };

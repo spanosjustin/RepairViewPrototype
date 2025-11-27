@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { InventoryItem } from "@/lib/inventory/types";
+import type { InventoryItem, RepairEvent } from "@/lib/inventory/types";
 import { useStatusColors } from "@/hooks/useStatusColors";
 import { getTone, getColorName, getBadgeClasses } from "@/lib/settings/colorMapper";
 import { ChevronDown, Pencil, Check, X } from "lucide-react";
@@ -14,13 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { piecesStorage } from "@/lib/storage/indexedDB";
-
-type RepairEvent = {
-  title?: string | null;
-  date?: string | null;
-  repairDetails?: string | null;
-  conditionDetails?: string | null;
-};
 
 type ItemWithExtras = InventoryItem & {
   turbine?: string | null;
@@ -71,7 +64,11 @@ export default function PieceInfoCard({
   const currentNote = notes[noteIdx] ?? null;
   const [isEditingNote, setIsEditingNote] = React.useState(false);
   const [editedNote, setEditedNote] = React.useState("");
-  const [localNotes, setLocalNotes] = React.useState<string[]>(notes.map(n => n ?? ""));
+  // Initialize localNotes with valid notes only (filter out empty/null)
+  const initialNotes = (item.notes ?? [])
+    .filter(n => n != null && String(n).trim() !== "")
+    .map(n => String(n));
+  const [localNotes, setLocalNotes] = React.useState<string[]>(initialNotes);
 
   /* ---------- Repair Events State ---------- */
   const events = item.repairEvents ?? [];
@@ -85,10 +82,14 @@ export default function PieceInfoCard({
   // Update local notes when item.notes changes
   React.useEffect(() => {
     const newNotes = item.notes ?? [];
-    setLocalNotes(newNotes.map(n => n ?? ""));
+    // Filter out null/undefined and empty strings, then map to strings
+    const validNotes = newNotes
+      .filter(n => n != null && String(n).trim() !== "")
+      .map(n => String(n));
+    setLocalNotes(validNotes);
     // Also update editedNotes if not in edit mode (to sync after save)
     if (!isEditing) {
-      setEditedNotes(newNotes.map(n => n ?? "").filter(n => n !== ""));
+      setEditedNotes(validNotes);
     }
   }, [item.notes, isEditing]);
 
@@ -191,7 +192,7 @@ export default function PieceInfoCard({
     }
   };
 
-  const handleSaveNote = () => {
+  const handleSaveNote = async () => {
     const trimmedNote = editedNote.trim();
     
     // If there are no notes and we're adding one, create a new array
@@ -211,13 +212,42 @@ export default function PieceInfoCard({
       }
     }
     
+    // Filter out empty notes before saving
+    const notesToSave = updatedNotes.filter(n => n.trim() !== "");
+    
     setLocalNotes(updatedNotes);
     setIsEditingNote(false);
     
-    // Notify parent component of the update
-    if (onNotesUpdate) {
-      const pieceId = item.sn || item.id || String(item.pn);
-      onNotesUpdate(pieceId, updatedNotes);
+    // Save notes to the database by updating the piece
+    try {
+      const pieceToSave: InventoryItem = {
+        ...item,
+        notes: notesToSave.length > 0 ? notesToSave : undefined,
+      };
+      
+      const success = await piecesStorage.save(pieceToSave);
+      if (!success) {
+        console.error("Failed to save notes to database");
+        // Still update UI even if database save fails
+      }
+      
+      // Notify parent component of the update
+      if (onNotesUpdate) {
+        const pieceId = item.sn || item.id || String(item.pn);
+        onNotesUpdate(pieceId, notesToSave);
+      }
+      
+      // Notify parent to refresh piece data
+      if (onPieceUpdated) {
+        onPieceUpdated();
+      }
+    } catch (error) {
+      console.error("Error saving notes:", error);
+      // Still update UI even if database save fails
+      if (onNotesUpdate) {
+        const pieceId = item.sn || item.id || String(item.pn);
+        onNotesUpdate(pieceId, notesToSave);
+      }
     }
   };
 
@@ -232,7 +262,7 @@ export default function PieceInfoCard({
     }
   };
 
-  const handleSaveRepairEvent = () => {
+  const handleSaveRepairEvent = async () => {
     if (!currentLocalEvent) return;
     
     const updatedEvents = [...localEvents];
@@ -245,10 +275,36 @@ export default function PieceInfoCard({
     setLocalEvents(updatedEvents);
     setIsEditingRepairEvent(false);
     
-    // Notify parent component of the update
-    if (onRepairEventsUpdate) {
-      const pieceId = item.sn || item.id || String(item.pn);
-      onRepairEventsUpdate(pieceId, updatedEvents);
+    // Save repair events to the database by updating the piece
+    try {
+      const pieceToSave: InventoryItem = {
+        ...item,
+        repairEvents: updatedEvents.length > 0 ? updatedEvents : undefined,
+      };
+      
+      const success = await piecesStorage.save(pieceToSave);
+      if (!success) {
+        console.error("Failed to save repair events to database");
+        // Still update UI even if database save fails
+      }
+      
+      // Notify parent component of the update
+      if (onRepairEventsUpdate) {
+        const pieceId = item.sn || item.id || String(item.pn);
+        onRepairEventsUpdate(pieceId, updatedEvents);
+      }
+      
+      // Notify parent to refresh piece data
+      if (onPieceUpdated) {
+        onPieceUpdated();
+      }
+    } catch (error) {
+      console.error("Error saving repair events:", error);
+      // Still update UI even if database save fails
+      if (onRepairEventsUpdate) {
+        const pieceId = item.sn || item.id || String(item.pn);
+        onRepairEventsUpdate(pieceId, updatedEvents);
+      }
     }
   };
 
@@ -314,13 +370,18 @@ export default function PieceInfoCard({
         starts: Number(editedPiece.starts) || 0,
       };
 
-      const success = await piecesStorage.save(pieceToSave);
+      // Include notes in the piece to save
+      const notesToSave = editedNotes.filter(n => n.trim() !== "");
+      const pieceWithNotes: InventoryItem = {
+        ...pieceToSave,
+        notes: notesToSave.length > 0 ? notesToSave : undefined,
+      };
+
+      const success = await piecesStorage.save(pieceWithNotes);
       if (success) {
         // Save notes via callback
         if (onNotesUpdate) {
           const pieceId = item.sn || item.id || String(item.pn);
-          // Filter out empty notes
-          const notesToSave = editedNotes.filter(n => n.trim() !== "");
           onNotesUpdate(pieceId, notesToSave);
         }
         
@@ -343,8 +404,7 @@ export default function PieceInfoCard({
   return (
     <div className="rounded-xl border p-6 space-y-6">
       {/* Header with Edit Button */}
-      <div className="flex justify-between items-center border-b pb-4">
-        <h2 className="text-lg font-semibold">Piece Details</h2>
+      <div className="flex justify-end items-center border-b pb-4">
         {!isEditing ? (
           <button
             onClick={handleStartEdit}
@@ -493,8 +553,7 @@ export default function PieceInfoCard({
           {/* Repair Summary Header - shown when State/Position card is collapsed */}
           {isRepairEventExpanded && (
             <div 
-              className="rounded-lg border p-3 transition-all duration-500 ease-in-out cursor-pointer hover:border-primary/50 opacity-100"
-              onClick={handleRepairEventClick}
+              className="rounded-lg border p-3 transition-all duration-500 ease-in-out opacity-100"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4 flex-wrap">
@@ -569,7 +628,7 @@ export default function PieceInfoCard({
                           newNotes[index] = e.target.value;
                           setEditedNotes(newNotes);
                         }}
-                        className="w-full h-24 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="w-full h-40 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
                         placeholder="Enter note text..."
                       />
                     </div>
@@ -616,7 +675,7 @@ export default function PieceInfoCard({
                   {noteIdx + 1} / {localNotes.length}
                 </div>
               )}
-              <div className="px-3 py-3 min-h-[136px] flex flex-col">
+              <div className="px-3 py-3 min-h-[240px] flex flex-col">
                 {isEditingNote ? (
                   <div className="space-y-3 flex-1" onClick={(e) => e.stopPropagation()}>
                     <div className="space-y-2">
@@ -624,7 +683,7 @@ export default function PieceInfoCard({
                       <textarea
                         value={editedNote}
                         onChange={(e) => setEditedNote(e.target.value)}
-                        className="w-full h-32 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="w-full h-48 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
                         placeholder="Enter note text..."
                         autoFocus
                       />
@@ -683,10 +742,9 @@ export default function PieceInfoCard({
           isRepairEventExpanded ? 'md:row-start-1 md:row-span-2' : 'md:row-start-2'
         }`}>
           <div 
-            className={`rounded-lg border cursor-pointer transition-all duration-500 ease-in-out hover:border-primary/50 flex flex-col flex-1 ${
+            className={`rounded-lg border transition-all duration-500 ease-in-out flex flex-col flex-1 ${
               isRepairEventExpanded ? 'h-full' : 'min-h-[136px]'
             }`}
-            onClick={handleRepairEventClick}
           >
             <div className="flex items-center justify-between border-b px-3 py-2">
               {isEditingRepairEvent ? (
@@ -789,8 +847,8 @@ export default function PieceInfoCard({
               </Toggle>
             </div>
 
-            <div className={`px-3 py-3 text-sm transition-all duration-500 ease-in-out ${
-              isRepairEventExpanded ? 'flex-1 overflow-auto' : ''
+            <div className={`px-3 py-3 text-sm transition-all duration-500 ease-in-out relative ${
+              isRepairEventExpanded ? 'flex-1 overflow-auto' : 'min-h-[240px]'
             }`}>
               {!hasAnyEvents ? (
                 <p className="text-muted-foreground">No repair events.</p>
@@ -803,7 +861,7 @@ export default function PieceInfoCard({
                     <textarea
                       value={editedRepairDetails}
                       onChange={(e) => setEditedRepairDetails(e.target.value)}
-                      className="w-full h-32 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full h-48 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
                       placeholder="Enter repair details..."
                       autoFocus
                     />
@@ -813,7 +871,7 @@ export default function PieceInfoCard({
                     <textarea
                       value={editedConditionDetails}
                       onChange={(e) => setEditedConditionDetails(e.target.value)}
-                      className="w-full h-32 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full h-48 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
                       placeholder="Enter condition details..."
                     />
                   </div>
@@ -845,20 +903,6 @@ export default function PieceInfoCard({
                   }`}>
                     {v(currentLocalEvent?.repairDetails)}
                   </p>
-                  {!isEditing && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditRepairEvent();
-                      }}
-                      className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1 mt-2"
-                      title="Edit repair details"
-                    >
-                      <Pencil className="h-3 w-3" />
-                      Edit
-                    </button>
-                  )}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -867,20 +911,22 @@ export default function PieceInfoCard({
                   }`}>
                     {v(currentLocalEvent?.conditionDetails)}
                   </p>
-                  {!isEditing && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditRepairEvent();
-                      }}
-                      className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1 mt-2"
-                      title="Edit condition details"
-                    >
-                      <Pencil className="h-3 w-3" />
-                      Edit
-                    </button>
-                  )}
+                </div>
+              )}
+              {!isEditing && !isEditingRepairEvent && hasAnyEvents && !bothNull && (
+                <div className="absolute bottom-3 left-3">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditRepairEvent();
+                    }}
+                    className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1"
+                    title={tab === "repair" ? "Edit repair details" : "Edit condition details"}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Edit
+                  </button>
                 </div>
               )}
             </div>
