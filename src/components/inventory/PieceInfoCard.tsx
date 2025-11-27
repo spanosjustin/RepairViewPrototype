@@ -17,6 +17,7 @@ import { piecesStorage } from "@/lib/storage/indexedDB";
 
 type RepairEvent = {
   title?: string | null;
+  date?: string | null;
   repairDetails?: string | null;
   conditionDetails?: string | null;
 };
@@ -128,6 +129,40 @@ export default function PieceInfoCard({
 
   const v = (x: unknown) =>
     x === null || x === undefined || x === "" ? "—" : String(x);
+
+  // Helper function to extract and format date from repair event
+  const formatEventDate = (event: RepairEvent | null): string => {
+    if (!event) return "—";
+    
+    // First, try to use the date field if it exists
+    if (event.date) {
+      try {
+        const date = new Date(event.date);
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+        }
+      } catch (e) {
+        // If date parsing fails, fall through to title extraction
+      }
+    }
+    
+    // If no date field, try to extract from title (format: "Title - YYYY-MM-DD")
+    if (event.title) {
+      const dateMatch = event.title.match(/- (\d{4}-\d{2}-\d{2})$/);
+      if (dateMatch) {
+        try {
+          const date = new Date(dateMatch[1]);
+          if (!isNaN(date.getTime())) {
+            return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+          }
+        } catch (e) {
+          // If date parsing fails, return dash
+        }
+      }
+    }
+    
+    return "—";
+  };
 
   const hasAnyNotes = localNotes.length > 0;
   const currentNoteValue = localNotes[noteIdx] ?? null;
@@ -545,29 +580,35 @@ export default function PieceInfoCard({
           ) : (
             /* View Mode: Show notes with navigation */
             <>
-              <div className="flex items-center justify-between border-b px-3 py-2">
-                <button
-                  type="button"
-                  className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
-                  onClick={() => setNoteIdx((i) => Math.max(0, i - 1))}
-                  disabled={!hasAnyNotes || noteIdx === 0 || isEditingNote}
-                >
-                  ◀
-                </button>
-                <h4 className="text-sm font-medium text-center flex-1">
-                  Note
-                </h4>
-                <div className="flex items-center gap-1">
+              <div className="border-b px-3 py-2">
+                <div className="flex items-center justify-between">
                   <button
                     type="button"
                     className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
-                    onClick={() =>
-                      setNoteIdx((i) => Math.min(localNotes.length - 1, i + 1))
-                    }
-                    disabled={!hasAnyNotes || noteIdx === localNotes.length - 1 || isEditingNote}
+                    onClick={() => setNoteIdx((i) => Math.max(0, i - 1))}
+                    disabled={!hasAnyNotes || noteIdx === 0 || isEditingNote}
                   >
-                    ▶
+                    ◀
                   </button>
+                  <h4 className="text-sm font-medium text-center flex-1">
+                    Note
+                  </h4>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
+                      onClick={() =>
+                        setNoteIdx((i) => Math.min(localNotes.length - 1, i + 1))
+                      }
+                      disabled={!hasAnyNotes || noteIdx === localNotes.length - 1 || isEditingNote}
+                    >
+                      ▶
+                    </button>
+                  </div>
+                </div>
+                {/* Placeholder for created-at; wire real dates here when available */}
+                <div className="mt-1 text-xs text-muted-foreground text-center">
+                  Created: —
                 </div>
               </div>
               {hasAnyNotes && (
@@ -694,11 +735,16 @@ export default function PieceInfoCard({
                   >
                     ◀
                   </button>
-                  <h4 className="text-sm font-medium text-center flex-1">
-                    {hasAnyEvents
-                      ? v(currentLocalEvent?.title ?? `Repair Event ${eventIdx + 1}`)
-                      : "Repair Event"}
-                  </h4>
+                  <div className="text-center flex-1 flex flex-col items-center">
+                    <h4 className="text-sm font-medium">
+                      {hasAnyEvents
+                        ? v(currentLocalEvent?.title ?? `Repair Event ${eventIdx + 1}`)
+                        : "Repair Event"}
+                    </h4>
+                    <span className="text-xs text-muted-foreground mt-0.5">
+                      {formatEventDate(currentLocalEvent)}
+                    </span>
+                  </div>
                   <button
                     type="button"
                     className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
