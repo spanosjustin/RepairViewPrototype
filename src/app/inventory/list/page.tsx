@@ -323,7 +323,7 @@ function generatePiecesForComponents(components: any[]): InventoryItem[] {
 }
 
 export default function InventoryListPage() {
-  const { searchTerms, searchQuery, turbineId, powerPlantId } = useFilter();
+  const { searchTerms, searchQuery, turbineId, powerPlantId, drilldownFilters } = useFilter();
   
   // Get turbines that belong to the selected power plant
   const powerPlantTurbineIds = React.useMemo(() => {
@@ -558,7 +558,19 @@ export default function InventoryListPage() {
     return { hoursFilter, tripsFilter, startsFilter, textWithoutFilters };
   }, []);
 
-  // Extract hours filters from search terms and query
+  // Helper to convert drilldown operator to filter operator
+  const convertDrilldownOperator = React.useCallback((op: ">" | "<" | "=" | "≥" | "≤"): '=' | '<' | '<=' | '>' | '>=' => {
+    switch (op) {
+      case ">": return ">";
+      case "<": return "<";
+      case "=": return "=";
+      case "≥": return ">=";
+      case "≤": return "<=";
+      default: return "=";
+    }
+  }, []);
+
+  // Extract hours filters from search terms, query, and drilldown filters
   const hoursFilters = React.useMemo(() => {
     const filters: Array<
       | { operator: '=' | '<' | '<=' | '>' | '>=', value: number }
@@ -582,10 +594,21 @@ export default function InventoryListPage() {
       }
     }
     
+    // Check drilldown filter
+    if (drilldownFilters.hours?.enabled && drilldownFilters.hours.value) {
+      const value = parseFloat(drilldownFilters.hours.value);
+      if (!isNaN(value)) {
+        filters.push({
+          operator: convertDrilldownOperator(drilldownFilters.hours.operator),
+          value: value,
+        });
+      }
+    }
+    
     return filters;
-  }, [searchTerms, searchQuery, parseSpecialFilters]);
+  }, [searchTerms, searchQuery, drilldownFilters.hours, parseSpecialFilters, convertDrilldownOperator]);
 
-  // Extract trips filters from search terms and query
+  // Extract trips filters from search terms, query, and drilldown filters
   const tripsFilters = React.useMemo(() => {
     const filters: Array<
       | { operator: '=' | '<' | '<=' | '>' | '>=', value: number }
@@ -609,10 +632,21 @@ export default function InventoryListPage() {
       }
     }
     
+    // Check drilldown filter
+    if (drilldownFilters.trips?.enabled && drilldownFilters.trips.value) {
+      const value = parseFloat(drilldownFilters.trips.value);
+      if (!isNaN(value)) {
+        filters.push({
+          operator: convertDrilldownOperator(drilldownFilters.trips.operator),
+          value: value,
+        });
+      }
+    }
+    
     return filters;
-  }, [searchTerms, searchQuery, parseSpecialFilters]);
+  }, [searchTerms, searchQuery, drilldownFilters.trips, parseSpecialFilters, convertDrilldownOperator]);
 
-  // Extract starts filters from search terms and query
+  // Extract starts filters from search terms, query, and drilldown filters
   const startsFilters = React.useMemo(() => {
     const filters: Array<
       | { operator: '=' | '<' | '<=' | '>' | '>=', value: number }
@@ -636,8 +670,19 @@ export default function InventoryListPage() {
       }
     }
     
+    // Check drilldown filter
+    if (drilldownFilters.starts?.enabled && drilldownFilters.starts.value) {
+      const value = parseFloat(drilldownFilters.starts.value);
+      if (!isNaN(value)) {
+        filters.push({
+          operator: convertDrilldownOperator(drilldownFilters.starts.operator),
+          value: value,
+        });
+      }
+    }
+    
     return filters;
-  }, [searchTerms, searchQuery, parseSpecialFilters]);
+  }, [searchTerms, searchQuery, drilldownFilters.starts, parseSpecialFilters, convertDrilldownOperator]);
 
   // Compute allowed hours values for fuzzy searches (exact match + 6 closest)
   const fuzzyHoursValues = React.useMemo(() => {

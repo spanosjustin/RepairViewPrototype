@@ -2,6 +2,18 @@
 
 import { createContext, useContext, useState, ReactNode } from "react";
 
+export type DrilldownFilter = {
+    enabled: boolean;
+    operator: ">" | "<" | "=" | "≥" | "≤";
+    value: string;
+} | null;
+
+type DrilldownFilters = {
+    hours: DrilldownFilter;
+    trips: DrilldownFilter;
+    starts: DrilldownFilter;
+};
+
 type FilterContextType = {
     searchTerms: string[];
     setSearchTerms: (terms: string[]) => void;
@@ -11,6 +23,8 @@ type FilterContextType = {
     setTurbineId: (id: string | null) => void;
     powerPlantId: string | null;
     setPowerPlantId: (id: string | null) => void;
+    drilldownFilters: DrilldownFilters;
+    setDrilldownFilters: (filters: DrilldownFilters | ((prev: DrilldownFilters) => DrilldownFilters)) => void;
 };
 
 const FilterContext = createContext<FilterContextType | undefined>(undefined);
@@ -20,6 +34,11 @@ export function FilterProvider({ children }: { children: ReactNode }) {
     const [searchQuery, setSearchQuery] = useState<string>("");
     const [turbineId, setTurbineId] = useState<string | null>(null);
     const [powerPlantId, setPowerPlantId] = useState<string | null>(null);
+    const [drilldownFilters, setDrilldownFilters] = useState<DrilldownFilters>({
+        hours: null,
+        trips: null,
+        starts: null,
+    });
 
     return (
         <FilterContext.Provider value={{ 
@@ -31,6 +50,8 @@ export function FilterProvider({ children }: { children: ReactNode }) {
             setTurbineId,
             powerPlantId,
             setPowerPlantId,
+            drilldownFilters,
+            setDrilldownFilters,
         }}>
             {children}
         </FilterContext.Provider>

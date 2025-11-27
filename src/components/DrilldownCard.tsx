@@ -13,6 +13,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { useFilter, type DrilldownFilter } from "@/app/FilterContext";
 
 const STAT_ITEMS = ["Hours", "Trips", "Starts", "Notes", "Set In", "Set Out", "From", "Before"] as const;
 const COMPONENT_ITEMS = [
@@ -33,21 +34,73 @@ type Operator = typeof OPERATORS[number];
 function NumericToggleRow({
     label,
     kind,
+    filterKey,
 }: {
     label: string,
     kind: StatKind;
+    filterKey: "hours" | "trips" | "starts";
 }) {
     const id = useId();
-    const [checked, setChecked] = useState(true);
-    const [value, setValue] = useState<string>("");
-    const [op, setOp] = useState<Operator>("=");
+    const { drilldownFilters, setDrilldownFilters } = useFilter();
+    
+    const currentFilter = drilldownFilters[filterKey];
+    const checked = currentFilter?.enabled ?? false;
+    
+    // Use local state for input value and operator, sync with context
+    const [localValue, setLocalValue] = useState<string>(currentFilter?.value ?? "");
+    const [localOp, setLocalOp] = useState<Operator>(currentFilter?.operator ?? "=");
+
+    // Sync local state when context changes (e.g., on reset)
+    React.useEffect(() => {
+        if (currentFilter) {
+            setLocalValue(currentFilter.value);
+            setLocalOp(currentFilter.operator);
+        } else {
+            setLocalValue("");
+            setLocalOp("=");
+        }
+    }, [currentFilter]);
+
+    const updateFilter = (enabled: boolean, value: string, operator: Operator) => {
+        setDrilldownFilters(prev => ({
+            ...prev,
+            [filterKey]: enabled && value.trim() ? {
+                enabled: true,
+                operator: operator,
+                value: value.trim(),
+            } : null,
+        }));
+    };
+
+    const handleCheckedChange = (newChecked: boolean) => {
+        updateFilter(newChecked, localValue, localOp);
+    };
+
+    const handleValueChange = (newValue: string) => {
+        setLocalValue(newValue);
+        // Automatically enable the filter when user starts typing
+        if (newValue.trim()) {
+            updateFilter(true, newValue, localOp);
+        } else {
+            // If value is empty, disable the filter
+            updateFilter(false, newValue, localOp);
+        }
+    };
+
+    const handleOpChange = (newOp: Operator) => {
+        setLocalOp(newOp);
+        // Automatically enable if there's a value
+        if (localValue.trim()) {
+            updateFilter(true, localValue, newOp);
+        }
+    };
 
     const onChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
         const v = e.target.value;
         if (kind === "int") {
-            if (/^-?\d*$/.test(v)) setValue(v);
+            if (/^-?\d*$/.test(v)) handleValueChange(v);
         } else {
-            if (/^-?\d*(\.\d*)?$/.test(v)) setValue(v);
+            if (/^-?\d*(\.\d*)?$/.test(v)) handleValueChange(v);
         }
     };
 
@@ -62,8 +115,8 @@ function NumericToggleRow({
 
             <div className="ml-4 flex items-center gap-2 justify-end w-full max-w-[260px] md:max-w-[300px] min-w-0">
                 <Select
-                    value={op}
-                    onValueChange={(v) => setOp(v as Operator)}
+                    value={localOp}
+                    onValueChange={(v) => handleOpChange(v as Operator)}
                 >
                     <SelectTrigger
                         className="h-9 w-12 md:w-14 justify-center px-0"
@@ -85,11 +138,11 @@ function NumericToggleRow({
                     type="text"
                     inputMode={kind === "int" ? "numeric" : "decimal"}
                     placeholder={kind === "int" ? "0" : "0.00"}
-                    value={value}
+                    value={localValue}
                     onChange={onChange}
                     className="h-9 w-16 md:w-20"
                 />
-                <Switch id={id} checked={checked} onCheckedChange={setChecked} />
+                <Switch id={id} checked={checked} onCheckedChange={handleCheckedChange} />
             </div>
         </div>
     );
@@ -227,7 +280,76 @@ function SectionShell({
     );
 }
 
-export default function DrilldownCard() {
+type DrilldownCardProps = {
+    onClose?: () => void;
+};
+
+export default function DrilldownCard({ onClose }: DrilldownCardProps) {
+    const { drilldownFilters, setDrilldownFilters, setSearchTerms, searchTerms } = useFilter();
+
+    const handleReset = () => {
+        setDrilldownFilters({
+            hours: null,
+            trips: null,
+            starts: null,
+        });
+    };
+
+    // Convert drilldown operator to search term format
+    const operatorToSearchFormat = (op: ">" | "<" | "=" | "≥" | "≤"): string => {
+        switch (op) {
+            case ">": return ">";
+            case "<": return "<";
+            case "=": return "=";
+            case "≥": return ">=";
+            case "≤": return "<=";
+            default: return "=";
+        }
+    };
+
+    // Convert drilldown filter to search term string
+    const filterToSearchTerm = (filterKey: "hours" | "trips" | "starts", filter: DrilldownFilter): string | null => {
+        if (!filter?.enabled || !filter.value) return null;
+        const operator = operatorToSearchFormat(filter.operator);
+        return `${filterKey}${operator}${filter.value}`;
+    };
+
+    const handleApplyFilters = () => {
+        const newTerms: string[] = [];
+        
+        // Convert each enabled filter to a search term
+        if (drilldownFilters.hours?.enabled && drilldownFilters.hours.value) {
+            const term = filterToSearchTerm("hours", drilldownFilters.hours);
+            if (term && !searchTerms.includes(term)) {
+                newTerms.push(term);
+            }
+        }
+        
+        if (drilldownFilters.trips?.enabled && drilldownFilters.trips.value) {
+            const term = filterToSearchTerm("trips", drilldownFilters.trips);
+            if (term && !searchTerms.includes(term)) {
+                newTerms.push(term);
+            }
+        }
+        
+        if (drilldownFilters.starts?.enabled && drilldownFilters.starts.value) {
+            const term = filterToSearchTerm("starts", drilldownFilters.starts);
+            if (term && !searchTerms.includes(term)) {
+                newTerms.push(term);
+            }
+        }
+        
+        // Add new terms to search terms
+        if (newTerms.length > 0) {
+            setSearchTerms([...searchTerms, ...newTerms]);
+        }
+        
+        // Close the drilldown panel
+        if (onClose) {
+            onClose();
+        }
+    };
+
     return (
         <Card className="w-full rounded-2xl border bg-white/70 shadow-sm backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/40">
             <CardContent className="p-4 md:p-6">
@@ -239,11 +361,13 @@ export default function DrilldownCard() {
                                 if (item === "Before") { return <DateFilterRow key={item} mainLabel={item} />; }
 
                                 if(item in STAT_CONFIG) {
+                                    const filterKey = item.toLowerCase() as "hours" | "trips" | "starts";
                                     return (
                                         <NumericToggleRow
                                             key={item}
                                             label={item}
                                             kind={STAT_CONFIG[item as keyof typeof STAT_CONFIG]}
+                                            filterKey={filterKey}
                                         />
                                         
                                     );
@@ -264,11 +388,11 @@ export default function DrilldownCard() {
 
                 {/* Actions */}
                 <div className="mt-6 flex items-center justify-between">
-                    <Button variant="outline">
+                    <Button variant="outline" onClick={handleReset}>
                         Reset
                     </Button>
                     <div className="flex items-center gap-3">
-                        <Button>
+                        <Button onClick={handleApplyFilters}>
                             Apply Filters
                         </Button>
                         <Button>

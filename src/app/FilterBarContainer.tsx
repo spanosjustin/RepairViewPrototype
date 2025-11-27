@@ -34,6 +34,8 @@ export default function FilterbarContainer() {
         setTurbineId,
         powerPlantId,
         setPowerPlantId,
+        drilldownFilters,
+        setDrilldownFilters,
     } = useFilter();
 
     // Sync local filter state with context when filter changes
@@ -55,11 +57,42 @@ export default function FilterbarContainer() {
     };
 
     const removeSearchTerm = (term: string) => {
+        // Remove from search terms
         setSearchTerms(searchTerms.filter((t) => t !== term));
+        
+        // Check if this is a drilldown filter (hours/trips/starts with operator)
+        // Pattern: (hours|trips|starts)(>=|<=|>|<|=)(\d+)
+        const drilldownPattern = /^(hours|trips|starts)(>=|<=|>|<|=)(\d+(?:\.\d+)?)$/i;
+        const match = term.match(drilldownPattern);
+        
+        if (match) {
+            const [, filterKey, operatorStr, valueStr] = match;
+            const key = filterKey.toLowerCase() as "hours" | "trips" | "starts";
+            
+            // Convert search operator to drilldown operator
+            let drilldownOp: ">" | "<" | "=" | "≥" | "≤" = "=";
+            if (operatorStr === ">") drilldownOp = ">";
+            else if (operatorStr === "<") drilldownOp = "<";
+            else if (operatorStr === "=") drilldownOp = "=";
+            else if (operatorStr === ">=") drilldownOp = "≥";
+            else if (operatorStr === "<=") drilldownOp = "≤";
+            
+            // Check if the current drilldown filter matches this term
+            const currentFilter = drilldownFilters[key];
+            if (currentFilter?.enabled && 
+                currentFilter.operator === drilldownOp && 
+                currentFilter.value === valueStr) {
+                // Disable the matching drilldown filter
+                setDrilldownFilters(prev => ({
+                    ...prev,
+                    [key]: null,
+                }));
+            }
+        }
     };
 
     return (
-        <div className="border-b bg-white/70 p-2 dark:bg-zinc-900/70">
+        <div className="sticky top-0 z-10 border-b bg-white/70 p-2 dark:bg-zinc-900/70">
             <div className="mx-auto max-w-6xl">
                 <FilterBar
                     powerPlants={powerPlants}
@@ -73,7 +106,7 @@ export default function FilterbarContainer() {
 
                 {isOpen && (
                     <div id="drilldown-panel" className="mt-3">
-                        <DrilldownCard />
+                        <DrilldownCard onClose={() => setIsOpen(false)} />
                     </div>
                 )}
 
