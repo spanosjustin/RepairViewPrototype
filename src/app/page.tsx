@@ -1,8 +1,7 @@
 import TurbineCarousel from "@/components/TurbineCarousel";
 import PieceStatusDonutChart from "@/components/PieceStatusDonutChart";
 import ComponentCarousel from "@/components/ComponentCarousel";
-import { MOCK_TURBINES } from "@/lib/matrix/mock";
-import { MOCK_INVENTORY } from "@/lib/inventory/mock";
+import { MOCK_DATA } from "@/lib/mockData";
 
 export default function Home() {
   return (
@@ -11,18 +10,18 @@ export default function Home() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         {/* Section A - Turbine Carousel */}
         <div>
-          <TurbineCarousel turbines={MOCK_TURBINES} />
+          <TurbineCarousel turbines={MOCK_DATA.turbines} />
         </div>
         
         {/* Section B - Piece Status Donut Chart */}
         <div>
-          <PieceStatusDonutChart turbines={MOCK_TURBINES} />
+          <PieceStatusDonutChart inventoryItems={MOCK_DATA.inventory} />
         </div>
       </div>
 
       {/* Section C - Component Carousel */}
       <div className="mb-8">
-        <ComponentCarousel inventoryItems={MOCK_INVENTORY} className="h-96" />
+        <ComponentCarousel inventoryItems={MOCK_DATA.inventory} className="h-96" />
       </div>
 
       <footer className="flex gap-[24px] flex-wrap items-center justify-center">

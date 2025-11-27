@@ -6,6 +6,7 @@ import InventoryMatrix from "@/components/inventory/InventoryMatrix";
 import { MOCK_INVENTORY } from "@/lib/inventory/mock";
 import type { InventoryItem } from "@/lib/inventory/types";
 import { MOCK_TURBINES } from "@/lib/matrix/mock";
+import { MOCK_SITES } from "@/app/sitesAndTurbines/page";
 import { useFilter } from "@/app/FilterContext";
 
 // shadcn/ui dialog (modal) to show the card
@@ -322,7 +323,15 @@ function generatePiecesForComponents(components: any[]): InventoryItem[] {
 }
 
 export default function InventoryListPage() {
-  const { searchTerms, searchQuery } = useFilter();
+  const { searchTerms, searchQuery, turbineId, powerPlantId, drilldownFilters, componentFilters } = useFilter();
+  
+  // Get turbines that belong to the selected power plant
+  const powerPlantTurbineIds = React.useMemo(() => {
+    if (!powerPlantId) return null;
+    const selectedSite = MOCK_SITES.find(site => site.id === powerPlantId);
+    if (!selectedSite) return null;
+    return new Set(selectedSite.turbines.map(t => t.id));
+  }, [powerPlantId]);
   const [viewMode, setViewMode] = React.useState<ViewMode>("pieces");
   const [pieces, setPieces] = React.useState<any[]>([]);
   const [components, setComponents] = React.useState<any[]>([]);
@@ -454,12 +463,563 @@ export default function InventoryListPage() {
     [pieces, dbComponents]
   );
 
+  // Helper function to parse special search patterns for hours and trips
+  const parseSpecialFilters = React.useCallback((searchText: string) => {
+    // Parse hours filters
+    // First check for fuzzy search pattern: hours~5000
+    const hoursFuzzyMatch = searchText.match(/hours\s*~\s*(\d+)/i);
+    let hoursFilter = null;
+    
+    if (hoursFuzzyMatch) {
+      const value = parseInt(hoursFuzzyMatch[1], 10);
+      hoursFilter = { operator: 'fuzzy' as const, value };
+    } else {
+      // Check for range pattern: hours=1000-5000
+      const hoursRangeMatch = searchText.match(/hours\s*=\s*(\d+)\s*-\s*(\d+)/i);
+      if (hoursRangeMatch) {
+        const min = parseInt(hoursRangeMatch[1], 10);
+        const max = parseInt(hoursRangeMatch[2], 10);
+        hoursFilter = { operator: 'range' as const, min, max };
+      } else {
+        // Match hours with operators: =, <, <=, >, >=
+        const hoursMatch = searchText.match(/hours\s*(>=|<=|>|<|=)\s*(\d+)/i);
+        if (hoursMatch) {
+          const operator = hoursMatch[1] as '=' | '<' | '<=' | '>' | '>=';
+          const value = parseInt(hoursMatch[2], 10);
+          hoursFilter = { operator, value };
+        }
+      }
+    }
+    
+    // Parse trips filters
+    // First check for fuzzy search pattern: trips~5000
+    const tripsFuzzyMatch = searchText.match(/trips\s*~\s*(\d+)/i);
+    let tripsFilter = null;
+    
+    if (tripsFuzzyMatch) {
+      const value = parseInt(tripsFuzzyMatch[1], 10);
+      tripsFilter = { operator: 'fuzzy' as const, value };
+    } else {
+      // Check for range pattern: trips=1000-5000
+      const tripsRangeMatch = searchText.match(/trips\s*=\s*(\d+)\s*-\s*(\d+)/i);
+      if (tripsRangeMatch) {
+        const min = parseInt(tripsRangeMatch[1], 10);
+        const max = parseInt(tripsRangeMatch[2], 10);
+        tripsFilter = { operator: 'range' as const, min, max };
+      } else {
+        // Match trips with operators: =, <, <=, >, >=
+        const tripsMatch = searchText.match(/trips\s*(>=|<=|>|<|=)\s*(\d+)/i);
+        if (tripsMatch) {
+          const operator = tripsMatch[1] as '=' | '<' | '<=' | '>' | '>=';
+          const value = parseInt(tripsMatch[2], 10);
+          tripsFilter = { operator, value };
+        }
+      }
+    }
+    
+    // Parse starts filters
+    // First check for fuzzy search pattern: starts~5000
+    const startsFuzzyMatch = searchText.match(/starts\s*~\s*(\d+)/i);
+    let startsFilter = null;
+    
+    if (startsFuzzyMatch) {
+      const value = parseInt(startsFuzzyMatch[1], 10);
+      startsFilter = { operator: 'fuzzy' as const, value };
+    } else {
+      // Check for range pattern: starts=1000-5000
+      const startsRangeMatch = searchText.match(/starts\s*=\s*(\d+)\s*-\s*(\d+)/i);
+      if (startsRangeMatch) {
+        const min = parseInt(startsRangeMatch[1], 10);
+        const max = parseInt(startsRangeMatch[2], 10);
+        startsFilter = { operator: 'range' as const, min, max };
+      } else {
+        // Match starts with operators: =, <, <=, >, >=
+        const startsMatch = searchText.match(/starts\s*(>=|<=|>|<|=)\s*(\d+)/i);
+        if (startsMatch) {
+          const operator = startsMatch[1] as '=' | '<' | '<=' | '>' | '>=';
+          const value = parseInt(startsMatch[2], 10);
+          startsFilter = { operator, value };
+        }
+      }
+    }
+    
+    // Remove hours, trips, and starts filter patterns from text
+    let textWithoutFilters = searchText
+      .replace(/hours\s*~\s*\d+/gi, '')
+      .replace(/hours\s*=\s*\d+\s*-\s*\d+/gi, '')
+      .replace(/hours\s*(>=|<=|>|<|=)\s*\d+/gi, '')
+      .replace(/trips\s*~\s*\d+/gi, '')
+      .replace(/trips\s*=\s*\d+\s*-\s*\d+/gi, '')
+      .replace(/trips\s*(>=|<=|>|<|=)\s*\d+/gi, '')
+      .replace(/starts\s*~\s*\d+/gi, '')
+      .replace(/starts\s*=\s*\d+\s*-\s*\d+/gi, '')
+      .replace(/starts\s*(>=|<=|>|<|=)\s*\d+/gi, '')
+      .trim();
+    return { hoursFilter, tripsFilter, startsFilter, textWithoutFilters };
+  }, []);
+
+  // Helper to convert drilldown operator to filter operator
+  const convertDrilldownOperator = React.useCallback((op: ">" | "<" | "=" | "≥" | "≤"): '=' | '<' | '<=' | '>' | '>=' => {
+    switch (op) {
+      case ">": return ">";
+      case "<": return "<";
+      case "=": return "=";
+      case "≥": return ">=";
+      case "≤": return "<=";
+      default: return "=";
+    }
+  }, []);
+
+  // Extract hours filters from search terms, query, and drilldown filters
+  const hoursFilters = React.useMemo(() => {
+    const filters: Array<
+      | { operator: '=' | '<' | '<=' | '>' | '>=', value: number }
+      | { operator: 'range', min: number, max: number }
+      | { operator: 'fuzzy', value: number }
+    > = [];
+    
+    // Check search terms
+    searchTerms.forEach(term => {
+      const { hoursFilter } = parseSpecialFilters(term);
+      if (hoursFilter !== null) {
+        filters.push(hoursFilter);
+      }
+    });
+    
+    // Check current search query
+    if (searchQuery.trim()) {
+      const { hoursFilter } = parseSpecialFilters(searchQuery);
+      if (hoursFilter !== null) {
+        filters.push(hoursFilter);
+      }
+    }
+    
+    // Check drilldown filter
+    if (drilldownFilters.hours?.enabled && drilldownFilters.hours.value) {
+      const value = parseFloat(drilldownFilters.hours.value);
+      if (!isNaN(value)) {
+        filters.push({
+          operator: convertDrilldownOperator(drilldownFilters.hours.operator),
+          value: value,
+        });
+      }
+    }
+    
+    return filters;
+  }, [searchTerms, searchQuery, drilldownFilters.hours, parseSpecialFilters, convertDrilldownOperator]);
+
+  // Extract trips filters from search terms, query, and drilldown filters
+  const tripsFilters = React.useMemo(() => {
+    const filters: Array<
+      | { operator: '=' | '<' | '<=' | '>' | '>=', value: number }
+      | { operator: 'range', min: number, max: number }
+      | { operator: 'fuzzy', value: number }
+    > = [];
+    
+    // Check search terms
+    searchTerms.forEach(term => {
+      const { tripsFilter } = parseSpecialFilters(term);
+      if (tripsFilter !== null) {
+        filters.push(tripsFilter);
+      }
+    });
+    
+    // Check current search query
+    if (searchQuery.trim()) {
+      const { tripsFilter } = parseSpecialFilters(searchQuery);
+      if (tripsFilter !== null) {
+        filters.push(tripsFilter);
+      }
+    }
+    
+    // Check drilldown filter
+    if (drilldownFilters.trips?.enabled && drilldownFilters.trips.value) {
+      const value = parseFloat(drilldownFilters.trips.value);
+      if (!isNaN(value)) {
+        filters.push({
+          operator: convertDrilldownOperator(drilldownFilters.trips.operator),
+          value: value,
+        });
+      }
+    }
+    
+    return filters;
+  }, [searchTerms, searchQuery, drilldownFilters.trips, parseSpecialFilters, convertDrilldownOperator]);
+
+  // Extract starts filters from search terms, query, and drilldown filters
+  const startsFilters = React.useMemo(() => {
+    const filters: Array<
+      | { operator: '=' | '<' | '<=' | '>' | '>=', value: number }
+      | { operator: 'range', min: number, max: number }
+      | { operator: 'fuzzy', value: number }
+    > = [];
+    
+    // Check search terms
+    searchTerms.forEach(term => {
+      const { startsFilter } = parseSpecialFilters(term);
+      if (startsFilter !== null) {
+        filters.push(startsFilter);
+      }
+    });
+    
+    // Check current search query
+    if (searchQuery.trim()) {
+      const { startsFilter } = parseSpecialFilters(searchQuery);
+      if (startsFilter !== null) {
+        filters.push(startsFilter);
+      }
+    }
+    
+    // Check drilldown filter
+    if (drilldownFilters.starts?.enabled && drilldownFilters.starts.value) {
+      const value = parseFloat(drilldownFilters.starts.value);
+      if (!isNaN(value)) {
+        filters.push({
+          operator: convertDrilldownOperator(drilldownFilters.starts.operator),
+          value: value,
+        });
+      }
+    }
+    
+    return filters;
+  }, [searchTerms, searchQuery, drilldownFilters.starts, parseSpecialFilters, convertDrilldownOperator]);
+
+  // Compute allowed hours values for fuzzy searches (exact match + 6 closest)
+  const fuzzyHoursValues = React.useMemo(() => {
+    const fuzzyFilters = hoursFilters.filter(f => f.operator === 'fuzzy') as Array<{ operator: 'fuzzy', value: number }>;
+    if (fuzzyFilters.length === 0) return null;
+
+    // Collect all unique hours values from pieces
+    const allHours = new Set<number>();
+    pieces.forEach(piece => {
+      const pieceHours = typeof piece.hours === 'number' ? piece.hours : null;
+      if (pieceHours !== null && !isNaN(pieceHours)) {
+        allHours.add(pieceHours);
+      }
+    });
+
+    // Also collect hours from components
+    componentStats.forEach(component => {
+      const componentHours = typeof component.hours === 'number' ? component.hours : 
+                            typeof component.hours === 'string' && component.hours !== "—" ? 
+                            parseFloat(component.hours) : null;
+      if (componentHours !== null && !isNaN(componentHours)) {
+        allHours.add(componentHours);
+      }
+    });
+
+    // For each fuzzy filter, find exact match + 6 closest values
+    const allowedValues = new Set<number>();
+    
+    fuzzyFilters.forEach(fuzzyFilter => {
+      const targetValue = fuzzyFilter.value;
+      
+      // Add exact match if it exists
+      if (allHours.has(targetValue)) {
+        allowedValues.add(targetValue);
+      }
+      
+      // Find all hours values and sort by distance from target
+      const sortedHours = Array.from(allHours)
+        .map(hours => ({
+          hours,
+          distance: Math.abs(hours - targetValue)
+        }))
+        .sort((a, b) => {
+          // First by distance, then by value (prefer lower values for ties)
+          if (a.distance !== b.distance) {
+            return a.distance - b.distance;
+          }
+          return a.hours - b.hours;
+        });
+      
+      // Take up to 7 values (exact match + 6 closest, or 7 closest if no exact match)
+      const countToTake = 7; // Always take 7 (exact + 6, or 7 closest)
+      sortedHours.slice(0, countToTake).forEach(({ hours }) => {
+        allowedValues.add(hours);
+      });
+    });
+    
+    return allowedValues;
+  }, [hoursFilters, pieces, componentStats]);
+
+  // Compute allowed trips values for fuzzy searches (exact match + 6 closest)
+  const fuzzyTripsValues = React.useMemo(() => {
+    const fuzzyFilters = tripsFilters.filter(f => f.operator === 'fuzzy') as Array<{ operator: 'fuzzy', value: number }>;
+    if (fuzzyFilters.length === 0) return null;
+
+    // Collect all unique trips values from pieces
+    const allTrips = new Set<number>();
+    pieces.forEach(piece => {
+      const pieceTrips = typeof piece.trips === 'number' ? piece.trips : null;
+      if (pieceTrips !== null && !isNaN(pieceTrips)) {
+        allTrips.add(pieceTrips);
+      }
+    });
+
+    // Also collect trips from components
+    componentStats.forEach(component => {
+      const componentTrips = typeof component.trips === 'number' ? component.trips : 
+                            typeof component.trips === 'string' && component.trips !== "—" ? 
+                            parseFloat(component.trips) : null;
+      if (componentTrips !== null && !isNaN(componentTrips)) {
+        allTrips.add(componentTrips);
+      }
+    });
+
+    // For each fuzzy filter, find exact match + 6 closest values
+    const allowedValues = new Set<number>();
+    
+    fuzzyFilters.forEach(fuzzyFilter => {
+      const targetValue = fuzzyFilter.value;
+      
+      // Add exact match if it exists
+      if (allTrips.has(targetValue)) {
+        allowedValues.add(targetValue);
+      }
+      
+      // Find all trips values and sort by distance from target
+      const sortedTrips = Array.from(allTrips)
+        .map(trips => ({
+          trips,
+          distance: Math.abs(trips - targetValue)
+        }))
+        .sort((a, b) => {
+          // First by distance, then by value (prefer lower values for ties)
+          if (a.distance !== b.distance) {
+            return a.distance - b.distance;
+          }
+          return a.trips - b.trips;
+        });
+      
+      // Take up to 7 values (exact match + 6 closest, or 7 closest if no exact match)
+      const countToTake = 7; // Always take 7 (exact + 6, or 7 closest)
+      sortedTrips.slice(0, countToTake).forEach(({ trips }) => {
+        allowedValues.add(trips);
+      });
+    });
+    
+    return allowedValues;
+  }, [tripsFilters, pieces, componentStats]);
+
+  // Compute allowed starts values for fuzzy searches (exact match + 6 closest)
+  const fuzzyStartsValues = React.useMemo(() => {
+    const fuzzyFilters = startsFilters.filter(f => f.operator === 'fuzzy') as Array<{ operator: 'fuzzy', value: number }>;
+    if (fuzzyFilters.length === 0) return null;
+
+    // Collect all unique starts values from pieces
+    const allStarts = new Set<number>();
+    pieces.forEach(piece => {
+      const pieceStarts = typeof piece.starts === 'number' ? piece.starts : null;
+      if (pieceStarts !== null && !isNaN(pieceStarts)) {
+        allStarts.add(pieceStarts);
+      }
+    });
+
+    // Also collect starts from components
+    componentStats.forEach(component => {
+      const componentStarts = typeof component.starts === 'number' ? component.starts : 
+                            typeof component.starts === 'string' && component.starts !== "—" ? 
+                            parseFloat(component.starts) : null;
+      if (componentStarts !== null && !isNaN(componentStarts)) {
+        allStarts.add(componentStarts);
+      }
+    });
+
+    // For each fuzzy filter, find exact match + 6 closest values
+    const allowedValues = new Set<number>();
+    
+    fuzzyFilters.forEach(fuzzyFilter => {
+      const targetValue = fuzzyFilter.value;
+      
+      // Add exact match if it exists
+      if (allStarts.has(targetValue)) {
+        allowedValues.add(targetValue);
+      }
+      
+      // Find all starts values and sort by distance from target
+      const sortedStarts = Array.from(allStarts)
+        .map(starts => ({
+          starts,
+          distance: Math.abs(starts - targetValue)
+        }))
+        .sort((a, b) => {
+          // First by distance, then by value (prefer lower values for ties)
+          if (a.distance !== b.distance) {
+            return a.distance - b.distance;
+          }
+          return a.starts - b.starts;
+        });
+      
+      // Take up to 7 values (exact match + 6 closest, or 7 closest if no exact match)
+      const countToTake = 7; // Always take 7 (exact + 6, or 7 closest)
+      sortedStarts.slice(0, countToTake).forEach(({ starts }) => {
+        allowedValues.add(starts);
+      });
+    });
+    
+    return allowedValues;
+  }, [startsFilters, pieces, componentStats]);
+
+  // Helper function to check if hours value matches any filter
+  const matchesHoursFilter = React.useCallback((hours: number | null): boolean => {
+    if (hours === null || isNaN(hours)) return false;
+    
+    // Check fuzzy filters first (if any)
+    if (fuzzyHoursValues !== null) {
+      if (fuzzyHoursValues.has(hours)) {
+        return true;
+      }
+      // If there are fuzzy filters but this value isn't in the allowed set, return false
+      // (unless there are also non-fuzzy filters that might match)
+      const hasNonFuzzyFilters = hoursFilters.some(f => f.operator !== 'fuzzy');
+      if (!hasNonFuzzyFilters) {
+        return false;
+      }
+    }
+    
+    // Check other filter types
+    return hoursFilters.some(filter => {
+      if (filter.operator === 'fuzzy') return false; // Already handled above
+      
+      switch (filter.operator) {
+        case '=':
+          return hours === filter.value;
+        case '<':
+          return hours < filter.value;
+        case '<=':
+          return hours <= filter.value;
+        case '>':
+          return hours > filter.value;
+        case '>=':
+          return hours >= filter.value;
+        case 'range':
+          return hours >= filter.min && hours <= filter.max;
+        default:
+          return false;
+      }
+    });
+  }, [hoursFilters, fuzzyHoursValues]);
+
+  // Helper function to check if trips value matches any filter
+  const matchesTripsFilter = React.useCallback((trips: number | null): boolean => {
+    if (trips === null || isNaN(trips)) return false;
+    
+    // Check fuzzy filters first (if any)
+    if (fuzzyTripsValues !== null) {
+      if (fuzzyTripsValues.has(trips)) {
+        return true;
+      }
+      // If there are fuzzy filters but this value isn't in the allowed set, return false
+      // (unless there are also non-fuzzy filters that might match)
+      const hasNonFuzzyFilters = tripsFilters.some(f => f.operator !== 'fuzzy');
+      if (!hasNonFuzzyFilters) {
+        return false;
+      }
+    }
+    
+    // Check other filter types
+    return tripsFilters.some(filter => {
+      if (filter.operator === 'fuzzy') return false; // Already handled above
+      
+      switch (filter.operator) {
+        case '=':
+          return trips === filter.value;
+        case '<':
+          return trips < filter.value;
+        case '<=':
+          return trips <= filter.value;
+        case '>':
+          return trips > filter.value;
+        case '>=':
+          return trips >= filter.value;
+        case 'range':
+          return trips >= filter.min && trips <= filter.max;
+        default:
+          return false;
+      }
+    });
+  }, [tripsFilters, fuzzyTripsValues]);
+
+  // Helper function to check if starts value matches any filter
+  const matchesStartsFilter = React.useCallback((starts: number | null): boolean => {
+    if (starts === null || isNaN(starts)) return false;
+    
+    // Check fuzzy filters first (if any)
+    if (fuzzyStartsValues !== null) {
+      if (fuzzyStartsValues.has(starts)) {
+        return true;
+      }
+      // If there are fuzzy filters but this value isn't in the allowed set, return false
+      // (unless there are also non-fuzzy filters that might match)
+      const hasNonFuzzyFilters = startsFilters.some(f => f.operator !== 'fuzzy');
+      if (!hasNonFuzzyFilters) {
+        return false;
+      }
+    }
+    
+    // Check other filter types
+    return startsFilters.some(filter => {
+      if (filter.operator === 'fuzzy') return false; // Already handled above
+      
+      switch (filter.operator) {
+        case '=':
+          return starts === filter.value;
+        case '<':
+          return starts < filter.value;
+        case '<=':
+          return starts <= filter.value;
+        case '>':
+          return starts > filter.value;
+        case '>=':
+          return starts >= filter.value;
+        case 'range':
+          return starts >= filter.min && starts <= filter.max;
+        default:
+          return false;
+      }
+    });
+  }, [startsFilters, fuzzyStartsValues]);
+
   // Filter component stats based on search query and FilterBarContainer search terms
   const filteredComponentStats = React.useMemo(() => {
     let filtered = componentStats;
 
+    // Apply component type filter (from drilldown)
+    if (componentFilters.size > 0) {
+      // If "All" is selected, don't filter (show all)
+      // Otherwise, filter by selected component types
+      if (!componentFilters.has("All")) {
+        filtered = filtered.filter((component) => {
+          const componentType = component.componentType || "";
+          return componentFilters.has(componentType);
+        });
+      }
+    }
+
+    // Apply power plant filter (filter by turbines belonging to the power plant)
+    if (powerPlantTurbineIds) {
+      filtered = filtered.filter((component) => {
+        const componentTurbine = component.turbine || "";
+        return powerPlantTurbineIds.has(componentTurbine);
+      });
+    }
+
+    // Apply turbine filter (overrides power plant filter if both are set)
+    if (turbineId) {
+      filtered = filtered.filter((component) => {
+        // Check if component's turbine matches the selected turbine ID
+        const componentTurbine = component.turbine || "";
+        return componentTurbine === turbineId;
+      });
+    }
+
     // Helper function to check if component matches search criteria
     const matchesSearch = (component: ComponentRow, searchText: string) => {
+      // Remove hours= pattern from search text
+      const { textWithoutFilters } = parseSpecialFilters(searchText);
+      if (!textWithoutFilters) return true; // If only hours/trips/starts filter, skip text matching
+      
       const searchableText = [
         String(component.componentName || ""),
         String(component.componentType || ""),
@@ -468,11 +1028,15 @@ export default function InventoryListPage() {
         String(component.turbine || ""),
       ].join(" ").toLowerCase();
       
-      return searchableText.includes(searchText.toLowerCase());
+      return searchableText.includes(textWithoutFilters.toLowerCase());
     };
 
     // Helper function to check if any piece in a component matches search criteria
     const hasMatchingPiece = (component: ComponentRow, searchText: string) => {
+      // Remove hours= pattern from search text
+      const { textWithoutFilters } = parseSpecialFilters(searchText);
+      if (!textWithoutFilters) return true; // If only hours/trips/starts filter, skip text matching
+      
       const componentName = component.componentName || "";
       const matchingPieces = pieces.filter((piece) => {
         const pieceComponent = piece.component || piece.piece || piece.name || "";
@@ -489,11 +1053,89 @@ export default function InventoryListPage() {
           String(piece.position || ""),
         ].join(" ").toLowerCase();
         
-        return pieceSearchableText.includes(searchText.toLowerCase());
+        return pieceSearchableText.includes(textWithoutFilters.toLowerCase());
       });
       
       return matchingPieces.length > 0;
     };
+
+    // Apply hours filter if present
+    if (hoursFilters.length > 0) {
+      filtered = filtered.filter((component) => {
+        // Check if component hours matches any of the filter values
+        const componentHours = typeof component.hours === 'number' ? component.hours : 
+                               typeof component.hours === 'string' && component.hours !== "—" ? 
+                               parseFloat(component.hours) : null;
+        
+        if (componentHours === null || isNaN(componentHours)) {
+          // If component hours is not available, check if any piece matches
+          const componentName = component.componentName || "";
+          const componentPieces = pieces.filter(p => {
+            const pieceComponent = p.component || p.piece || p.name || "";
+            return pieceComponent === componentName;
+          });
+          
+          return componentPieces.some(piece => {
+            const pieceHours = typeof piece.hours === 'number' ? piece.hours : null;
+            return matchesHoursFilter(pieceHours);
+          });
+        }
+        
+        return matchesHoursFilter(componentHours);
+      });
+    }
+
+    // Apply trips filter if present
+    if (tripsFilters.length > 0) {
+      filtered = filtered.filter((component) => {
+        // Check if component trips matches any of the filter values
+        const componentTrips = typeof component.trips === 'number' ? component.trips : 
+                               typeof component.trips === 'string' && component.trips !== "—" ? 
+                               parseFloat(component.trips) : null;
+        
+        if (componentTrips === null || isNaN(componentTrips)) {
+          // If component trips is not available, check if any piece matches
+          const componentName = component.componentName || "";
+          const componentPieces = pieces.filter(p => {
+            const pieceComponent = p.component || p.piece || p.name || "";
+            return pieceComponent === componentName;
+          });
+          
+          return componentPieces.some(piece => {
+            const pieceTrips = typeof piece.trips === 'number' ? piece.trips : null;
+            return matchesTripsFilter(pieceTrips);
+          });
+        }
+        
+        return matchesTripsFilter(componentTrips);
+      });
+    }
+
+    // Apply starts filter if present
+    if (startsFilters.length > 0) {
+      filtered = filtered.filter((component) => {
+        // Check if component starts matches any of the filter values
+        const componentStarts = typeof component.starts === 'number' ? component.starts : 
+                               typeof component.starts === 'string' && component.starts !== "—" ? 
+                               parseFloat(component.starts) : null;
+        
+        if (componentStarts === null || isNaN(componentStarts)) {
+          // If component starts is not available, check if any piece matches
+          const componentName = component.componentName || "";
+          const componentPieces = pieces.filter(p => {
+            const pieceComponent = p.component || p.piece || p.name || "";
+            return pieceComponent === componentName;
+          });
+          
+          return componentPieces.some(piece => {
+            const pieceStarts = typeof piece.starts === 'number' ? piece.starts : null;
+            return matchesStartsFilter(pieceStarts);
+          });
+        }
+        
+        return matchesStartsFilter(componentStarts);
+      });
+    }
 
     // Apply FilterBarContainer search terms (all terms must match)
     if (searchTerms.length > 0) {
@@ -538,7 +1180,7 @@ export default function InventoryListPage() {
     }
 
     return filtered;
-  }, [componentStats, componentSearchQuery, searchTerms, searchQuery, pieces]);
+  }, [componentStats, componentSearchQuery, searchTerms, searchQuery, pieces, turbineId, powerPlantTurbineIds, componentFilters, hoursFilters, tripsFilters, startsFilters, parseSpecialFilters, matchesHoursFilter, matchesTripsFilter, matchesStartsFilter]);
 
   // Sort component stats based on sortColumn and sortDirection
   const sortedComponentStats = React.useMemo(() => {
@@ -581,8 +1223,40 @@ export default function InventoryListPage() {
   const filteredPieces = React.useMemo(() => {
     let filtered = pieces;
 
+    // Apply component type filter (from drilldown)
+    if (componentFilters.size > 0) {
+      // If "All" is selected, don't filter (show all)
+      // Otherwise, filter by selected component types
+      if (!componentFilters.has("All")) {
+        filtered = filtered.filter((piece) => {
+          const pieceComponentType = piece.componentType || "";
+          return componentFilters.has(pieceComponentType);
+        });
+      }
+    }
+
+    // Apply power plant filter (filter by turbines belonging to the power plant)
+    if (powerPlantTurbineIds) {
+      filtered = filtered.filter((piece) => {
+        const pieceTurbine = piece.turbine || piece.turbineName || piece.turbine_name || "";
+        return powerPlantTurbineIds.has(pieceTurbine);
+      });
+    }
+
+    // Apply turbine filter (overrides power plant filter if both are set)
+    if (turbineId) {
+      filtered = filtered.filter((piece) => {
+        const pieceTurbine = piece.turbine || piece.turbineName || piece.turbine_name || "";
+        return pieceTurbine === turbineId;
+      });
+    }
+
     // Helper function to check if piece matches search criteria
     const matchesSearch = (piece: any, searchText: string) => {
+      // Remove hours= pattern from search text
+      const { textWithoutFilters } = parseSpecialFilters(searchText);
+      if (!textWithoutFilters) return true; // If only hours/trips/starts filter, skip text matching
+      
       const searchableText = [
         String(piece.pn || ""),
         String(piece.sn || piece.serial || ""),
@@ -594,8 +1268,32 @@ export default function InventoryListPage() {
         String(piece.position || ""),
       ].join(" ").toLowerCase();
       
-      return searchableText.includes(searchText.toLowerCase());
+      return searchableText.includes(textWithoutFilters.toLowerCase());
     };
+
+    // Apply hours filter if present
+    if (hoursFilters.length > 0) {
+      filtered = filtered.filter((piece) => {
+        const pieceHours = typeof piece.hours === 'number' ? piece.hours : null;
+        return matchesHoursFilter(pieceHours);
+      });
+    }
+
+    // Apply trips filter if present
+    if (tripsFilters.length > 0) {
+      filtered = filtered.filter((piece) => {
+        const pieceTrips = typeof piece.trips === 'number' ? piece.trips : null;
+        return matchesTripsFilter(pieceTrips);
+      });
+    }
+
+    // Apply starts filter if present
+    if (startsFilters.length > 0) {
+      filtered = filtered.filter((piece) => {
+        const pieceStarts = typeof piece.starts === 'number' ? piece.starts : null;
+        return matchesStartsFilter(pieceStarts);
+      });
+    }
 
     // Apply FilterBarContainer search terms (all terms must match)
     if (searchTerms.length > 0) {
@@ -640,18 +1338,52 @@ export default function InventoryListPage() {
     }
 
     return filtered;
-  }, [pieces, pieceSearchQuery, searchTerms, searchQuery]);
+  }, [pieces, pieceSearchQuery, searchTerms, searchQuery, turbineId, powerPlantTurbineIds, componentFilters, hoursFilters, tripsFilters, startsFilters, parseSpecialFilters, matchesHoursFilter, matchesTripsFilter, matchesStartsFilter]);
 
   // Filter pieces for List view (TreeView) - drills down to only matching pieces
   const filteredPiecesForListView = React.useMemo(() => {
-    // If no search, return all pieces
+    let filtered = pieces;
+
+    // Apply component type filter (from drilldown)
+    if (componentFilters.size > 0) {
+      // If "All" is selected, don't filter (show all)
+      // Otherwise, filter by selected component types
+      if (!componentFilters.has("All")) {
+        filtered = filtered.filter((piece) => {
+          const pieceComponentType = piece.componentType || "";
+          return componentFilters.has(pieceComponentType);
+        });
+      }
+    }
+
+    // Apply power plant filter (filter by turbines belonging to the power plant)
+    if (powerPlantTurbineIds) {
+      filtered = filtered.filter((piece) => {
+        const pieceTurbine = piece.turbine || piece.turbineName || piece.turbine_name || "";
+        return powerPlantTurbineIds.has(pieceTurbine);
+      });
+    }
+
+    // Apply turbine filter (overrides power plant filter if both are set)
+    if (turbineId) {
+      filtered = filtered.filter((piece) => {
+        const pieceTurbine = piece.turbine || piece.turbineName || piece.turbine_name || "";
+        return pieceTurbine === turbineId;
+      });
+    }
+
+    // If no search, return filtered pieces (or all if no turbine filter)
     const hasSearch = (searchTerms.length > 0) || (searchQuery.trim().length > 0);
     if (!hasSearch) {
-      return pieces;
+      return filtered;
     }
 
     // Helper function to check if piece matches search
     const pieceMatchesSearch = (piece: any, searchText: string) => {
+      // Remove hours= pattern from search text
+      const { textWithoutFilters } = parseSpecialFilters(searchText);
+      if (!textWithoutFilters) return true; // If only hours/trips/starts filter, skip text matching
+      
       const searchableText = [
         String(piece.pn || ""),
         String(piece.sn || piece.serial || ""),
@@ -663,15 +1395,39 @@ export default function InventoryListPage() {
         String(piece.position || ""),
       ].join(" ").toLowerCase();
       
-      return searchableText.includes(searchText.toLowerCase());
+      return searchableText.includes(textWithoutFilters.toLowerCase());
     };
+
+    // Apply hours filter if present
+    if (hoursFilters.length > 0) {
+      filtered = filtered.filter((piece) => {
+        const pieceHours = typeof piece.hours === 'number' ? piece.hours : null;
+        return matchesHoursFilter(pieceHours);
+      });
+    }
+
+    // Apply trips filter if present
+    if (tripsFilters.length > 0) {
+      filtered = filtered.filter((piece) => {
+        const pieceTrips = typeof piece.trips === 'number' ? piece.trips : null;
+        return matchesTripsFilter(pieceTrips);
+      });
+    }
+
+    // Apply starts filter if present
+    if (startsFilters.length > 0) {
+      filtered = filtered.filter((piece) => {
+        const pieceStarts = typeof piece.starts === 'number' ? piece.starts : null;
+        return matchesStartsFilter(pieceStarts);
+      });
+    }
 
     // Find all matching pieces
     const matchingPieces = new Set<string>();
 
     // Check search terms (bubbles)
     searchTerms.forEach(term => {
-      pieces.forEach(piece => {
+      filtered.forEach(piece => {
         if (pieceMatchesSearch(piece, term)) {
           const pieceId = piece.sn || piece.id || String(piece.pn);
           matchingPieces.add(pieceId);
@@ -681,7 +1437,7 @@ export default function InventoryListPage() {
 
     // Check current search query
     if (searchQuery.trim()) {
-      pieces.forEach(piece => {
+      filtered.forEach(piece => {
         if (pieceMatchesSearch(piece, searchQuery)) {
           const pieceId = piece.sn || piece.id || String(piece.pn);
           matchingPieces.add(pieceId);
@@ -695,13 +1451,13 @@ export default function InventoryListPage() {
     }
 
     // Only include the matching pieces themselves (drill down to just the piece)
-    const filteredPieces = pieces.filter(piece => {
+    const resultPieces = filtered.filter(piece => {
       const pieceId = piece.sn || piece.id || String(piece.pn);
       return matchingPieces.has(pieceId);
     });
 
-    return filteredPieces;
-  }, [pieces, searchTerms, searchQuery]);
+    return resultPieces;
+  }, [pieces, searchTerms, searchQuery, turbineId, powerPlantTurbineIds, componentFilters, hoursFilters, tripsFilters, startsFilters, parseSpecialFilters, matchesHoursFilter, matchesTripsFilter, matchesStartsFilter]);
 
   // Sort pieces based on pieceSortColumn and pieceSortDirection
   const sortedPieces = React.useMemo(() => {
@@ -827,7 +1583,7 @@ export default function InventoryListPage() {
   // Reset page when switching view modes, sorting, or search
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [viewMode, sortColumn, sortDirection, pieceSortColumn, pieceSortDirection, componentSearchQuery, pieceSearchQuery, searchTerms, searchQuery]);
+  }, [viewMode, sortColumn, sortDirection, pieceSortColumn, pieceSortDirection, componentSearchQuery, pieceSearchQuery, searchTerms, searchQuery, turbineId, powerPlantId, componentFilters]);
 
   // Pagination logic - only apply pagination to pieces and components views
   const currentData = viewMode === "pieces" ? sortedPieces : 

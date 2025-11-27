@@ -8,19 +8,13 @@ import DrilldownCard from "@/components/DrilldownCard";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useFilter } from "./FilterContext";
+import { MOCK_TURBINES } from "@/lib/matrix/mock";
+import { MOCK_SITES } from "@/app/sitesAndTurbines/page";
 
 export default function FilterbarContainer() {
     // Replace DB Query later
-    const powerPlants = [
-        { id: "pp-1", name: "Riverbend" },
-        { id: "pp-2", name: "Mountainview" },
-        { id: "pp-3", name: "Lakeside" },
-    ];
-    const turbines = [
-        { id: "tb-1", name: "Turbine A" },
-        { id: "tb-2", name: "Turbine B" },
-        { id: "tb-3", name: "Turbine C" },
-    ];
+    const powerPlants = MOCK_SITES.map((site) => ({ id: site.id, name: site.name }));
+    const turbines = MOCK_TURBINES.map((t) => ({ id: t.id, name: t.id }));
 
     const [fitlers, setFilters] = useState<FilterState>({
         powerPlantId: null,
@@ -31,7 +25,27 @@ export default function FilterbarContainer() {
     const [isOpen, setIsOpen] = useState(false);
     const handleToggle = () => setIsOpen((prev) => !prev);
 
-    const { searchTerms, setSearchTerms, searchQuery, setSearchQuery } = useFilter();
+    const { 
+        searchTerms, 
+        setSearchTerms, 
+        searchQuery, 
+        setSearchQuery,
+        turbineId,
+        setTurbineId,
+        powerPlantId,
+        setPowerPlantId,
+        drilldownFilters,
+        setDrilldownFilters,
+        componentFilters,
+        setComponentFilters,
+    } = useFilter();
+
+    // Sync local filter state with context when filter changes
+    const handleFilterChange = (next: FilterState) => {
+        setFilters(next);
+        setTurbineId(next.turbineId);
+        setPowerPlantId(next.powerPlantId);
+    };
 
     const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === "Enter" && searchQuery.trim()) {
@@ -45,17 +59,56 @@ export default function FilterbarContainer() {
     };
 
     const removeSearchTerm = (term: string) => {
+        // Remove from search terms
         setSearchTerms(searchTerms.filter((t) => t !== term));
+        
+        // Check if this is a drilldown filter (hours/trips/starts with operator)
+        // Pattern: (hours|trips|starts)(>=|<=|>|<|=)(\d+)
+        const drilldownPattern = /^(hours|trips|starts)(>=|<=|>|<|=)(\d+(?:\.\d+)?)$/i;
+        const match = term.match(drilldownPattern);
+        
+        if (match) {
+            const [, filterKey, operatorStr, valueStr] = match;
+            const key = filterKey.toLowerCase() as "hours" | "trips" | "starts";
+            
+            // Convert search operator to drilldown operator
+            let drilldownOp: ">" | "<" | "=" | "≥" | "≤" = "=";
+            if (operatorStr === ">") drilldownOp = ">";
+            else if (operatorStr === "<") drilldownOp = "<";
+            else if (operatorStr === "=") drilldownOp = "=";
+            else if (operatorStr === ">=") drilldownOp = "≥";
+            else if (operatorStr === "<=") drilldownOp = "≤";
+            
+            // Check if the current drilldown filter matches this term
+            const currentFilter = drilldownFilters[key];
+            if (currentFilter?.enabled && 
+                currentFilter.operator === drilldownOp && 
+                currentFilter.value === valueStr) {
+                // Disable the matching drilldown filter
+                setDrilldownFilters(prev => ({
+                    ...prev,
+                    [key]: null,
+                }));
+            }
+        }
+    };
+
+    const removeComponentFilter = (componentType: string) => {
+        setComponentFilters(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(componentType);
+            return newSet;
+        });
     };
 
     return (
-        <div className="border-b bg-white/70 p-2 dark:bg-zinc-900/70">
+        <div className="sticky top-0 z-10 border-b bg-white/70 p-2 dark:bg-zinc-900/70">
             <div className="mx-auto max-w-6xl">
                 <FilterBar
                     powerPlants={powerPlants}
                     turbines={turbines}
                     value={fitlers}
-                    onChange={setFilters}
+                    onChange={handleFilterChange}
                     onDrilldown={handleToggle}
                     isOpen={isOpen}
                     onAddFilter={() => alert("Feature Coming Soon...")}
@@ -63,7 +116,7 @@ export default function FilterbarContainer() {
 
                 {isOpen && (
                     <div id="drilldown-panel" className="mt-3">
-                        <DrilldownCard />
+                        <DrilldownCard onClose={() => setIsOpen(false)} />
                     </div>
                 )}
 
@@ -80,8 +133,9 @@ export default function FilterbarContainer() {
                             className="w-full rounded-xl bg-white/70 pl-9 dark:bg-zinc-900/70"
                         />
                     </div>
-                    {searchTerms.length > 0 && (
+                    {(searchTerms.length > 0 || componentFilters.size > 0) && (
                         <div className="mt-2 flex flex-wrap gap-2">
+                            {/* Search term badges */}
                             {searchTerms.map((term) => (
                                 <Badge
                                     key={term}
@@ -98,6 +152,25 @@ export default function FilterbarContainer() {
                                     </button>
                                 </Badge>
                             ))}
+                            {/* Component filter badges */}
+                            {Array.from(componentFilters)
+                                .filter(componentType => componentType !== "All") // Don't show "All" as a badge
+                                .map((componentType) => (
+                                    <Badge
+                                        key={componentType}
+                                        variant="secondary"
+                                        className="flex items-center gap-1.5 rounded-xl px-3 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                                    >
+                                        <span>{componentType}</span>
+                                        <button
+                                            onClick={() => removeComponentFilter(componentType)}
+                                            className="hover:bg-blue-200 dark:hover:bg-blue-800 rounded-full p-0.5 transition-colors"
+                                            aria-label={`Remove ${componentType} filter`}
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </Badge>
+                                ))}
                         </div>
                     )}
                 </div>
