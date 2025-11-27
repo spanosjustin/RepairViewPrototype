@@ -287,6 +287,7 @@ function PiecesTable({
       <table className="w-full text-sm" style={style}>
         <thead className="text-left">
           <tr className="border-b">
+            <th className="py-2 pr-3">PN</th>
             <th className="py-2 pr-3">Piece</th>
             <th className="py-2 pr-3">SN</th>
             <th className="py-2 pr-3">Hours</th>
@@ -324,6 +325,9 @@ function PiecesTable({
                   className={`${firstCellBase} before:bg-[var(--dot-color)] before:shadow-[0_0_0_2px_var(--dot-ring)]`}
                   data-piece-id={it.id ?? it.sn ?? it.piece ?? it.name}
                 >
+                  {it.pn ?? "—"}
+                </td>
+                <td className="py-2 pr-3">
                   <div className="flex items-center gap-2">
                     <span>{it.piece ?? it.name ?? "—"}</span>
                     {it.componentType && it.componentType !== "—" && (
