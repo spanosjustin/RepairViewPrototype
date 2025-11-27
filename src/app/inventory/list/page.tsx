@@ -463,6 +463,83 @@ export default function InventoryListPage() {
     [pieces, dbComponents]
   );
 
+  // Helper function to parse special search patterns like "hours=123", "hours<5000", "hours>=1000", "hours=1000-5000"
+  const parseSpecialFilters = React.useCallback((searchText: string) => {
+    // First check for range pattern: hours=1000-5000
+    const rangeMatch = searchText.match(/hours\s*=\s*(\d+)\s*-\s*(\d+)/i);
+    let hoursFilter = null;
+    
+    if (rangeMatch) {
+      const min = parseInt(rangeMatch[1], 10);
+      const max = parseInt(rangeMatch[2], 10);
+      hoursFilter = { operator: 'range' as const, min, max };
+    } else {
+      // Match hours with operators: =, <, <=, >, >=
+      const hoursMatch = searchText.match(/hours\s*(>=|<=|>|<|=)\s*(\d+)/i);
+      if (hoursMatch) {
+        const operator = hoursMatch[1] as '=' | '<' | '<=' | '>' | '>=';
+        const value = parseInt(hoursMatch[2], 10);
+        hoursFilter = { operator, value };
+      }
+    }
+    
+    // Remove hours filter pattern from text (both range and operator patterns)
+    const textWithoutHours = searchText
+      .replace(/hours\s*=\s*\d+\s*-\s*\d+/gi, '')
+      .replace(/hours\s*(>=|<=|>|<|=)\s*\d+/gi, '')
+      .trim();
+    return { hoursFilter, textWithoutHours };
+  }, []);
+
+  // Extract hours filters from search terms and query
+  const hoursFilters = React.useMemo(() => {
+    const filters: Array<
+      | { operator: '=' | '<' | '<=' | '>' | '>=', value: number }
+      | { operator: 'range', min: number, max: number }
+    > = [];
+    
+    // Check search terms
+    searchTerms.forEach(term => {
+      const { hoursFilter } = parseSpecialFilters(term);
+      if (hoursFilter !== null) {
+        filters.push(hoursFilter);
+      }
+    });
+    
+    // Check current search query
+    if (searchQuery.trim()) {
+      const { hoursFilter } = parseSpecialFilters(searchQuery);
+      if (hoursFilter !== null) {
+        filters.push(hoursFilter);
+      }
+    }
+    
+    return filters;
+  }, [searchTerms, searchQuery, parseSpecialFilters]);
+
+  // Helper function to check if hours value matches any filter
+  const matchesHoursFilter = React.useCallback((hours: number | null): boolean => {
+    if (hours === null || isNaN(hours)) return false;
+    return hoursFilters.some(filter => {
+      switch (filter.operator) {
+        case '=':
+          return hours === filter.value;
+        case '<':
+          return hours < filter.value;
+        case '<=':
+          return hours <= filter.value;
+        case '>':
+          return hours > filter.value;
+        case '>=':
+          return hours >= filter.value;
+        case 'range':
+          return hours >= filter.min && hours <= filter.max;
+        default:
+          return false;
+      }
+    });
+  }, [hoursFilters]);
+
   // Filter component stats based on search query and FilterBarContainer search terms
   const filteredComponentStats = React.useMemo(() => {
     let filtered = componentStats;
@@ -486,6 +563,10 @@ export default function InventoryListPage() {
 
     // Helper function to check if component matches search criteria
     const matchesSearch = (component: ComponentRow, searchText: string) => {
+      // Remove hours= pattern from search text
+      const { textWithoutHours } = parseSpecialFilters(searchText);
+      if (!textWithoutHours) return true; // If only hours filter, skip text matching
+      
       const searchableText = [
         String(component.componentName || ""),
         String(component.componentType || ""),
@@ -494,11 +575,15 @@ export default function InventoryListPage() {
         String(component.turbine || ""),
       ].join(" ").toLowerCase();
       
-      return searchableText.includes(searchText.toLowerCase());
+      return searchableText.includes(textWithoutHours.toLowerCase());
     };
 
     // Helper function to check if any piece in a component matches search criteria
     const hasMatchingPiece = (component: ComponentRow, searchText: string) => {
+      // Remove hours= pattern from search text
+      const { textWithoutHours } = parseSpecialFilters(searchText);
+      if (!textWithoutHours) return true; // If only hours filter, skip text matching
+      
       const componentName = component.componentName || "";
       const matchingPieces = pieces.filter((piece) => {
         const pieceComponent = piece.component || piece.piece || piece.name || "";
@@ -515,11 +600,37 @@ export default function InventoryListPage() {
           String(piece.position || ""),
         ].join(" ").toLowerCase();
         
-        return pieceSearchableText.includes(searchText.toLowerCase());
+        return pieceSearchableText.includes(textWithoutHours.toLowerCase());
       });
       
       return matchingPieces.length > 0;
     };
+
+    // Apply hours filter if present
+    if (hoursFilters.length > 0) {
+      filtered = filtered.filter((component) => {
+        // Check if component hours matches any of the filter values
+        const componentHours = typeof component.hours === 'number' ? component.hours : 
+                               typeof component.hours === 'string' && component.hours !== "—" ? 
+                               parseFloat(component.hours) : null;
+        
+        if (componentHours === null || isNaN(componentHours)) {
+          // If component hours is not available, check if any piece matches
+          const componentName = component.componentName || "";
+          const componentPieces = pieces.filter(p => {
+            const pieceComponent = p.component || p.piece || p.name || "";
+            return pieceComponent === componentName;
+          });
+          
+          return componentPieces.some(piece => {
+            const pieceHours = typeof piece.hours === 'number' ? piece.hours : null;
+            return matchesHoursFilter(pieceHours);
+          });
+        }
+        
+        return matchesHoursFilter(componentHours);
+      });
+    }
 
     // Apply FilterBarContainer search terms (all terms must match)
     if (searchTerms.length > 0) {
@@ -564,7 +675,7 @@ export default function InventoryListPage() {
     }
 
     return filtered;
-  }, [componentStats, componentSearchQuery, searchTerms, searchQuery, pieces, turbineId, powerPlantTurbineIds]);
+  }, [componentStats, componentSearchQuery, searchTerms, searchQuery, pieces, turbineId, powerPlantTurbineIds, hoursFilters, parseSpecialFilters, matchesHoursFilter]);
 
   // Sort component stats based on sortColumn and sortDirection
   const sortedComponentStats = React.useMemo(() => {
@@ -625,6 +736,10 @@ export default function InventoryListPage() {
 
     // Helper function to check if piece matches search criteria
     const matchesSearch = (piece: any, searchText: string) => {
+      // Remove hours= pattern from search text
+      const { textWithoutHours } = parseSpecialFilters(searchText);
+      if (!textWithoutHours) return true; // If only hours filter, skip text matching
+      
       const searchableText = [
         String(piece.pn || ""),
         String(piece.sn || piece.serial || ""),
@@ -636,8 +751,16 @@ export default function InventoryListPage() {
         String(piece.position || ""),
       ].join(" ").toLowerCase();
       
-      return searchableText.includes(searchText.toLowerCase());
+      return searchableText.includes(textWithoutHours.toLowerCase());
     };
+
+    // Apply hours filter if present
+    if (hoursFilters.length > 0) {
+      filtered = filtered.filter((piece) => {
+        const pieceHours = typeof piece.hours === 'number' ? piece.hours : null;
+        return matchesHoursFilter(pieceHours);
+      });
+    }
 
     // Apply FilterBarContainer search terms (all terms must match)
     if (searchTerms.length > 0) {
@@ -682,7 +805,7 @@ export default function InventoryListPage() {
     }
 
     return filtered;
-  }, [pieces, pieceSearchQuery, searchTerms, searchQuery, turbineId, powerPlantTurbineIds]);
+  }, [pieces, pieceSearchQuery, searchTerms, searchQuery, turbineId, powerPlantTurbineIds, hoursFilters, parseSpecialFilters, matchesHoursFilter]);
 
   // Filter pieces for List view (TreeView) - drills down to only matching pieces
   const filteredPiecesForListView = React.useMemo(() => {
@@ -712,6 +835,10 @@ export default function InventoryListPage() {
 
     // Helper function to check if piece matches search
     const pieceMatchesSearch = (piece: any, searchText: string) => {
+      // Remove hours= pattern from search text
+      const { textWithoutHours } = parseSpecialFilters(searchText);
+      if (!textWithoutHours) return true; // If only hours filter, skip text matching
+      
       const searchableText = [
         String(piece.pn || ""),
         String(piece.sn || piece.serial || ""),
@@ -723,8 +850,16 @@ export default function InventoryListPage() {
         String(piece.position || ""),
       ].join(" ").toLowerCase();
       
-      return searchableText.includes(searchText.toLowerCase());
+      return searchableText.includes(textWithoutHours.toLowerCase());
     };
+
+    // Apply hours filter if present
+    if (hoursFilters.length > 0) {
+      filtered = filtered.filter((piece) => {
+        const pieceHours = typeof piece.hours === 'number' ? piece.hours : null;
+        return matchesHoursFilter(pieceHours);
+      });
+    }
 
     // Find all matching pieces
     const matchingPieces = new Set<string>();
@@ -761,7 +896,7 @@ export default function InventoryListPage() {
     });
 
     return resultPieces;
-  }, [pieces, searchTerms, searchQuery, turbineId, powerPlantTurbineIds]);
+  }, [pieces, searchTerms, searchQuery, turbineId, powerPlantTurbineIds, hoursFilters, parseSpecialFilters, matchesHoursFilter]);
 
   // Sort pieces based on pieceSortColumn and pieceSortDirection
   const sortedPieces = React.useMemo(() => {
