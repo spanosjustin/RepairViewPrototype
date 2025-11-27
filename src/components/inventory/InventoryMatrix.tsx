@@ -2,6 +2,7 @@
 "use client";
 
 import * as React from "react";
+import { ArrowUp, ArrowDown } from "lucide-react";
 import { useStatusColors } from "@/hooks/useStatusColors";
 import { getTone, getColorName, getBadgeClasses, getRowStripeClass, getCellBackgroundClasses } from "@/lib/settings/colorMapper";
 
@@ -22,6 +23,9 @@ type ComponentRow = {
   id?: string | number; // if you have ids, great
 };
 
+type SortDirection = "asc" | "desc" | null;
+type SortableColumn = keyof ComponentRow;
+
 type InventoryMatrixProps =
   | {
       dataset: "pieces";
@@ -32,6 +36,9 @@ type InventoryMatrixProps =
       dataset: "components";
       componentStats: ComponentRow[];
       onSelectComponent?: (row: ComponentRow) => void;
+      sortColumn?: SortableColumn;
+      sortDirection?: SortDirection;
+      onSort?: (column: SortableColumn) => void;
     };
 
 /* -------------------- Status/State color logic -------------------- */
@@ -57,15 +64,80 @@ const firstCellBase =
   "before:content-[''] before:absolute before:left-2 before:top-1/2 before:-translate-y-1/2 " +
   "before:h-2.5 before:w-2.5 before:rounded-full before:pointer-events-none";
 
+/* -------------------- Sortable Header Component -------------------- */
+function SortableHeader({
+  column,
+  label,
+  sortColumn,
+  sortDirection,
+  onSort,
+}: {
+  column: SortableColumn;
+  label: string;
+  sortColumn?: SortableColumn;
+  sortDirection?: SortDirection;
+  onSort?: (column: SortableColumn) => void;
+}) {
+  const isActive = sortColumn === column;
+  const canSort = !!onSort;
+
+  const handleClick = () => {
+    if (canSort) {
+      onSort(column);
+    }
+  };
+
+  return (
+    <th
+      className={cx(
+        "py-2 pr-3",
+        canSort && "cursor-pointer hover:bg-muted/50 select-none",
+        isActive && "bg-muted/30"
+      )}
+      onClick={handleClick}
+    >
+      <div className="flex items-center gap-1.5">
+        <span>{label}</span>
+        {canSort && (
+          <div className="flex flex-col items-center">
+            <ArrowUp
+              className={cx(
+                "h-3 w-3",
+                isActive && sortDirection === "asc"
+                  ? "text-foreground"
+                  : "text-muted-foreground opacity-40"
+              )}
+            />
+            <ArrowDown
+              className={cx(
+                "h-3 w-3 -mt-1",
+                isActive && sortDirection === "desc"
+                  ? "text-foreground"
+                  : "text-muted-foreground opacity-40"
+              )}
+            />
+          </div>
+        )}
+      </div>
+    </th>
+  );
+}
+
 /* -------------------- Components View -------------------- */
 function ComponentsTable({
   rows,
   onSelect,
   colorSettings = [],
+  sortColumn,
+  sortDirection,
+  onSort,
 }: {
   rows: ComponentRow[];
   onSelect?: (row: ComponentRow) => void;
   colorSettings?: any[];
+  sortColumn?: SortableColumn;
+  sortDirection?: SortDirection;
+  onSort?: (column: SortableColumn) => void;
 }) {
   // dataset color vars for the pseudo dot
   const style = {
@@ -79,14 +151,62 @@ function ComponentsTable({
       <table className="w-full text-sm" style={style}>
         <thead className="text-left">
           <tr className="border-b">
-            <th className="py-2 pr-3">Component Type</th>
-            <th className="py-2 pr-3">Component Name</th>
-            <th className="py-2 pr-3">Hours</th>
-            <th className="py-2 pr-3">Trips</th>
-            <th className="py-2 pr-3">Starts</th>
-            <th className="py-2 pr-3">Status</th>
-            <th className="py-2 pr-3">State</th>
-            <th className="py-2 pr-3">Turbine</th>
+            <SortableHeader
+              column="componentType"
+              label="Component Type"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+            />
+            <SortableHeader
+              column="componentName"
+              label="Component Name"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+            />
+            <SortableHeader
+              column="hours"
+              label="Hours"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+            />
+            <SortableHeader
+              column="trips"
+              label="Trips"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+            />
+            <SortableHeader
+              column="starts"
+              label="Starts"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+            />
+            <SortableHeader
+              column="status"
+              label="Status"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+            />
+            <SortableHeader
+              column="state"
+              label="State"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+            />
+            <SortableHeader
+              column="turbine"
+              label="Turbine"
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={onSort}
+            />
           </tr>
         </thead>
         <tbody>
@@ -118,7 +238,14 @@ function ComponentsTable({
                   >
                     {r.componentType}
                   </td>
-                  <td className="py-2 pr-3">{r.componentName}</td>
+                  <td className="py-2 pr-3">
+                    <div className="flex items-center gap-2">
+                      <span>{r.componentName}</span>
+                      {r.componentType && r.componentType !== "—" && (
+                        <span className="text-xs text-muted-foreground">({r.componentType})</span>
+                      )}
+                    </div>
+                  </td>
                   <td className="py-2 pr-3">{r.hours}</td>
                   <td className="py-2 pr-3">{r.trips}</td>
                   <td className="py-2 pr-3">{r.starts}</td>
@@ -197,7 +324,12 @@ function PiecesTable({
                   className={`${firstCellBase} before:bg-[var(--dot-color)] before:shadow-[0_0_0_2px_var(--dot-ring)]`}
                   data-piece-id={it.id ?? it.sn ?? it.piece ?? it.name}
                 >
-                  {it.piece ?? it.name ?? "—"}
+                  <div className="flex items-center gap-2">
+                    <span>{it.piece ?? it.name ?? "—"}</span>
+                    {it.componentType && it.componentType !== "—" && (
+                      <span className="text-xs text-muted-foreground">({it.componentType})</span>
+                    )}
+                  </div>
                 </td>
                 <td className="py-2 pr-3">{it.sn ?? it.serial ?? "—"}</td>
                 <td className="py-2 pr-3">{it.hours ?? "—"}</td>
@@ -230,6 +362,9 @@ export default function InventoryMatrix(props: InventoryMatrixProps) {
         rows={props.componentStats ?? []}
         onSelect={props.onSelectComponent}
         colorSettings={colorSettings}
+        sortColumn={props.sortColumn}
+        sortDirection={props.sortDirection}
+        onSort={props.onSort}
       />
     );
   }

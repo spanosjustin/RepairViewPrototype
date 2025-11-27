@@ -123,13 +123,13 @@ const T1_STATS: StatRow[] = makeStatRows(
 
 const T1_PIECES: PieceRow[] = makePieceRows(
   [
-    { piece: "Liner Caps", position: "Comb", condition: "OK", setIn: "2024-11-03", setOut: "-", notes: "" },
+    { piece: "Liner Caps", position: "Comb", condition: "OK", setIn: "2024-11-03", setOut: "-", notes: "Standard installation, proper clearance verified. Operating within normal temperature range." },
     { piece: "Comb Liners", position: "Comb", condition: "Monitor", setIn: "2025-02-18", setOut: "-", notes: "Minor scoring" },
-    { piece: "Tran PRC", position: "Tran", condition: "OK", setIn: "2024-08-22", setOut: "-", notes: "" },
-    { piece: "S1N", position: "S1N", condition: "OK", setIn: "2025-04-10", setOut: "-", notes: "" },
+    { piece: "Tran PRC", position: "Tran", condition: "OK", setIn: "2024-08-22", setOut: "-", notes: "Pressure regulation stable. Calibration checked during last inspection. No drift detected." },
+    { piece: "S1N", position: "S1N", condition: "OK", setIn: "2025-04-10", setOut: "-", notes: "Newly installed stage 1 nozzle. Airfoil geometry within spec. Flow characteristics nominal." },
     { piece: "S2N", position: "S2N", condition: "Replace Soon", setIn: "2024-06-12", setOut: "-", notes: "Edge wear" },
-    { piece: "S3N", position: "S3N", condition: "Monitor", setIn: "2024-09-01", setOut: "-", notes: "" },
-    { piece: "Rotor", position: "Rotor", condition: "OK", setIn: "2023-12-05", setOut: "-", notes: "" },
+    { piece: "S3N", position: "S3N", condition: "Monitor", setIn: "2024-09-01", setOut: "-", notes: "Stage 3 nozzle showing typical wear pattern. Efficiency remains acceptable. Next inspection scheduled." },
+    { piece: "Rotor", position: "Rotor", condition: "OK", setIn: "2023-12-05", setOut: "-", notes: "Rotor balance verified. Blade attachment integrity confirmed. Vibration levels within tolerance." },
   ],
   "T1"
 );
@@ -147,11 +147,11 @@ const T2_PIECES: PieceRow[] = makePieceRows(
   [
     { piece: "Liner Caps", position: "Comb", condition: "Monitor", setIn: "2024-10-19", setOut: "-", notes: "Hot spots" },
     { piece: "Comb Liners", position: "Comb", condition: "Replace Now", setIn: "2024-03-07", setOut: "-", notes: "Cracks visible" },
-    { piece: "Tran PRC", position: "Tran", condition: "OK", setIn: "2023-11-30", setOut: "-", notes: "" },
-    { piece: "S1S", position: "S1S", condition: "OK", setIn: "2025-05-21", setOut: "-", notes: "" },
+    { piece: "Tran PRC", position: "Tran", condition: "OK", setIn: "2023-11-30", setOut: "-", notes: "Long-service pressure control valve. Response time consistent. Maintenance history shows regular calibration." },
+    { piece: "S1S", position: "S1S", condition: "OK", setIn: "2025-05-21", setOut: "-", notes: "Recent stage 1 stator installation. Cooling passages clear. Thermal barrier coating intact." },
     { piece: "S2S", position: "S2S", condition: "Monitor", setIn: "2024-07-14", setOut: "-", notes: "Vibration trend" },
-    { piece: "S3S", position: "S3S", condition: "OK", setIn: "2024-12-02", setOut: "-", notes: "" },
-    { piece: "Rotor", position: "Rotor", condition: "OK", setIn: "2023-08-09", setOut: "-", notes: "" },
+    { piece: "S3S", position: "S3S", condition: "OK", setIn: "2024-12-02", setOut: "-", notes: "Stage 3 stator performing well. No erosion concerns. Blade count verified during last inspection." },
+    { piece: "Rotor", position: "Rotor", condition: "OK", setIn: "2023-08-09", setOut: "-", notes: "Rotor assembly in good condition. Shaft alignment verified. Bearing clearances within specification." },
   ],
   "T2"
 );
@@ -167,13 +167,13 @@ const T3_STATS: StatRow[] = makeStatRows(
 
 const T3_PIECES: PieceRow[] = makePieceRows(
   [
-    { piece: "Liner Caps", position: "Comb", condition: "OK", setIn: "2025-06-01", setOut: "-", notes: "" },
-    { piece: "Comb Liners", position: "Comb", condition: "OK", setIn: "2025-06-01", setOut: "-", notes: "" },
-    { piece: "Tran PRC", position: "Tran", condition: "OK", setIn: "2025-06-01", setOut: "-", notes: "" },
-    { piece: "S1B", position: "S1B", condition: "OK", setIn: "2025-06-01", setOut: "-", notes: "" },
-    { piece: "S2B", position: "S2B", condition: "OK", setIn: "2025-06-01", setOut: "-", notes: "" },
-    { piece: "S3B", position: "S3B", condition: "OK", setIn: "2025-06-01", setOut: "-", notes: "" },
-    { piece: "Rotor", position: "Rotor", condition: "OK", setIn: "2025-06-01", setOut: "-", notes: "" },
+    { piece: "Liner Caps", position: "Comb", condition: "OK", setIn: "2025-06-01", setOut: "-", notes: "Fresh installation post-overhaul. All caps properly seated and torqued. Thermal expansion clearance confirmed." },
+    { piece: "Comb Liners", position: "Comb", condition: "OK", setIn: "2025-06-01", setOut: "-", notes: "New combustor liners installed. Coating application verified. No hot spots detected during initial run." },
+    { piece: "Tran PRC", position: "Tran", condition: "OK", setIn: "2025-06-01", setOut: "-", notes: "Pressure control valve replaced during overhaul. Factory calibration certified. Response characteristics nominal." },
+    { piece: "S1B", position: "S1B", condition: "OK", setIn: "2025-06-01", setOut: "-", notes: "Stage 1 blade set newly installed. Airfoil profiles within tolerance. Root attachment integrity verified." },
+    { piece: "S2B", position: "S2B", condition: "OK", setIn: "2025-06-01", setOut: "-", notes: "Stage 2 blades fresh from overhaul. Cooling holes inspected and clear. Tip clearance set to specification." },
+    { piece: "S3B", position: "S3B", condition: "OK", setIn: "2025-06-01", setOut: "-", notes: "Stage 3 blade assembly replaced. Material certification on file. Operating hours reset to zero." },
+    { piece: "Rotor", position: "Rotor", condition: "OK", setIn: "2025-06-01", setOut: "-", notes: "Complete rotor rebuild completed. Dynamic balance performed. All blade attachments torqued to spec. Service life reset." },
   ],
   "T3"
 );

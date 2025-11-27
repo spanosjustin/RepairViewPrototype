@@ -33,34 +33,44 @@ interface TreeViewProps {
 
 // Transform flat inventory data into hierarchical tree structure
 function buildTreeData(items: InventoryItem[]): TurbineNode[] {
-  // Group by component first, then by turbine (assuming all items are from same turbine for now)
-  const componentMap = new Map<string, InventoryItem[]>();
+  // Group by turbine first, then by component
+  const turbineMap = new Map<string, Map<string, InventoryItem[]>>();
   
   items.forEach(item => {
+    const turbineName = item.turbine || "Unknown Turbine";
     const componentName = item.component;
+    
+    if (!turbineMap.has(turbineName)) {
+      turbineMap.set(turbineName, new Map());
+    }
+    
+    const componentMap = turbineMap.get(turbineName)!;
     if (!componentMap.has(componentName)) {
       componentMap.set(componentName, []);
     }
+    
     componentMap.get(componentName)!.push(item);
   });
 
-  // Create component nodes
-  const components: ComponentNode[] = Array.from(componentMap.entries()).map(([componentName, pieces]) => ({
-    id: `component-${componentName}`,
-    name: componentName,
-    pieces: pieces.map(piece => ({
-      id: `piece-${piece.sn}`,
-      item: piece
-    }))
-  }));
+  // Create turbine nodes with their components
+  const turbines: TurbineNode[] = Array.from(turbineMap.entries()).map(([turbineName, componentMap]) => {
+    const components: ComponentNode[] = Array.from(componentMap.entries()).map(([componentName, pieces]) => ({
+      id: `component-${turbineName}-${componentName}`,
+      name: componentName,
+      pieces: pieces.map(piece => ({
+        id: `piece-${piece.sn}`,
+        item: piece
+      }))
+    }));
 
-  // For now, create a single turbine with all components
-  // In a real app, you'd group by actual turbine IDs
-  return [{
-    id: "turbine-1",
-    name: "Turbine 1",
-    components
-  }];
+    return {
+      id: `turbine-${turbineName}`,
+      name: turbineName,
+      components
+    };
+  });
+
+  return turbines;
 }
 
 interface TreeNodeProps {
@@ -124,24 +134,76 @@ function TreeNode({ node, level, isExpanded, onToggle, onSelectPiece, onSelectCo
         {!hasChildren && <div className="w-4" />}
 
         <div className="flex-1 flex items-center justify-between">
-          <span className="text-sm">
-            {isTurbine && "🏭"}
-            {isComponent && "⚙️"}
-            {isPiece && "🔧"}
-            {" "}
-            {isTurbine && node.name}
-            {isComponent && node.name}
-            {isPiece && `${node.item.sn} (${node.item.pn})`}
-          </span>
-
-          {isComponent && (
-            <button
-              onClick={handleComponentClick}
-              className="text-xs px-2 py-1 bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors"
-            >
-              View Details
-            </button>
+          {isPiece ? (
+            <div className="flex items-start gap-2">
+              <span className="text-sm pt-0.5">🔧</span>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm block">{node.item.sn}</span>
+                <span className="text-xs text-muted-foreground block">{node.item.pn}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-sm">
+                {isTurbine && "🏭"}
+                {isComponent && "⚙️"}
+                {" "}
+                {isTurbine && node.name}
+                {isComponent && node.name}
+              </span>
+              {isComponent && (() => {
+                // Get componentType from the first piece in this component
+                const firstPiece = node.pieces[0]?.item;
+                const componentType = firstPiece?.componentType;
+                return componentType && componentType !== "—" ? (
+                  <span className="text-xs text-muted-foreground">({componentType})</span>
+                ) : null;
+              })()}
+            </div>
           )}
+
+          {isComponent && (() => {
+            // Calculate component status from pieces (worst status)
+            const statusPriority: Record<string, number> = {
+              "Replace Now": 7,
+              "Replace Soon": 6,
+              "Degraded": 5,
+              "Monitor": 4,
+              "Unknown": 3,
+              "Spare": 2,
+              "OK": 1,
+            };
+            
+            const statuses = node.pieces
+              .map(p => p.item.status)
+              .filter((s): s is InventoryItem['status'] => !!s);
+            
+            let componentStatus = "—";
+            if (statuses.length > 0) {
+              componentStatus = statuses.reduce((worst, current) => {
+                const worstPriority = statusPriority[worst] || 0;
+                const currentPriority = statusPriority[current] || 0;
+                return currentPriority > worstPriority ? current : worst;
+              }, statuses[0]);
+            }
+            
+            const statusTone = getTone(componentStatus || "", 'status', colorSettings);
+            const statusColor = getColorName(componentStatus || "", 'status', colorSettings);
+            
+            return (
+              <div className="flex items-center gap-2">
+                <span className={getBadgeClasses(statusTone, statusColor)}>
+                  {componentStatus}
+                </span>
+                <button
+                  onClick={handleComponentClick}
+                  className="text-xs px-2 py-1 bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors"
+                >
+                  View Details
+                </button>
+              </div>
+            );
+          })()}
 
           {isPiece && (() => {
             const statusTone = getTone(node.item.status || "", 'status', colorSettings);
@@ -195,10 +257,27 @@ function TreeNode({ node, level, isExpanded, onToggle, onSelectPiece, onSelectCo
 }
 
 export default function TreeView({ items, onSelectPiece, onSelectComponent }: TreeViewProps) {
-  const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(new Set(['turbine-1']));
   const { data: colorSettings = [] } = useStatusColors();
   
   const treeData = React.useMemo(() => buildTreeData(items), [items]);
+  
+  // Initialize expanded nodes with all turbine IDs
+  const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(() => {
+    return new Set(treeData.map(turbine => turbine.id));
+  });
+  
+  // Update expanded nodes when tree data changes
+  React.useEffect(() => {
+    setExpandedNodes(prev => {
+      const newSet = new Set(prev);
+      treeData.forEach(turbine => {
+        if (!newSet.has(turbine.id)) {
+          newSet.add(turbine.id);
+        }
+      });
+      return newSet;
+    });
+  }, [treeData]);
 
   const toggleNode = (nodeId: string) => {
     setExpandedNodes(prev => {
