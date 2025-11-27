@@ -920,6 +920,45 @@ export default function InventoryListPage() {
     }
   }, [selectedComponent]);
 
+  // Handle piece updated - refresh pieces from database and update selected piece
+  const handlePieceUpdated = React.useCallback(async () => {
+    try {
+      const dbPieces = await piecesStorage.getAll();
+      setPieces(dbPieces);
+      
+      // Update selected piece if dialog is open
+      if (selectedPiece) {
+        const pieceId = selectedPiece.id || selectedPiece.sn || String(selectedPiece.pn);
+        const updatedPiece = dbPieces.find(
+          p => (p.id?.toString() === pieceId?.toString()) ||
+               (p.sn === pieceId) ||
+               (String(p.pn) === pieceId)
+        );
+        if (updatedPiece) {
+          // Enrich with notes
+          const notes = findNotesForPiece(updatedPiece);
+          setSelectedPiece({
+            ...updatedPiece,
+            notes: notes,
+          });
+        }
+      }
+      
+      // Also refresh component pieces if component dialog is open
+      if (selectedComponent) {
+        const componentName = selectedComponent.componentName || selectedComponent.name || selectedComponent.component;
+        if (componentName) {
+          const piecesForComponent = dbPieces.filter(
+            (p) => p.component === componentName
+          );
+          setComponentPieces(piecesForComponent);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing pieces:', error);
+    }
+  }, [selectedPiece, selectedComponent, findNotesForPiece]);
+
   // Handle component updated - refresh component data
   const handleComponentUpdated = React.useCallback(async () => {
     try {
@@ -1149,7 +1188,11 @@ export default function InventoryListPage() {
           <div className="px-6 pb-6 max-h-[80vh] overflow-auto">
             {selectedPiece ? (
               <div className="w-full">
-                <PieceInfoCard item={selectedPiece} onNotesUpdate={handleNotesUpdate} />
+                <PieceInfoCard 
+                  item={selectedPiece} 
+                  onNotesUpdate={handleNotesUpdate}
+                  onPieceUpdated={handlePieceUpdated}
+                />
               </div>
             ) : (
               <div className="text-sm text-muted-foreground">No piece selected.</div>

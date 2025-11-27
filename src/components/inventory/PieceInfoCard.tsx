@@ -5,6 +5,15 @@ import type { InventoryItem } from "@/lib/inventory/types";
 import { useStatusColors } from "@/hooks/useStatusColors";
 import { getTone, getColorName, getBadgeClasses } from "@/lib/settings/colorMapper";
 import { ChevronDown, Pencil, Check, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { piecesStorage } from "@/lib/storage/indexedDB";
 
 type RepairEvent = {
   title?: string | null;
@@ -21,16 +30,36 @@ type ItemWithExtras = InventoryItem & {
 
 export default function PieceInfoCard({ 
   item,
-  onNotesUpdate
+  onNotesUpdate,
+  onPieceUpdated
 }: { 
   item: ItemWithExtras;
   onNotesUpdate?: (pieceId: string, notes: string[]) => void;
+  onPieceUpdated?: () => void;
 }) {
   const [tab, setTab] = React.useState<"repair" | "condition">("repair");
   const [isRepairEventExpanded, setIsRepairEventExpanded] = React.useState(false);
   
   // Load color settings from IndexedDB
   const { data: colorSettings = [] } = useStatusColors();
+
+  /* ---------- Edit Mode State ---------- */
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [editedPiece, setEditedPiece] = React.useState<InventoryItem>({
+    id: item.id,
+    sn: item.sn || "",
+    pn: item.pn || "",
+    hours: typeof item.hours === "number" ? item.hours : 0,
+    trips: typeof item.trips === "number" ? item.trips : 0,
+    starts: typeof item.starts === "number" ? item.starts : 0,
+    status: item.status || "OK",
+    state: item.state || "In Service",
+    component: item.component || "",
+    componentType: item.componentType || "",
+    turbine: item.turbine || "",
+    position: item.position || "",
+  });
 
   /* ---------- Notes State ---------- */
   const notes = item.notes ?? [];
@@ -133,21 +162,161 @@ export default function PieceInfoCard({
     setEditedNote(localNotes[noteIdx] ?? "");
   };
 
+  /* ---------- Piece Edit Handlers ---------- */
+  const handleStartEdit = () => {
+    setEditedPiece({
+      id: item.id,
+      sn: item.sn || "",
+      pn: item.pn || "",
+      hours: typeof item.hours === "number" ? item.hours : 0,
+      trips: typeof item.trips === "number" ? item.trips : 0,
+      starts: typeof item.starts === "number" ? item.starts : 0,
+      status: item.status || "OK",
+      state: item.state || "In Service",
+      component: item.component || "",
+      componentType: item.componentType || "",
+      turbine: item.turbine || "",
+      position: item.position || "",
+    });
+    setIsEditing(true);
+  };
+
+  const handleCancelPieceEdit = () => {
+    setIsEditing(false);
+    // Reset edited piece to original values
+    setEditedPiece({
+      id: item.id,
+      sn: item.sn || "",
+      pn: item.pn || "",
+      hours: typeof item.hours === "number" ? item.hours : 0,
+      trips: typeof item.trips === "number" ? item.trips : 0,
+      starts: typeof item.starts === "number" ? item.starts : 0,
+      status: item.status || "OK",
+      state: item.state || "In Service",
+      component: item.component || "",
+      componentType: item.componentType || "",
+      turbine: item.turbine || "",
+      position: item.position || "",
+    });
+  };
+
+  const handleSavePiece = async () => {
+    setIsSaving(true);
+    try {
+      const pieceToSave: InventoryItem = {
+        ...editedPiece,
+        hours: Number(editedPiece.hours) || 0,
+        trips: Number(editedPiece.trips) || 0,
+        starts: Number(editedPiece.starts) || 0,
+      };
+
+      const success = await piecesStorage.save(pieceToSave);
+      if (success) {
+        setIsEditing(false);
+        // Notify parent to refresh
+        if (onPieceUpdated) {
+          onPieceUpdated();
+        }
+      } else {
+        alert("Error saving piece. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error saving piece:", error);
+      alert("Error saving piece. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="rounded-xl border p-6 space-y-6">
+      {/* Header with Edit Button */}
+      <div className="flex justify-between items-center border-b pb-4">
+        <h2 className="text-lg font-semibold">Piece Details</h2>
+        {!isEditing ? (
+          <button
+            onClick={handleStartEdit}
+            className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1"
+            title="Edit piece"
+          >
+            <Pencil className="h-3 w-3" />
+            Edit
+          </button>
+        ) : (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleSavePiece}
+              disabled={isSaving}
+              className="px-2 py-1 rounded-md text-xs bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50 flex items-center gap-1 disabled:opacity-50"
+              title="Save changes"
+            >
+              <Check className="h-3 w-3" />
+              {isSaving ? "Saving..." : "Save"}
+            </button>
+            <button
+              onClick={handleCancelPieceEdit}
+              disabled={isSaving}
+              className="px-2 py-1 rounded-md text-xs bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 flex items-center gap-1 disabled:opacity-50"
+              title="Cancel editing"
+            >
+              <X className="h-3 w-3" />
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* 2x2 Grid Layout: Row 1 = top cards, Row 2 = bottom cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Row 1, Column 1: Component Details Card */}
         <div className="md:row-start-1 md:col-start-1">
-          <InfoCard
-            rows={[
-              ["Status", statusValue, statusTone, statusColor],
-              ["SN", v(item.sn)],
-              ["PN", v(item.pn)],
-              ["Component", v(item.component)],
-              ["Turbine", v(item.turbine)],
-            ]}
-          />
+          {isEditing ? (
+            <EditableInfoCard
+              rows={[
+                {
+                  label: "Status",
+                  value: editedPiece.status,
+                  type: "readonly",
+                  tone: getTone(editedPiece.status, 'status', colorSettings),
+                  colorName: getColorName(editedPiece.status, 'status', colorSettings),
+                },
+                {
+                  label: "SN",
+                  value: editedPiece.sn,
+                  type: "text",
+                  onChange: (value) => setEditedPiece(prev => ({ ...prev, sn: value })),
+                },
+                {
+                  label: "PN",
+                  value: editedPiece.pn,
+                  type: "text",
+                  onChange: (value) => setEditedPiece(prev => ({ ...prev, pn: value })),
+                },
+                {
+                  label: "Component",
+                  value: editedPiece.component,
+                  type: "text",
+                  onChange: (value) => setEditedPiece(prev => ({ ...prev, component: value })),
+                },
+                {
+                  label: "Turbine",
+                  value: editedPiece.turbine,
+                  type: "text",
+                  onChange: (value) => setEditedPiece(prev => ({ ...prev, turbine: value })),
+                },
+              ]}
+            />
+          ) : (
+            <InfoCard
+              rows={[
+                ["Status", statusValue, statusTone, statusColor],
+                ["SN", v(item.sn)],
+                ["PN", v(item.pn)],
+                ["Component", v(item.component)],
+                ["Turbine", v(item.turbine)],
+              ]}
+            />
+          )}
         </div>
 
         {/* Row 1, Column 2: State/Position Card or Repair Summary Header */}
@@ -157,15 +326,55 @@ export default function PieceInfoCard({
             <div 
               className="rounded-lg border overflow-hidden transition-all duration-500 ease-in-out max-h-[500px] opacity-100"
             >
-              <InfoCard
-                rows={[
-                  ["State", stateValue, stateTone, stateColor],
-                  ["Position", v(item.position)],
-                  ["Hours", v(item.hours)],
-                  ["Starts", v(item.starts)],
-                  ["Trips", v(item.trips)],
-                ]}
-              />
+              {isEditing ? (
+                <EditableInfoCard
+                  rows={[
+                    {
+                      label: "State",
+                      value: editedPiece.state,
+                      type: "select",
+                      options: ["In Service", "Out of Service", "Standby", "Repair", "On Order"],
+                      onChange: (value) => setEditedPiece(prev => ({ ...prev, state: value as InventoryItem["state"] })),
+                      tone: getTone(editedPiece.state, 'state', colorSettings),
+                      colorName: getColorName(editedPiece.state, 'state', colorSettings),
+                    },
+                    {
+                      label: "Position",
+                      value: editedPiece.position,
+                      type: "text",
+                      onChange: (value) => setEditedPiece(prev => ({ ...prev, position: value })),
+                    },
+                    {
+                      label: "Hours",
+                      value: String(editedPiece.hours),
+                      type: "number",
+                      onChange: (value) => setEditedPiece(prev => ({ ...prev, hours: Number(value) || 0 })),
+                    },
+                    {
+                      label: "Starts",
+                      value: String(editedPiece.starts),
+                      type: "number",
+                      onChange: (value) => setEditedPiece(prev => ({ ...prev, starts: Number(value) || 0 })),
+                    },
+                    {
+                      label: "Trips",
+                      value: String(editedPiece.trips),
+                      type: "number",
+                      onChange: (value) => setEditedPiece(prev => ({ ...prev, trips: Number(value) || 0 })),
+                    },
+                  ]}
+                />
+              ) : (
+                <InfoCard
+                  rows={[
+                    ["State", stateValue, stateTone, stateColor],
+                    ["Position", v(item.position)],
+                    ["Hours", v(item.hours)],
+                    ["Starts", v(item.starts)],
+                    ["Trips", v(item.trips)],
+                  ]}
+                />
+              )}
             </div>
           )}
           
@@ -214,44 +423,6 @@ export default function PieceInfoCard({
                 Note
               </h4>
               <div className="flex items-center gap-1">
-                {!isEditingNote ? (
-                  <button
-                    type="button"
-                    className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditNote();
-                    }}
-                    title="Edit note"
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="px-2 py-1 rounded-md text-xs bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSaveNote();
-                      }}
-                      title="Save note"
-                    >
-                      <Check className="h-3 w-3" />
-                    </button>
-                    <button
-                      type="button"
-                      className="px-2 py-1 rounded-md text-xs bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCancelEdit();
-                      }}
-                      title="Cancel editing"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </>
-                )}
                 <button
                   type="button"
                   className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
@@ -280,7 +451,7 @@ export default function PieceInfoCard({
                 />
               ) : (
                 <div className="text-sm text-muted-foreground">
-                  {hasAnyNotes ? v(currentNoteValue) : "No notes available. Click the edit button to add a note."}
+                  {hasAnyNotes ? v(currentNoteValue) : "No notes available."}
                 </div>
               )}
             </div>
@@ -404,6 +575,74 @@ function InfoCard({ rows }: { rows: Array<[label: string, value: string, tone?: 
                   <span className={getBadgeClasses(tone, colorName)}>{value}</span>
                 ) : (
                   value
+                )}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+    </div>
+  );
+}
+
+type EditableRow = {
+  label: string;
+  value: string;
+  type: "text" | "number" | "select" | "readonly";
+  options?: string[];
+  onChange?: (value: string) => void;
+  tone?: any;
+  colorName?: string;
+};
+
+function EditableInfoCard({ rows }: { rows: EditableRow[] }) {
+  return (
+    <div className="rounded-lg border p-3">
+      <dl className="space-y-2 text-sm">
+        {rows.map((row) => {
+          const isStatusOrState = row.label === "Status" || row.label === "State";
+          const shouldShowBadge = isStatusOrState && row.tone !== undefined && row.type === "readonly";
+          
+          return (
+            <div
+              key={row.label}
+              className="flex items-center justify-between gap-3 border-b last:border-b-0 pb-1.5"
+            >
+              <dt className="text-muted-foreground">{row.label}</dt>
+              <dd className="font-medium text-right flex-1 max-w-[60%]">
+                {row.type === "readonly" ? (
+                  shouldShowBadge ? (
+                    <span className={getBadgeClasses(row.tone, row.colorName)}>{row.value}</span>
+                  ) : (
+                    <span className="truncate">{row.value}</span>
+                  )
+                ) : row.type === "select" ? (
+                  <Select value={row.value} onValueChange={row.onChange!}>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {row.options?.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : row.type === "number" ? (
+                  <Input
+                    type="number"
+                    value={row.value}
+                    onChange={(e) => row.onChange!(e.target.value)}
+                    className="h-8 text-sm text-right"
+                  />
+                ) : (
+                  <Input
+                    type="text"
+                    value={row.value}
+                    onChange={(e) => row.onChange!(e.target.value)}
+                    className="h-8 text-sm text-right"
+                  />
                 )}
               </dd>
             </div>
