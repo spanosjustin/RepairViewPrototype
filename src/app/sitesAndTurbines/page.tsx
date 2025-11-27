@@ -99,7 +99,7 @@ const MOCK_TURBINE_INVENTORY: Record<string, InventoryItem[]> = {
 };
 
 // Mock data for sites and turbines
-const MOCK_SITES = [
+export const MOCK_SITES = [
   {
     id: "site-1",
     name: "Riverbend Power Plant",

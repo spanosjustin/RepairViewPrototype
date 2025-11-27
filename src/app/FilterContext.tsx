@@ -7,6 +7,10 @@ type FilterContextType = {
     setSearchTerms: (terms: string[]) => void;
     searchQuery: string;
     setSearchQuery: (query: string) => void;
+    turbineId: string | null;
+    setTurbineId: (id: string | null) => void;
+    powerPlantId: string | null;
+    setPowerPlantId: (id: string | null) => void;
 };
 
 const FilterContext = createContext<FilterContextType | undefined>(undefined);
@@ -14,9 +18,20 @@ const FilterContext = createContext<FilterContextType | undefined>(undefined);
 export function FilterProvider({ children }: { children: ReactNode }) {
     const [searchTerms, setSearchTerms] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState<string>("");
+    const [turbineId, setTurbineId] = useState<string | null>(null);
+    const [powerPlantId, setPowerPlantId] = useState<string | null>(null);
 
     return (
-        <FilterContext.Provider value={{ searchTerms, setSearchTerms, searchQuery, setSearchQuery }}>
+        <FilterContext.Provider value={{ 
+            searchTerms, 
+            setSearchTerms, 
+            searchQuery, 
+            setSearchQuery,
+            turbineId,
+            setTurbineId,
+            powerPlantId,
+            setPowerPlantId,
+        }}>
             {children}
         </FilterContext.Provider>
     );

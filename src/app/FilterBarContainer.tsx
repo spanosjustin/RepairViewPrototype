@@ -8,19 +8,13 @@ import DrilldownCard from "@/components/DrilldownCard";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useFilter } from "./FilterContext";
+import { MOCK_TURBINES } from "@/lib/matrix/mock";
+import { MOCK_SITES } from "@/app/sitesAndTurbines/page";
 
 export default function FilterbarContainer() {
     // Replace DB Query later
-    const powerPlants = [
-        { id: "pp-1", name: "Riverbend" },
-        { id: "pp-2", name: "Mountainview" },
-        { id: "pp-3", name: "Lakeside" },
-    ];
-    const turbines = [
-        { id: "tb-1", name: "Turbine A" },
-        { id: "tb-2", name: "Turbine B" },
-        { id: "tb-3", name: "Turbine C" },
-    ];
+    const powerPlants = MOCK_SITES.map((site) => ({ id: site.id, name: site.name }));
+    const turbines = MOCK_TURBINES.map((t) => ({ id: t.id, name: t.id }));
 
     const [fitlers, setFilters] = useState<FilterState>({
         powerPlantId: null,
@@ -31,7 +25,23 @@ export default function FilterbarContainer() {
     const [isOpen, setIsOpen] = useState(false);
     const handleToggle = () => setIsOpen((prev) => !prev);
 
-    const { searchTerms, setSearchTerms, searchQuery, setSearchQuery } = useFilter();
+    const { 
+        searchTerms, 
+        setSearchTerms, 
+        searchQuery, 
+        setSearchQuery,
+        turbineId,
+        setTurbineId,
+        powerPlantId,
+        setPowerPlantId,
+    } = useFilter();
+
+    // Sync local filter state with context when filter changes
+    const handleFilterChange = (next: FilterState) => {
+        setFilters(next);
+        setTurbineId(next.turbineId);
+        setPowerPlantId(next.powerPlantId);
+    };
 
     const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === "Enter" && searchQuery.trim()) {
@@ -55,7 +65,7 @@ export default function FilterbarContainer() {
                     powerPlants={powerPlants}
                     turbines={turbines}
                     value={fitlers}
-                    onChange={setFilters}
+                    onChange={handleFilterChange}
                     onDrilldown={handleToggle}
                     isOpen={isOpen}
                     onAddFilter={() => alert("Feature Coming Soon...")}

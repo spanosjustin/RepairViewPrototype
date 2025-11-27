@@ -6,6 +6,7 @@ import InventoryMatrix from "@/components/inventory/InventoryMatrix";
 import { MOCK_INVENTORY } from "@/lib/inventory/mock";
 import type { InventoryItem } from "@/lib/inventory/types";
 import { MOCK_TURBINES } from "@/lib/matrix/mock";
+import { MOCK_SITES } from "@/app/sitesAndTurbines/page";
 import { useFilter } from "@/app/FilterContext";
 
 // shadcn/ui dialog (modal) to show the card
@@ -322,7 +323,15 @@ function generatePiecesForComponents(components: any[]): InventoryItem[] {
 }
 
 export default function InventoryListPage() {
-  const { searchTerms, searchQuery } = useFilter();
+  const { searchTerms, searchQuery, turbineId, powerPlantId } = useFilter();
+  
+  // Get turbines that belong to the selected power plant
+  const powerPlantTurbineIds = React.useMemo(() => {
+    if (!powerPlantId) return null;
+    const selectedSite = MOCK_SITES.find(site => site.id === powerPlantId);
+    if (!selectedSite) return null;
+    return new Set(selectedSite.turbines.map(t => t.id));
+  }, [powerPlantId]);
   const [viewMode, setViewMode] = React.useState<ViewMode>("pieces");
   const [pieces, setPieces] = React.useState<any[]>([]);
   const [components, setComponents] = React.useState<any[]>([]);
@@ -458,6 +467,23 @@ export default function InventoryListPage() {
   const filteredComponentStats = React.useMemo(() => {
     let filtered = componentStats;
 
+    // Apply power plant filter (filter by turbines belonging to the power plant)
+    if (powerPlantTurbineIds) {
+      filtered = filtered.filter((component) => {
+        const componentTurbine = component.turbine || "";
+        return powerPlantTurbineIds.has(componentTurbine);
+      });
+    }
+
+    // Apply turbine filter (overrides power plant filter if both are set)
+    if (turbineId) {
+      filtered = filtered.filter((component) => {
+        // Check if component's turbine matches the selected turbine ID
+        const componentTurbine = component.turbine || "";
+        return componentTurbine === turbineId;
+      });
+    }
+
     // Helper function to check if component matches search criteria
     const matchesSearch = (component: ComponentRow, searchText: string) => {
       const searchableText = [
@@ -538,7 +564,7 @@ export default function InventoryListPage() {
     }
 
     return filtered;
-  }, [componentStats, componentSearchQuery, searchTerms, searchQuery, pieces]);
+  }, [componentStats, componentSearchQuery, searchTerms, searchQuery, pieces, turbineId, powerPlantTurbineIds]);
 
   // Sort component stats based on sortColumn and sortDirection
   const sortedComponentStats = React.useMemo(() => {
@@ -580,6 +606,22 @@ export default function InventoryListPage() {
   // Filter pieces based on search query and FilterBarContainer search terms
   const filteredPieces = React.useMemo(() => {
     let filtered = pieces;
+
+    // Apply power plant filter (filter by turbines belonging to the power plant)
+    if (powerPlantTurbineIds) {
+      filtered = filtered.filter((piece) => {
+        const pieceTurbine = piece.turbine || piece.turbineName || piece.turbine_name || "";
+        return powerPlantTurbineIds.has(pieceTurbine);
+      });
+    }
+
+    // Apply turbine filter (overrides power plant filter if both are set)
+    if (turbineId) {
+      filtered = filtered.filter((piece) => {
+        const pieceTurbine = piece.turbine || piece.turbineName || piece.turbine_name || "";
+        return pieceTurbine === turbineId;
+      });
+    }
 
     // Helper function to check if piece matches search criteria
     const matchesSearch = (piece: any, searchText: string) => {
@@ -640,14 +682,32 @@ export default function InventoryListPage() {
     }
 
     return filtered;
-  }, [pieces, pieceSearchQuery, searchTerms, searchQuery]);
+  }, [pieces, pieceSearchQuery, searchTerms, searchQuery, turbineId, powerPlantTurbineIds]);
 
   // Filter pieces for List view (TreeView) - drills down to only matching pieces
   const filteredPiecesForListView = React.useMemo(() => {
-    // If no search, return all pieces
+    let filtered = pieces;
+
+    // Apply power plant filter (filter by turbines belonging to the power plant)
+    if (powerPlantTurbineIds) {
+      filtered = filtered.filter((piece) => {
+        const pieceTurbine = piece.turbine || piece.turbineName || piece.turbine_name || "";
+        return powerPlantTurbineIds.has(pieceTurbine);
+      });
+    }
+
+    // Apply turbine filter (overrides power plant filter if both are set)
+    if (turbineId) {
+      filtered = filtered.filter((piece) => {
+        const pieceTurbine = piece.turbine || piece.turbineName || piece.turbine_name || "";
+        return pieceTurbine === turbineId;
+      });
+    }
+
+    // If no search, return filtered pieces (or all if no turbine filter)
     const hasSearch = (searchTerms.length > 0) || (searchQuery.trim().length > 0);
     if (!hasSearch) {
-      return pieces;
+      return filtered;
     }
 
     // Helper function to check if piece matches search
@@ -671,7 +731,7 @@ export default function InventoryListPage() {
 
     // Check search terms (bubbles)
     searchTerms.forEach(term => {
-      pieces.forEach(piece => {
+      filtered.forEach(piece => {
         if (pieceMatchesSearch(piece, term)) {
           const pieceId = piece.sn || piece.id || String(piece.pn);
           matchingPieces.add(pieceId);
@@ -681,7 +741,7 @@ export default function InventoryListPage() {
 
     // Check current search query
     if (searchQuery.trim()) {
-      pieces.forEach(piece => {
+      filtered.forEach(piece => {
         if (pieceMatchesSearch(piece, searchQuery)) {
           const pieceId = piece.sn || piece.id || String(piece.pn);
           matchingPieces.add(pieceId);
@@ -695,13 +755,13 @@ export default function InventoryListPage() {
     }
 
     // Only include the matching pieces themselves (drill down to just the piece)
-    const filteredPieces = pieces.filter(piece => {
+    const resultPieces = filtered.filter(piece => {
       const pieceId = piece.sn || piece.id || String(piece.pn);
       return matchingPieces.has(pieceId);
     });
 
-    return filteredPieces;
-  }, [pieces, searchTerms, searchQuery]);
+    return resultPieces;
+  }, [pieces, searchTerms, searchQuery, turbineId, powerPlantTurbineIds]);
 
   // Sort pieces based on pieceSortColumn and pieceSortDirection
   const sortedPieces = React.useMemo(() => {
@@ -827,7 +887,7 @@ export default function InventoryListPage() {
   // Reset page when switching view modes, sorting, or search
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [viewMode, sortColumn, sortDirection, pieceSortColumn, pieceSortDirection, componentSearchQuery, pieceSearchQuery, searchTerms, searchQuery]);
+  }, [viewMode, sortColumn, sortDirection, pieceSortColumn, pieceSortDirection, componentSearchQuery, pieceSearchQuery, searchTerms, searchQuery, turbineId, powerPlantId]);
 
   // Pagination logic - only apply pagination to pieces and components views
   const currentData = viewMode === "pieces" ? sortedPieces : 
