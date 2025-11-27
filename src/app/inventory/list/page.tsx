@@ -31,6 +31,7 @@ import ComponentInfoCard from "@/components/inventory/ComponentInfoCard";
 import TreeView from "@/components/TreeView";
 import VisualTreeView from "@/components/VisualTreeView";
 import { piecesStorage, componentsStorage, type Component } from "@/lib/storage/indexedDB";
+import { getMockRepairEvents } from "@/lib/inventory/mockRepairEvents";
 
 type ViewMode = "pieces" | "components" | "list" | "tree";
 
@@ -48,6 +49,9 @@ type ComponentRow = {
 
 type SortableColumn = keyof ComponentRow;
 type SortDirection = "asc" | "desc" | null;
+
+// Sortable columns for pieces
+type SortablePieceColumn = "pn" | "piece" | "sn" | "hours" | "trips" | "starts" | "status" | "state" | "turbine" | "component" | "componentType";
 
 function buildComponentStatsFromMock(mock: any[]): ComponentRow[] {
   return (mock ?? []).map((it) => ({
@@ -325,6 +329,9 @@ export default function InventoryListPage() {
   // Store updated notes by piece SN (serial number)
   const [updatedNotes, setUpdatedNotes] = React.useState<Record<string, string[]>>({});
   
+  // Store updated repair events by piece SN (serial number)
+  const [updatedRepairEvents, setUpdatedRepairEvents] = React.useState<Record<string, any[]>>({});
+  
   // Create a mutable copy of MOCK_TURBINES for updates
   const [mutableTurbines, setMutableTurbines] = React.useState(() => {
     try {
@@ -346,9 +353,13 @@ export default function InventoryListPage() {
   const [currentPage, setCurrentPage] = React.useState(1);
   const itemsPerPage = 50;
 
-  // Sorting state (only for components view)
+  // Sorting state for components view
   const [sortColumn, setSortColumn] = React.useState<SortableColumn | undefined>(undefined);
   const [sortDirection, setSortDirection] = React.useState<SortDirection>(null);
+  
+  // Sorting state for pieces view
+  const [pieceSortColumn, setPieceSortColumn] = React.useState<SortablePieceColumn | undefined>(undefined);
+  const [pieceSortDirection, setPieceSortDirection] = React.useState<SortDirection>(null);
 
   // Load pieces from database or generate them
   React.useEffect(() => {
@@ -471,7 +482,94 @@ export default function InventoryListPage() {
     });
   }, [componentStats, sortColumn, sortDirection]);
 
-  // Handle sort column click
+  // Sort pieces based on pieceSortColumn and pieceSortDirection
+  const sortedPieces = React.useMemo(() => {
+    if (!pieceSortColumn || !pieceSortDirection) {
+      return pieces;
+    }
+
+    return [...pieces].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      // Map column names to piece properties
+      switch (pieceSortColumn) {
+        case "pn":
+          aValue = a.pn ?? "—";
+          bValue = b.pn ?? "—";
+          break;
+        case "piece":
+          aValue = a.component ?? a.piece ?? a.name ?? "—";
+          bValue = b.component ?? b.piece ?? b.name ?? "—";
+          break;
+        case "sn":
+          aValue = a.sn ?? a.serial ?? "—";
+          bValue = b.sn ?? b.serial ?? "—";
+          break;
+        case "hours":
+          aValue = a.hours;
+          bValue = b.hours;
+          break;
+        case "trips":
+          aValue = a.trips;
+          bValue = b.trips;
+          break;
+        case "starts":
+          aValue = a.starts;
+          bValue = b.starts;
+          break;
+        case "status":
+          aValue = a.status ?? a.health ?? "—";
+          bValue = b.status ?? b.health ?? "—";
+          break;
+        case "state":
+          aValue = a.state ?? a.condition ?? "—";
+          bValue = b.state ?? b.condition ?? "—";
+          break;
+        case "turbine":
+          aValue = a.turbine ?? "—";
+          bValue = b.turbine ?? "—";
+          break;
+        case "component":
+          aValue = a.component ?? "—";
+          bValue = b.component ?? "—";
+          break;
+        case "componentType":
+          aValue = a.componentType ?? "—";
+          bValue = b.componentType ?? "—";
+          break;
+        default:
+          return 0;
+      }
+
+      // Handle numeric columns (hours, trips, starts)
+      if (pieceSortColumn === "hours" || pieceSortColumn === "trips" || pieceSortColumn === "starts") {
+        const aNum = typeof aValue === "number" ? aValue : typeof aValue === "string" && aValue !== "—" ? parseFloat(aValue) : -Infinity;
+        const bNum = typeof bValue === "number" ? bValue : typeof bValue === "string" && bValue !== "—" ? parseFloat(bValue) : -Infinity;
+        
+        const aFinal = isNaN(aNum) ? -Infinity : aNum;
+        const bFinal = isNaN(bNum) ? -Infinity : bNum;
+        
+        if (pieceSortDirection === "asc") {
+          return aFinal - bFinal;
+        } else {
+          return bFinal - aFinal;
+        }
+      }
+
+      // Handle string columns
+      const aStr = String(aValue || "—").toLowerCase();
+      const bStr = String(bValue || "—").toLowerCase();
+
+      if (pieceSortDirection === "asc") {
+        return aStr.localeCompare(bStr);
+      } else {
+        return bStr.localeCompare(aStr);
+      }
+    });
+  }, [pieces, pieceSortColumn, pieceSortDirection]);
+
+  // Handle sort column click for components
   const handleSort = React.useCallback((column: SortableColumn) => {
     if (sortColumn === column) {
       // Toggle direction: asc -> desc -> null
@@ -488,13 +586,30 @@ export default function InventoryListPage() {
     }
   }, [sortColumn, sortDirection]);
 
+  // Handle sort column click for pieces
+  const handlePieceSort = React.useCallback((column: SortablePieceColumn) => {
+    if (pieceSortColumn === column) {
+      // Toggle direction: asc -> desc -> null
+      if (pieceSortDirection === "asc") {
+        setPieceSortDirection("desc");
+      } else if (pieceSortDirection === "desc") {
+        setPieceSortDirection(null);
+        setPieceSortColumn(undefined);
+      }
+    } else {
+      // New column, start with ascending
+      setPieceSortColumn(column);
+      setPieceSortDirection("asc");
+    }
+  }, [pieceSortColumn, pieceSortDirection]);
+
   // Reset page when switching view modes or sorting
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [viewMode, sortColumn, sortDirection]);
+  }, [viewMode, sortColumn, sortDirection, pieceSortColumn, pieceSortDirection]);
 
   // Pagination logic - only apply pagination to pieces and components views
-  const currentData = viewMode === "pieces" ? pieces : 
+  const currentData = viewMode === "pieces" ? sortedPieces : 
                      viewMode === "components" ? sortedComponentStats : 
                      pieces; // For turbines and tree views, use pieces data
   
@@ -580,13 +695,22 @@ export default function InventoryListPage() {
   const openPieceCard = React.useCallback((item: any) => {
     // Enrich the piece with notes from matrix data
     const notes = findNotesForPiece(item);
+    
+    // Check if we have updated repair events for this piece first
+    const pieceId = item.sn || item.id || String(item.pn);
+    const updatedEvents = updatedRepairEvents[pieceId];
+    
+    // Get mock repair events for this piece (if no updated events exist)
+    const repairEvents = updatedEvents || getMockRepairEvents(item);
+    
     const enrichedPiece = {
       ...item,
       notes: notes,
+      repairEvents: repairEvents.length > 0 ? repairEvents : null,
     };
     setSelectedPiece(enrichedPiece);
     setPieceOpen(true);
-  }, [findNotesForPiece]);
+  }, [findNotesForPiece, updatedRepairEvents]);
 
   // Handle notes updates from PieceInfoCard
   const handleNotesUpdate = React.useCallback((pieceId: string, notes: string[]) => {
@@ -645,6 +769,32 @@ export default function InventoryListPage() {
           }
           return turbine;
         }));
+      }
+      
+      return prev;
+    });
+  }, []);
+
+  // Handle repair events updates from PieceInfoCard
+  const handleRepairEventsUpdate = React.useCallback((pieceId: string, repairEvents: any[]) => {
+    // Store the updated repair events
+    setUpdatedRepairEvents(prev => ({
+      ...prev,
+      [pieceId]: [...repairEvents], // Create new array reference
+    }));
+    
+    // Update the selected piece if it's the one being edited
+    setSelectedPiece((prev: any) => {
+      if (!prev) return prev;
+      
+      const currentPieceId = prev.sn || prev.id || String(prev.pn);
+      
+      if (currentPieceId === pieceId) {
+        // Create new object with new repair events array to trigger re-render
+        return {
+          ...prev,
+          repairEvents: [...repairEvents], // Create new array reference
+        };
       }
       
       return prev;
@@ -809,6 +959,49 @@ export default function InventoryListPage() {
     }
   }, [selectedComponent]);
 
+  // Handle piece updated - refresh pieces from database and update selected piece
+  const handlePieceUpdated = React.useCallback(async () => {
+    try {
+      const dbPieces = await piecesStorage.getAll();
+      setPieces(dbPieces);
+      
+      // Update selected piece if dialog is open
+      if (selectedPiece) {
+        const pieceId = selectedPiece.id || selectedPiece.sn || String(selectedPiece.pn);
+        const updatedPiece = dbPieces.find(
+          p => (p.id?.toString() === pieceId?.toString()) ||
+               (p.sn === pieceId) ||
+               (String(p.pn) === pieceId)
+        );
+        if (updatedPiece) {
+          // Enrich with notes and repair events
+          const notes = findNotesForPiece(updatedPiece);
+          const pieceId = updatedPiece.sn || updatedPiece.id || String(updatedPiece.pn);
+          const updatedEvents = updatedRepairEvents[pieceId];
+          const repairEvents = updatedEvents || getMockRepairEvents(updatedPiece);
+          setSelectedPiece({
+            ...updatedPiece,
+            notes: notes,
+            repairEvents: repairEvents.length > 0 ? repairEvents : null,
+          });
+        }
+      }
+      
+      // Also refresh component pieces if component dialog is open
+      if (selectedComponent) {
+        const componentName = selectedComponent.componentName || selectedComponent.name || selectedComponent.component;
+        if (componentName) {
+          const piecesForComponent = dbPieces.filter(
+            (p) => p.component === componentName
+          );
+          setComponentPieces(piecesForComponent);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing pieces:', error);
+    }
+  }, [selectedPiece, selectedComponent, findNotesForPiece]);
+
   // Handle component updated - refresh component data
   const handleComponentUpdated = React.useCallback(async () => {
     try {
@@ -867,6 +1060,9 @@ export default function InventoryListPage() {
               dataset="pieces"
               items={paginatedData}
               onSelectPiece={openPieceCard}
+              sortColumn={pieceSortColumn}
+              sortDirection={pieceSortDirection}
+              onSort={handlePieceSort}
             />
             
             {/* Pagination Controls */}
@@ -1035,7 +1231,12 @@ export default function InventoryListPage() {
           <div className="px-6 pb-6 max-h-[80vh] overflow-auto">
             {selectedPiece ? (
               <div className="w-full">
-                <PieceInfoCard item={selectedPiece} onNotesUpdate={handleNotesUpdate} />
+                <PieceInfoCard 
+                  item={selectedPiece} 
+                  onNotesUpdate={handleNotesUpdate}
+                  onPieceUpdated={handlePieceUpdated}
+                  onRepairEventsUpdate={handleRepairEventsUpdate}
+                />
               </div>
             ) : (
               <div className="text-sm text-muted-foreground">No piece selected.</div>

@@ -430,8 +430,8 @@ export default function ComponentInfoCard({
         if (piece) {
           pieceUpdates.push({
             ...piece,
-            component: undefined,
-            position: undefined,
+            component: "",
+            position: "",
           });
         }
       }
@@ -463,8 +463,8 @@ export default function ComponentInfoCard({
             // Remove old piece from component (clear its component assignment)
             pieceUpdates.push({
               ...piece,
-              component: undefined,
-              position: undefined,
+              component: "",
+              position: "",
             });
             
             // Add new piece to component with the position
@@ -472,7 +472,7 @@ export default function ComponentInfoCard({
               ...newPiece,
               component: componentName,
               componentType: componentType || newPiece.componentType,
-              position: newPosition.trim() || undefined,
+              position: newPosition.trim() || "",
             });
           }
         } else {
@@ -481,7 +481,7 @@ export default function ComponentInfoCard({
             ...piece,
             component: componentName,
             componentType: componentType || piece.componentType,
-            position: newPosition.trim() || piece.position || undefined,
+            position: newPosition.trim() || piece.position || "",
           };
           
           // Only add to updates if something actually changed
