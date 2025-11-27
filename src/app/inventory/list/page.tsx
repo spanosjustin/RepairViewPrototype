@@ -463,28 +463,36 @@ export default function InventoryListPage() {
     [pieces, dbComponents]
   );
 
-  // Helper function to parse special search patterns like "hours=123", "hours<5000", "hours>=1000", "hours=1000-5000"
+  // Helper function to parse special search patterns like "hours=123", "hours<5000", "hours>=1000", "hours=1000-5000", "hours~5000"
   const parseSpecialFilters = React.useCallback((searchText: string) => {
-    // First check for range pattern: hours=1000-5000
-    const rangeMatch = searchText.match(/hours\s*=\s*(\d+)\s*-\s*(\d+)/i);
+    // First check for fuzzy search pattern: hours~5000
+    const fuzzyMatch = searchText.match(/hours\s*~\s*(\d+)/i);
     let hoursFilter = null;
     
-    if (rangeMatch) {
-      const min = parseInt(rangeMatch[1], 10);
-      const max = parseInt(rangeMatch[2], 10);
-      hoursFilter = { operator: 'range' as const, min, max };
+    if (fuzzyMatch) {
+      const value = parseInt(fuzzyMatch[1], 10);
+      hoursFilter = { operator: 'fuzzy' as const, value };
     } else {
-      // Match hours with operators: =, <, <=, >, >=
-      const hoursMatch = searchText.match(/hours\s*(>=|<=|>|<|=)\s*(\d+)/i);
-      if (hoursMatch) {
-        const operator = hoursMatch[1] as '=' | '<' | '<=' | '>' | '>=';
-        const value = parseInt(hoursMatch[2], 10);
-        hoursFilter = { operator, value };
+      // Check for range pattern: hours=1000-5000
+      const rangeMatch = searchText.match(/hours\s*=\s*(\d+)\s*-\s*(\d+)/i);
+      if (rangeMatch) {
+        const min = parseInt(rangeMatch[1], 10);
+        const max = parseInt(rangeMatch[2], 10);
+        hoursFilter = { operator: 'range' as const, min, max };
+      } else {
+        // Match hours with operators: =, <, <=, >, >=
+        const hoursMatch = searchText.match(/hours\s*(>=|<=|>|<|=)\s*(\d+)/i);
+        if (hoursMatch) {
+          const operator = hoursMatch[1] as '=' | '<' | '<=' | '>' | '>=';
+          const value = parseInt(hoursMatch[2], 10);
+          hoursFilter = { operator, value };
+        }
       }
     }
     
-    // Remove hours filter pattern from text (both range and operator patterns)
+    // Remove hours filter pattern from text (fuzzy, range, and operator patterns)
     const textWithoutHours = searchText
+      .replace(/hours\s*~\s*\d+/gi, '')
       .replace(/hours\s*=\s*\d+\s*-\s*\d+/gi, '')
       .replace(/hours\s*(>=|<=|>|<|=)\s*\d+/gi, '')
       .trim();
@@ -496,6 +504,7 @@ export default function InventoryListPage() {
     const filters: Array<
       | { operator: '=' | '<' | '<=' | '>' | '>=', value: number }
       | { operator: 'range', min: number, max: number }
+      | { operator: 'fuzzy', value: number }
     > = [];
     
     // Check search terms
@@ -517,10 +526,86 @@ export default function InventoryListPage() {
     return filters;
   }, [searchTerms, searchQuery, parseSpecialFilters]);
 
+  // Compute allowed hours values for fuzzy searches (exact match + 6 closest)
+  const fuzzyHoursValues = React.useMemo(() => {
+    const fuzzyFilters = hoursFilters.filter(f => f.operator === 'fuzzy') as Array<{ operator: 'fuzzy', value: number }>;
+    if (fuzzyFilters.length === 0) return null;
+
+    // Collect all unique hours values from pieces
+    const allHours = new Set<number>();
+    pieces.forEach(piece => {
+      const pieceHours = typeof piece.hours === 'number' ? piece.hours : null;
+      if (pieceHours !== null && !isNaN(pieceHours)) {
+        allHours.add(pieceHours);
+      }
+    });
+
+    // Also collect hours from components
+    componentStats.forEach(component => {
+      const componentHours = typeof component.hours === 'number' ? component.hours : 
+                            typeof component.hours === 'string' && component.hours !== "—" ? 
+                            parseFloat(component.hours) : null;
+      if (componentHours !== null && !isNaN(componentHours)) {
+        allHours.add(componentHours);
+      }
+    });
+
+    // For each fuzzy filter, find exact match + 6 closest values
+    const allowedValues = new Set<number>();
+    
+    fuzzyFilters.forEach(fuzzyFilter => {
+      const targetValue = fuzzyFilter.value;
+      
+      // Add exact match if it exists
+      if (allHours.has(targetValue)) {
+        allowedValues.add(targetValue);
+      }
+      
+      // Find all hours values and sort by distance from target
+      const sortedHours = Array.from(allHours)
+        .map(hours => ({
+          hours,
+          distance: Math.abs(hours - targetValue)
+        }))
+        .sort((a, b) => {
+          // First by distance, then by value (prefer lower values for ties)
+          if (a.distance !== b.distance) {
+            return a.distance - b.distance;
+          }
+          return a.hours - b.hours;
+        });
+      
+      // Take up to 7 values (exact match + 6 closest, or 7 closest if no exact match)
+      const countToTake = 7; // Always take 7 (exact + 6, or 7 closest)
+      sortedHours.slice(0, countToTake).forEach(({ hours }) => {
+        allowedValues.add(hours);
+      });
+    });
+    
+    return allowedValues;
+  }, [hoursFilters, pieces, componentStats]);
+
   // Helper function to check if hours value matches any filter
   const matchesHoursFilter = React.useCallback((hours: number | null): boolean => {
     if (hours === null || isNaN(hours)) return false;
+    
+    // Check fuzzy filters first (if any)
+    if (fuzzyHoursValues !== null) {
+      if (fuzzyHoursValues.has(hours)) {
+        return true;
+      }
+      // If there are fuzzy filters but this value isn't in the allowed set, return false
+      // (unless there are also non-fuzzy filters that might match)
+      const hasNonFuzzyFilters = hoursFilters.some(f => f.operator !== 'fuzzy');
+      if (!hasNonFuzzyFilters) {
+        return false;
+      }
+    }
+    
+    // Check other filter types
     return hoursFilters.some(filter => {
+      if (filter.operator === 'fuzzy') return false; // Already handled above
+      
       switch (filter.operator) {
         case '=':
           return hours === filter.value;
@@ -538,7 +623,7 @@ export default function InventoryListPage() {
           return false;
       }
     });
-  }, [hoursFilters]);
+  }, [hoursFilters, fuzzyHoursValues]);
 
   // Filter component stats based on search query and FilterBarContainer search terms
   const filteredComponentStats = React.useMemo(() => {
