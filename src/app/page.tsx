@@ -1,5 +1,5 @@
 import TurbineCarousel from "@/components/TurbineCarousel";
-import PieceStatusDonutChart from "@/components/PieceStatusDonutChart";
+import DonutCarousel from "@/components/DonutCarousel";
 import ComponentCarousel from "@/components/ComponentCarousel";
 import { MOCK_DATA } from "@/lib/mockData";
 
@@ -13,9 +13,12 @@ export default function Home() {
           <TurbineCarousel turbines={MOCK_DATA.turbines} />
         </div>
         
-        {/* Section B - Piece Status Donut Chart */}
+        {/* Section B - Donut Carousel (Piece and Component) */}
         <div>
-          <PieceStatusDonutChart inventoryItems={MOCK_DATA.inventory} />
+          <DonutCarousel 
+            turbines={MOCK_DATA.turbines}
+            inventoryItems={MOCK_DATA.inventory} 
+          />
         </div>
       </div>
 

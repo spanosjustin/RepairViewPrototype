@@ -18,15 +18,18 @@ interface ComponentGroup {
 export default function ComponentCarousel({ inventoryItems, className }: ComponentCarouselProps) {
   const [currentIndex, setCurrentIndex] = React.useState(0);
 
-  // Group inventory items by component
+  // Group inventory items by component (unique component name)
   const componentGroups = React.useMemo(() => {
     const groups: Record<string, InventoryItem[]> = {};
     
     inventoryItems.forEach(item => {
-      if (!groups[item.component]) {
-        groups[item.component] = [];
+      const componentName = item.component;
+      if (!componentName) return; // Skip items without a component name
+      
+      if (!groups[componentName]) {
+        groups[componentName] = [];
       }
-      groups[item.component].push(item);
+      groups[componentName].push(item);
     });
 
     return Object.entries(groups).map(([componentName, parts]) => ({
