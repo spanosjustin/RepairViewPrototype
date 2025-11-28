@@ -472,65 +472,49 @@ export default function SitesAndTurbinesPage() {
           <h1 className="text-3xl font-bold">Sites & Turbines</h1>
           <p className="text-gray-600 mt-1">Manage power plant sites and their associated turbines</p>
         </div>
-        <Button 
-          className="flex items-center gap-2"
-          onClick={() => setIsAddDialogOpen(true)}
-        >
-          <Plus className="h-4 w-4" />
-          {viewMode === "sites" ? "Add Site" : "Add Turbine"}
-        </Button>
-      </div>
-
-      {/* Filters and Controls */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* Search */}
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search sites or turbines..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-
-            {/* View Mode Toggle */}
-            <div className="flex gap-2">
-              <Button
-                variant={viewMode === "sites" ? "default" : "outline"}
-                onClick={() => setViewMode("sites")}
-                className="flex items-center gap-2"
-              >
-                <Building2 className="h-4 w-4" />
-                Sites
-              </Button>
-              <Button
-                variant={viewMode === "turbines" ? "default" : "outline"}
-                onClick={() => setViewMode("turbines")}
-                className="flex items-center gap-2"
-              >
-                <Activity className="h-4 w-4" />
-                Turbines
-              </Button>
-            </div>
-
-            {/* Status Filter */}
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="operational">Operational</SelectItem>
-                <SelectItem value="maintenance">Maintenance</SelectItem>
-                <SelectItem value="outage">Outage</SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="flex items-center gap-3">
+          {/* View Mode Toggle */}
+          <div className="flex gap-2">
+            <Button
+              variant={viewMode === "sites" ? "default" : "outline"}
+              onClick={() => setViewMode("sites")}
+              className="flex items-center gap-2"
+            >
+              <Building2 className="h-4 w-4" />
+              Sites
+            </Button>
+            <Button
+              variant={viewMode === "turbines" ? "default" : "outline"}
+              onClick={() => setViewMode("turbines")}
+              className="flex items-center gap-2"
+            >
+              <Activity className="h-4 w-4" />
+              Turbines
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Status Filter */}
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="operational">Operational</SelectItem>
+              <SelectItem value="maintenance">Maintenance</SelectItem>
+              <SelectItem value="outage">Outage</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Button 
+            className="flex items-center gap-2 min-w-[140px]"
+            onClick={() => setIsAddDialogOpen(true)}
+          >
+            <Plus className="h-4 w-4" />
+            {viewMode === "sites" ? "Add Site" : "Add Turbine"}
+          </Button>
+        </div>
+      </div>
 
       {/* Content */}
       {viewMode === "sites" ? (
