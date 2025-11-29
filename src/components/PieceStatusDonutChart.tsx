@@ -5,7 +5,7 @@ import type { Turbine } from "@/lib/matrix/types";
 import type { InventoryItem } from "@/lib/inventory/types";
 import { useStatusColors } from "@/hooks/useStatusColors";
 import { getColorName, getTone } from "@/lib/settings/colorMapper";
-import { piecesStorage } from "@/lib/storage/indexedDB";
+// Removed old database import - now using inventoryItems prop from new DB
 import { Button } from "@/components/ui/button";
 
 interface PieceStatusDonutChartProps {
@@ -78,40 +78,15 @@ function getColorHex(colorName: string | undefined, tone: string): string {
 
 export default function PieceStatusDonutChart({ turbines, inventoryItems, className }: PieceStatusDonutChartProps) {
   const { data: colorSettings = [] } = useStatusColors();
-  const [dbPieces, setDbPieces] = React.useState<InventoryItem[]>([]);
   const [hoveredStatus, setHoveredStatus] = React.useState<string | null>(null);
   const [selectedStatuses, setSelectedStatuses] = React.useState<string[]>([]);
 
-  // Load pieces from IndexedDB (same as inventory page)
-  React.useEffect(() => {
-    const loadPieces = async () => {
-      try {
-        const pieces = await piecesStorage.getAll();
-        if (pieces.length > 0) {
-          setDbPieces(pieces);
-        }
-      } catch (error) {
-        console.error('Error loading pieces from database:', error);
-      }
-    };
-    loadPieces();
-  }, []);
-
-  // Aggregate piece statuses from database pieces (preferred), then inventory items, then turbines
+  // Aggregate piece statuses from inventory items (new DB - preferred), then turbines
   const statusCounts = React.useMemo(() => {
     const counts: Record<string, number> = {};
     
-    // Priority 1: Use pieces from IndexedDB (same as inventory page)
-    if (dbPieces.length > 0) {
-      dbPieces.forEach(item => {
-        const status = item.status;
-        if (status) {
-          counts[status] = (counts[status] || 0) + 1;
-        }
-      });
-    }
-    // Priority 2: If inventory items are provided, use those
-    else if (inventoryItems && inventoryItems.length > 0) {
+    // Priority 1: Use inventory items from new database (passed as prop)
+    if (inventoryItems && inventoryItems.length > 0) {
       inventoryItems.forEach(item => {
         const status = item.status;
         if (status) {
@@ -119,7 +94,7 @@ export default function PieceStatusDonutChart({ turbines, inventoryItems, classN
         }
       });
     } 
-    // Priority 3: Fall back to counting from turbines
+    // Priority 2: Fall back to counting from turbines
     else if (turbines && turbines.length > 0) {
       turbines.forEach(turbine => {
         turbine.pieces.forEach(piece => {
@@ -143,7 +118,7 @@ export default function PieceStatusDonutChart({ turbines, inventoryItems, classN
         color,
       };
     });
-  }, [dbPieces, turbines, inventoryItems, colorSettings]);
+  }, [turbines, inventoryItems, colorSettings]);
 
   const totalPieces = statusCounts.reduce((sum, item) => sum + item.count, 0);
 

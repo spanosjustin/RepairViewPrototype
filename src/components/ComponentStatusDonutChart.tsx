@@ -4,7 +4,7 @@ import * as React from "react";
 import type { InventoryItem } from "@/lib/inventory/types";
 import { useStatusColors } from "@/hooks/useStatusColors";
 import { getColorName, getTone } from "@/lib/settings/colorMapper";
-import { componentsStorage, type Component } from "@/lib/storage/indexedDB";
+// Removed old database import - now using inventoryItems prop from new DB
 import { Button } from "@/components/ui/button";
 
 interface ComponentStatusDonutChartProps {
@@ -76,39 +76,14 @@ function getColorHex(colorName: string | undefined, tone: string): string {
 
 export default function ComponentStatusDonutChart({ inventoryItems, className }: ComponentStatusDonutChartProps) {
   const { data: colorSettings = [] } = useStatusColors();
-  const [dbComponents, setDbComponents] = React.useState<Component[]>([]);
   const [hoveredStatus, setHoveredStatus] = React.useState<string | null>(null);
   const [selectedStatuses, setSelectedStatuses] = React.useState<string[]>([]);
 
-  // Load components from IndexedDB
-  React.useEffect(() => {
-    const loadComponents = async () => {
-      try {
-        const components = await componentsStorage.getAll();
-        if (components.length > 0) {
-          setDbComponents(components);
-        }
-      } catch (error) {
-        console.error('Error loading components from database:', error);
-      }
-    };
-    loadComponents();
-  }, []);
-
-  // Aggregate component statuses from database components (preferred), then inventory items
+  // Aggregate component statuses from inventory items (new database)
   const statusCounts = React.useMemo(() => {
     const counts: Record<string, number> = {};
     
-    // Priority 1: Use components from IndexedDB (only if no inventoryItems provided)
-    if (dbComponents.length > 0 && (!inventoryItems || inventoryItems.length === 0)) {
-      dbComponents.forEach(component => {
-        const status = component.status;
-        if (status) {
-          counts[status] = (counts[status] || 0) + 1;
-        }
-      });
-    }
-    // Priority 2: If inventory items are provided, aggregate by component
+    // Use inventory items from new database (passed as prop)
     if (inventoryItems && inventoryItems.length > 0) {
       // Group pieces by component and determine status (use worst status if multiple pieces)
       const componentMap = new Map<string, InventoryItem[]>();
@@ -162,7 +137,7 @@ export default function ComponentStatusDonutChart({ inventoryItems, className }:
         color,
       };
     });
-  }, [dbComponents, inventoryItems, colorSettings]);
+  }, [inventoryItems, colorSettings]);
 
   const totalComponents = statusCounts.reduce((sum, item) => sum + item.count, 0);
 

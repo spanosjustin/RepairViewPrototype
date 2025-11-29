@@ -1,20 +1,20 @@
 // src/app/Filter/Bar/Container
 "use client";
 
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Search, X } from "lucide-react";
 import FilterBar, { FilterState } from "@/components/FilterBar";
 import DrilldownCard from "@/components/DrilldownCard";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useFilter } from "./FilterContext";
-import { MOCK_TURBINES } from "@/lib/matrix/mock";
-import { MOCK_SITES } from "@/app/sitesAndTurbines/page";
+import { plantStorage, turbineStorage } from "@/lib/storage/db/storage";
 
 export default function FilterbarContainer() {
-    // Replace DB Query later
-    const powerPlants = MOCK_SITES.map((site) => ({ id: site.id, name: site.name }));
-    const turbines = MOCK_TURBINES.map((t) => ({ id: t.id, name: t.id }));
+    const [powerPlants, setPowerPlants] = useState<Array<{ id: string; name: string }>>([]);
+    const [turbines, setTurbines] = useState<Array<{ id: string; name: string }>>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     const [fitlers, setFilters] = useState<FilterState>({
         powerPlantId: null,
@@ -39,6 +39,31 @@ export default function FilterbarContainer() {
         componentFilters,
         setComponentFilters,
     } = useFilter();
+
+    // Load power plants and turbines from DB
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+
+                const [plants, dbTurbines] = await Promise.all([
+                    plantStorage.getAll(),
+                    turbineStorage.getAll(),
+                ]);
+
+                setPowerPlants(plants.map((p) => ({ id: p.id, name: p.name })));
+                setTurbines(dbTurbines.map((t) => ({ id: t.id, name: t.id })));
+            } catch (e) {
+                console.error("Error loading filter data:", e);
+                setError(e instanceof Error ? e.message : "Failed to load filter data");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadData();
+    }, []);
 
     // Sync local filter state with context when filter changes
     const handleFilterChange = (next: FilterState) => {

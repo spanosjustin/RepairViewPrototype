@@ -1,17 +1,25 @@
 "use client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode, useState, useEffect } from "react";
-import { initializeDefaults } from "@/lib/storage/defaults";
-import { runMigrations } from "@/lib/storage/migrate";
+import { initializeDatabase, initializeDatabaseWithSeed } from "@/lib/storage/db/init";
 
 export default function Providers({ children }: { children: ReactNode }) {
   const [qc] = useState(() => new QueryClient());
   
-  // Initialize IndexedDB with defaults and run migrations on app startup
+  // Initialize new database structure on app startup
   useEffect(() => {
     const init = async () => {
-      await runMigrations(); // Migrate from localStorage if needed
-      await initializeDefaults(); // Seed defaults if empty
+      try {
+        if (process.env.NODE_ENV !== "production") {
+          // In development, ensure DB is populated and relationships are seeded
+          await initializeDatabaseWithSeed(false);
+        } else {
+          // In production, just open the DB and leave it empty for real client data
+          await initializeDatabase();
+        }
+      } catch (error) {
+        console.error('Failed to initialize database:', error);
+      }
     };
     init();
   }, []);
