@@ -29,145 +29,45 @@ import {
 import VisualTreeView from "@/components/VisualTreeView";
 import AddTurbineSiteDialog from "@/components/AddTurbineSiteDialog";
 import type { InventoryItem } from "@/lib/inventory/types";
+import { plantStorage, plantContactStorage, turbineStorage } from "@/lib/storage/db/storage";
+import { getAllInventoryItems } from "@/lib/storage/db/adapters";
 
-// Mock inventory data for turbines
-const MOCK_TURBINE_INVENTORY: Record<string, InventoryItem[]> = {
-  "T-101": [
-    { sn: "SN-00123", pn: "PN-AX45", hours: 18520, trips: 182, starts: 980, status: "OK", state: "In Service", component: "Comb Liner" },
-    { sn: "SN-00456", pn: "PN-QZ19", hours: 23270, trips: 201, starts: 1165, status: "Replace Now", state: "Repair", component: "Comb Liner" },
-    { sn: "SN-00789", pn: "PN-TX88", hours: 7400, trips: 12, starts: 180, status: "OK", state: "In Service", component: "Tran PRC" },
-    { sn: "SN-01011", pn: "PN-S1N1", hours: 9240, trips: 33, starts: 402, status: "Monitor", state: "In Service", component: "S1N" },
-    { sn: "SN-01314", pn: "PN-S2N2", hours: 15410, trips: 77, starts: 605, status: "Replace Soon", state: "In Service", component: "S2N" },
-    { sn: "SN-01617", pn: "PN-RTR1", hours: 28100, trips: 15, starts: 220, status: "OK", state: "Standby", component: "Rotor" }
-  ],
-  "T-102": [
-    { sn: "SN-00234", pn: "PN-BX56", hours: 15200, trips: 145, starts: 750, status: "OK", state: "In Service", component: "Comb Liner" },
-    { sn: "SN-00567", pn: "PN-RZ20", hours: 19800, trips: 165, starts: 890, status: "Monitor", state: "In Service", component: "Comb Liner" },
-    { sn: "SN-00890", pn: "PN-UX99", hours: 8200, trips: 18, starts: 210, status: "OK", state: "In Service", component: "Tran PRC" },
-    { sn: "SN-01112", pn: "PN-T2N2", hours: 11200, trips: 45, starts: 520, status: "OK", state: "In Service", component: "S1N" },
-    { sn: "SN-01425", pn: "PN-T3N3", hours: 16800, trips: 89, starts: 720, status: "Replace Soon", state: "In Service", component: "S2N" },
-    { sn: "SN-01728", pn: "PN-STR2", hours: 24500, trips: 22, starts: 180, status: "OK", state: "Standby", component: "Rotor" }
-  ],
-  "T-103": [
-    { sn: "SN-00345", pn: "PN-CX67", hours: 22100, trips: 198, starts: 1100, status: "OK", state: "In Service", component: "Comb Liner" },
-    { sn: "SN-00678", pn: "PN-SZ21", hours: 18700, trips: 156, starts: 820, status: "OK", state: "In Service", component: "Comb Liner" },
-    { sn: "SN-00901", pn: "PN-VX00", hours: 6800, trips: 8, starts: 150, status: "OK", state: "In Service", component: "Tran PRC" },
-    { sn: "SN-01213", pn: "PN-U3N3", hours: 13400, trips: 67, starts: 680, status: "OK", state: "In Service", component: "S1N" },
-    { sn: "SN-01536", pn: "PN-U4N4", hours: 19200, trips: 95, starts: 850, status: "OK", state: "In Service", component: "S2N" },
-    { sn: "SN-01839", pn: "PN-TTR3", hours: 31200, trips: 28, starts: 250, status: "OK", state: "Standby", component: "Rotor" }
-  ],
-  "T-201": [
-    { sn: "SN-00456", pn: "PN-DX78", hours: 16800, trips: 142, starts: 780, status: "OK", state: "In Service", component: "Comb Liner" },
-    { sn: "SN-00789", pn: "PN-TZ22", hours: 20300, trips: 178, starts: 950, status: "OK", state: "In Service", component: "Comb Liner" },
-    { sn: "SN-01012", pn: "PN-WX11", hours: 9200, trips: 15, starts: 190, status: "OK", state: "In Service", component: "Tran PRC" },
-    { sn: "SN-01324", pn: "PN-V4N4", hours: 15600, trips: 78, starts: 750, status: "OK", state: "In Service", component: "S1N" },
-    { sn: "SN-01647", pn: "PN-V5N5", hours: 21400, trips: 108, starts: 920, status: "OK", state: "In Service", component: "S2N" },
-    { sn: "SN-01950", pn: "PN-UUR4", hours: 26800, trips: 35, starts: 280, status: "OK", state: "Standby", component: "Rotor" }
-  ],
-  "T-202": [
-    { sn: "SN-00567", pn: "PN-EX89", hours: 14200, trips: 128, starts: 720, status: "OK", state: "In Service", component: "Comb Liner" },
-    { sn: "SN-00890", pn: "PN-UZ23", hours: 18900, trips: 167, starts: 880, status: "OK", state: "In Service", component: "Comb Liner" },
-    { sn: "SN-01123", pn: "PN-XX22", hours: 7800, trips: 12, starts: 170, status: "OK", state: "In Service", component: "Tran PRC" },
-    { sn: "SN-01435", pn: "PN-W5N5", hours: 13800, trips: 69, starts: 680, status: "OK", state: "In Service", component: "S1N" },
-    { sn: "SN-01758", pn: "PN-W6N6", hours: 19600, trips: 98, starts: 850, status: "OK", state: "In Service", component: "S2N" },
-    { sn: "SN-02061", pn: "PN-VVR5", hours: 25200, trips: 32, starts: 260, status: "OK", state: "Standby", component: "Rotor" }
-  ],
-  "T-301": [
-    { sn: "SN-00678", pn: "PN-FX90", hours: 19800, trips: 175, starts: 920, status: "Replace Now", state: "Repair", component: "Comb Liner" },
-    { sn: "SN-00901", pn: "PN-VZ24", hours: 22500, trips: 198, starts: 1050, status: "OK", state: "In Service", component: "Comb Liner" },
-    { sn: "SN-01234", pn: "PN-YX33", hours: 8600, trips: 18, starts: 210, status: "OK", state: "In Service", component: "Tran PRC" },
-    { sn: "SN-01546", pn: "PN-X6N6", hours: 17200, trips: 85, starts: 820, status: "OK", state: "In Service", component: "S1N" },
-    { sn: "SN-01869", pn: "PN-X7N7", hours: 22800, trips: 115, starts: 980, status: "OK", state: "In Service", component: "S2N" },
-    { sn: "SN-02172", pn: "PN-WWR6", hours: 28400, trips: 38, starts: 300, status: "OK", state: "Standby", component: "Rotor" }
-  ],
-  "T-302": [
-    { sn: "SN-00789", pn: "PN-GX01", hours: 17600, trips: 158, starts: 850, status: "OK", state: "In Service", component: "Comb Liner" },
-    { sn: "SN-01012", pn: "PN-WZ25", hours: 21100, trips: 186, starts: 980, status: "OK", state: "In Service", component: "Comb Liner" },
-    { sn: "SN-01345", pn: "PN-ZX44", hours: 9400, trips: 16, starts: 190, status: "OK", state: "In Service", component: "Tran PRC" },
-    { sn: "SN-01657", pn: "PN-Y7N7", hours: 15800, trips: 78, starts: 750, status: "OK", state: "In Service", component: "S1N" },
-    { sn: "SN-01980", pn: "PN-Y8N8", hours: 21600, trips: 108, starts: 920, status: "OK", state: "In Service", component: "S2N" },
-    { sn: "SN-02283", pn: "PN-XXR7", hours: 27200, trips: 35, starts: 280, status: "OK", state: "Standby", component: "Rotor" }
-  ],
-  "T-303": [
-    { sn: "SN-00890", pn: "PN-HX12", hours: 16400, trips: 148, starts: 800, status: "OK", state: "In Service", component: "Comb Liner" },
-    { sn: "SN-01123", pn: "PN-XZ26", hours: 19700, trips: 174, starts: 920, status: "OK", state: "In Service", component: "Comb Liner" },
-    { sn: "SN-01456", pn: "PN-AX55", hours: 8200, trips: 14, starts: 180, status: "OK", state: "In Service", component: "Tran PRC" },
-    { sn: "SN-01768", pn: "PN-Z8N8", hours: 14400, trips: 71, starts: 690, status: "OK", state: "In Service", component: "S1N" },
-    { sn: "SN-02091", pn: "PN-Z9N9", hours: 20400, trips: 102, starts: 870, status: "OK", state: "In Service", component: "S2N" },
-    { sn: "SN-02394", pn: "PN-YYR8", hours: 26000, trips: 33, starts: 270, status: "OK", state: "Standby", component: "Rotor" }
-  ]
-};
+// DB-backed view models
+interface SiteViewModel {
+  id: string;
+  name: string;
+  location: string;
+  address: string;
+  contact: {
+    name: string;
+    title: string;
+    phone: string;
+    email: string;
+  };
+  turbines: Array<{
+    id: string;
+    name: string;
+    status: string;
+    lastMaintenance: string;
+    nextMaintenance: string;
+  }>;
+  totalCapacity: string;
+  operationalStatus: string;
+}
 
-// Mock data for sites and turbines
-export const MOCK_SITES = [
-  {
-    id: "site-1",
-    name: "Riverbend Power Plant",
-    location: "Riverside, CA",
-    address: "1234 River Road, Riverside, CA 92501",
-    contact: {
-      name: "John Smith",
-      title: "Plant Manager",
-      phone: "(555) 123-4567",
-      email: "john.smith@riverbend.com"
-    },
-    turbines: [
-      { id: "T-101", name: "Unit 1A", status: "operational", lastMaintenance: "2024-11-15", nextMaintenance: "2025-02-15" },
-      { id: "T-102", name: "Unit 1B", status: "maintenance", lastMaintenance: "2024-12-01", nextMaintenance: "2025-03-01" },
-      { id: "T-103", name: "Unit 1C", status: "operational", lastMaintenance: "2024-10-20", nextMaintenance: "2025-01-20" }
-    ],
-    totalCapacity: "450 MW",
-    operationalStatus: "operational"
-  },
-  {
-    id: "site-2", 
-    name: "Mountainview Energy Center",
-    location: "Denver, CO",
-    address: "5678 Mountain View Drive, Denver, CO 80202",
-    contact: {
-      name: "Sarah Johnson",
-      title: "Operations Director",
-      phone: "(555) 987-6543",
-      email: "sarah.johnson@mountainview.com"
-    },
-    turbines: [
-      { id: "T-201", name: "Unit 2A", status: "operational", lastMaintenance: "2024-12-10", nextMaintenance: "2025-03-10" },
-      { id: "T-202", name: "Unit 2B", status: "operational", lastMaintenance: "2024-11-25", nextMaintenance: "2025-02-25" }
-    ],
-    totalCapacity: "300 MW",
-    operationalStatus: "operational"
-  },
-  {
-    id: "site-3",
-    name: "Lakeside Generation Facility", 
-    location: "Seattle, WA",
-    address: "9012 Lake Street, Seattle, WA 98101",
-    contact: {
-      name: "Mike Chen",
-      title: "Site Supervisor",
-      phone: "(555) 456-7890",
-      email: "mike.chen@lakeside.com"
-    },
-    turbines: [
-      { id: "T-301", name: "Unit 3A", status: "outage", lastMaintenance: "2024-09-15", nextMaintenance: "2025-01-15" },
-      { id: "T-302", name: "Unit 3B", status: "operational", lastMaintenance: "2024-12-05", nextMaintenance: "2025-03-05" },
-      { id: "T-303", name: "Unit 3C", status: "operational", lastMaintenance: "2024-11-30", nextMaintenance: "2025-02-28" }
-    ],
-    totalCapacity: "375 MW",
-    operationalStatus: "partial_outage"
-  }
-];
+const EMPTY_SITES: SiteViewModel[] = [];
 
 type ViewMode = "sites" | "turbines";
 type StatusFilter = "all" | "operational" | "maintenance" | "outage";
 
 interface SiteCardProps {
-  site: typeof MOCK_SITES[0];
+  site: SiteViewModel;
   onTurbineClick?: (turbineId: string) => void;
   expandedTurbines: Set<string>;
+  inventoryByTurbine: Record<string, InventoryItem[]>;
 }
 
-function SiteCard({ site, onTurbineClick, expandedTurbines }: SiteCardProps) {
+function SiteCard({ site, onTurbineClick, expandedTurbines, inventoryByTurbine }: SiteCardProps) {
   const [selectedContact, setSelectedContact] = React.useState(site.contact.name);
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -292,7 +192,7 @@ function SiteCard({ site, onTurbineClick, expandedTurbines }: SiteCardProps) {
                       <h5 className="font-medium text-sm text-gray-800 mb-3">Components & Inventory</h5>
                       <div className="max-h-64 overflow-auto">
                         <VisualTreeView 
-                          items={MOCK_TURBINE_INVENTORY[turbine.id] || []}
+                          items={inventoryByTurbine[turbine.id] || []}
                           onSelectPiece={(item) => {
                             console.log('Selected piece:', item);
                             // Handle piece selection - could open a modal or navigate to details
@@ -328,7 +228,12 @@ interface TurbineOverviewProps {
   onTurbineClick: (turbineId: string) => void;
 }
 
-function TurbineOverview({ turbines, expandedTurbines, onTurbineClick }: TurbineOverviewProps) {
+function TurbineOverview({
+  turbines,
+  expandedTurbines,
+  onTurbineClick,
+  inventoryByTurbine,
+}: TurbineOverviewProps & { inventoryByTurbine: Record<string, InventoryItem[]> }) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "operational": return "bg-green-100 text-green-800 border-green-200";
@@ -388,7 +293,7 @@ function TurbineOverview({ turbines, expandedTurbines, onTurbineClick }: Turbine
                     <h4 className="font-semibold text-gray-800 mb-4">Turbine Components & Inventory</h4>
                     <div className="max-h-96 overflow-auto">
                       <VisualTreeView 
-                        items={MOCK_TURBINE_INVENTORY[turbine.id] || []}
+                        items={inventoryByTurbine[turbine.id] || []}
                         onSelectPiece={(item) => {
                           console.log('Selected piece:', item);
                           // Handle piece selection - could open a modal or navigate to details
@@ -416,36 +321,104 @@ export default function SitesAndTurbinesPage() {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [expandedTurbines, setExpandedTurbines] = React.useState<Set<string>>(new Set());
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
+  const [sites, setSites] = React.useState<SiteViewModel[]>(EMPTY_SITES);
+  const [inventoryByTurbine, setInventoryByTurbine] = React.useState<Record<string, InventoryItem[]>>({});
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const [plants, turbines, inventoryItems, contacts] = await Promise.all([
+          plantStorage.getAll(),
+          turbineStorage.getAll(),
+          getAllInventoryItems(),
+          plantContactStorage.getAll(),
+        ]);
+
+        // Build inventory map by turbine
+        const inventoryMap: Record<string, InventoryItem[]> = {};
+        for (const item of inventoryItems) {
+          const tid = item.turbine || "unassigned";
+          if (!inventoryMap[tid]) inventoryMap[tid] = [];
+          inventoryMap[tid].push(item);
+        }
+
+        setInventoryByTurbine(inventoryMap);
+
+        // Build site view models from plants and turbines
+        const siteModels: SiteViewModel[] = plants.map((plant) => {
+          const plantTurbines = turbines.filter((t) => t.plant_id === plant.id);
+
+          return {
+            id: plant.id,
+            name: plant.name,
+            location: plant.location || "Unknown location",
+            address: plant.address || "",
+            contact: {
+              name: contacts.find((c) => c.plant_id === plant.id)?.name || "Unknown",
+              title: contacts.find((c) => c.plant_id === plant.id)?.title || "",
+              phone: contacts.find((c) => c.plant_id === plant.id)?.phone || "",
+              email: contacts.find((c) => c.plant_id === plant.id)?.email || "",
+            },
+            turbines: plantTurbines.map((turbine) => ({
+              id: turbine.id,
+              name: turbine.name,
+              status: "operational", // placeholder until outage/maintenance tracking is wired
+              lastMaintenance: new Date(turbine.created_at).toISOString().split("T")[0],
+              nextMaintenance: new Date(turbine.updated_at).toISOString().split("T")[0],
+            })),
+            totalCapacity: "N/A",
+            operationalStatus: "operational",
+          };
+        });
+
+        setSites(siteModels);
+      } catch (e) {
+        console.error("Error loading sites & turbines:", e);
+        setError(e instanceof Error ? e.message : "Failed to load data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
 
   // Flatten turbines for turbine view
   const allTurbines = React.useMemo(() => {
-    return MOCK_SITES.flatMap(site => 
-      site.turbines.map(turbine => ({
+    return sites.flatMap((site) =>
+      site.turbines.map((turbine) => ({
         ...turbine,
-        site: site.name
+        site: site.name,
       }))
     );
-  }, []);
+  }, [sites]);
 
   // Filter sites based on search and status
   const filteredSites = React.useMemo(() => {
-    return MOCK_SITES.filter(site => {
-      const matchesSearch = site.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           site.location.toLowerCase().includes(searchQuery.toLowerCase());
-      
+    return sites.filter((site) => {
+      const matchesSearch =
+        site.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        site.location.toLowerCase().includes(searchQuery.toLowerCase());
+
       if (statusFilter === "all") return matchesSearch;
-      
-      const hasMatchingTurbine = site.turbines.some(turbine => turbine.status === statusFilter);
+
+      const hasMatchingTurbine = site.turbines.some((turbine) => turbine.status === statusFilter);
       return matchesSearch && hasMatchingTurbine;
     });
-  }, [searchQuery, statusFilter]);
+  }, [sites, searchQuery, statusFilter]);
 
   // Filter turbines based on search and status
   const filteredTurbines = React.useMemo(() => {
-    return allTurbines.filter(turbine => {
-      const matchesSearch = turbine.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           turbine.site.toLowerCase().includes(searchQuery.toLowerCase());
-      
+    return allTurbines.filter((turbine) => {
+      const matchesSearch =
+        turbine.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        turbine.site.toLowerCase().includes(searchQuery.toLowerCase());
+
       if (statusFilter === "all") return matchesSearch;
       return matchesSearch && turbine.status === statusFilter;
     });
@@ -525,6 +498,7 @@ export default function SitesAndTurbinesPage() {
               site={site} 
               onTurbineClick={handleTurbineClick}
               expandedTurbines={expandedTurbines}
+              inventoryByTurbine={inventoryByTurbine}
             />
           ))}
         </div>
@@ -537,6 +511,7 @@ export default function SitesAndTurbinesPage() {
             turbines={filteredTurbines} 
             expandedTurbines={expandedTurbines}
             onTurbineClick={handleTurbineClick}
+            inventoryByTurbine={inventoryByTurbine}
           />
         </div>
       )}
