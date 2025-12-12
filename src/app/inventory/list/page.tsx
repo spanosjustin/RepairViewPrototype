@@ -1824,7 +1824,7 @@ export default function InventoryListPage() {
   // Handle piece added - refresh pieces from database
   const handlePieceAdded = React.useCallback(async () => {
     try {
-      const dbPieces = await piecesStorage.getAll();
+      const dbPieces = await getAllInventoryItems();
       setPieces(dbPieces);
       
       // Also refresh component pieces if dialog is open
@@ -1850,12 +1850,26 @@ export default function InventoryListPage() {
       
       // Update selected piece if dialog is open
       if (selectedPiece) {
-        const pieceId = selectedPiece.id || selectedPiece.sn || String(selectedPiece.pn);
-        const updatedPiece = inventoryItems.find(
-          p => (p.id?.toString() === pieceId?.toString()) ||
-               (p.sn === pieceId) ||
-               (String(p.pn) === pieceId)
-        );
+        // Try multiple ways to find the piece
+        const originalId = selectedPiece.id;
+        const originalSn = selectedPiece.sn;
+        const originalPn = selectedPiece.pn;
+        
+        // First try by ID (most reliable)
+        let updatedPiece = originalId ? inventoryItems.find(
+          p => p.id?.toString() === originalId?.toString()
+        ) : null;
+        
+        // If not found by ID, try by SN
+        if (!updatedPiece && originalSn) {
+          updatedPiece = inventoryItems.find(p => p.sn === originalSn);
+        }
+        
+        // If still not found, try by PN
+        if (!updatedPiece && originalPn) {
+          updatedPiece = inventoryItems.find(p => p.pn === originalPn);
+        }
+        
         if (updatedPiece) {
           // Enrich with notes and repair events
           // Notes from database take priority, then fall back to findNotesForPiece
@@ -1871,6 +1885,15 @@ export default function InventoryListPage() {
             ...updatedPiece,
             notes: notes,
             repairEvents: repairEvents.length > 0 ? repairEvents : null,
+          });
+        } else {
+          // Piece not found - might have been deleted or ID changed
+          // Keep the selected piece but log a warning
+          console.warn('Updated piece not found in inventory items', {
+            originalId,
+            originalSn,
+            originalPn,
+            inventoryItemIds: inventoryItems.map(p => ({ id: p.id, sn: p.sn, pn: p.pn }))
           });
         }
       }
@@ -1894,12 +1917,12 @@ export default function InventoryListPage() {
   const handleComponentUpdated = React.useCallback(async () => {
     try {
       // Refresh components list from database
-      const dbComps = await componentsStorage.getAll();
+      const dbComps = await componentStorage.getAll();
       setDbComponents(dbComps);
       
       // Update selected component if dialog is open
       if (selectedComponent?.id) {
-        const updatedComponent = await componentsStorage.get(selectedComponent.id);
+        const updatedComponent = await componentStorage.get(selectedComponent.id);
         if (updatedComponent) {
           setSelectedComponent({
             ...updatedComponent,
@@ -2120,6 +2143,7 @@ export default function InventoryListPage() {
             {selectedPiece ? (
               <div className="w-full">
                 <PieceInfoCard 
+                  key={`${selectedPiece.id || selectedPiece.sn || selectedPiece.pn}-${selectedPiece.hours}-${selectedPiece.trips}-${selectedPiece.starts}`}
                   item={selectedPiece} 
                   onNotesUpdate={handleNotesUpdate}
                   onPieceUpdated={handlePieceUpdated}

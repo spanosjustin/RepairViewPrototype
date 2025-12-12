@@ -13,7 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { piecesStorage } from "@/lib/storage/indexedDB";
+import { saveInventoryItem } from "@/lib/storage/db/adapters";
+import { turbineStorage } from "@/lib/storage/db/storage";
+import type { Turbine } from "@/lib/storage/db/types";
 
 type ItemWithExtras = InventoryItem & {
   turbine?: string | null;
@@ -39,9 +41,27 @@ export default function PieceInfoCard({
   // Load color settings from IndexedDB
   const { data: colorSettings = [] } = useStatusColors();
 
+  // Load turbines from database
+  const [turbines, setTurbines] = React.useState<Turbine[]>([]);
+  
+  React.useEffect(() => {
+    const loadTurbines = async () => {
+      try {
+        const allTurbines = await turbineStorage.getAll();
+        setTurbines(allTurbines);
+      } catch (error) {
+        console.error('Error loading turbines:', error);
+        setTurbines([]);
+      }
+    };
+    
+    loadTurbines();
+  }, []);
+
   /* ---------- Edit Mode State ---------- */
   const [isEditing, setIsEditing] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [editedPiece, setEditedPiece] = React.useState<InventoryItem>({
     id: item.id,
     sn: item.sn || "",
@@ -78,6 +98,26 @@ export default function PieceInfoCard({
   const [isEditingRepairEvent, setIsEditingRepairEvent] = React.useState(false);
   const [editedRepairDetails, setEditedRepairDetails] = React.useState("");
   const [editedConditionDetails, setEditedConditionDetails] = React.useState("");
+
+  // Update editedPiece when item changes (when not in edit mode)
+  React.useEffect(() => {
+    if (!isEditing) {
+      setEditedPiece({
+        id: item.id,
+        sn: item.sn || "",
+        pn: item.pn || "",
+        hours: typeof item.hours === "number" ? item.hours : 0,
+        trips: typeof item.trips === "number" ? item.trips : 0,
+        starts: typeof item.starts === "number" ? item.starts : 0,
+        status: item.status || "OK",
+        state: item.state || "In Service",
+        component: item.component || "",
+        componentType: item.componentType || "",
+        turbine: item.turbine || "",
+        position: item.position || "",
+      });
+    }
+  }, [item, isEditing]);
 
   // Update local notes when item.notes changes
   React.useEffect(() => {
@@ -225,7 +265,7 @@ export default function PieceInfoCard({
         notes: notesToSave.length > 0 ? notesToSave : undefined,
       };
       
-      const success = await piecesStorage.save(pieceToSave);
+      const success = await saveInventoryItem(pieceToSave);
       if (!success) {
         console.error("Failed to save notes to database");
         // Still update UI even if database save fails
@@ -237,10 +277,14 @@ export default function PieceInfoCard({
         onNotesUpdate(pieceId, notesToSave);
       }
       
+      setIsRefreshing(true);
+      // Small delay to ensure database write is committed
+      await new Promise(resolve => setTimeout(resolve, 100));
       // Notify parent to refresh piece data
       if (onPieceUpdated) {
-        onPieceUpdated();
+        await onPieceUpdated();
       }
+      setIsRefreshing(false);
     } catch (error) {
       console.error("Error saving notes:", error);
       // Still update UI even if database save fails
@@ -276,13 +320,15 @@ export default function PieceInfoCard({
     setIsEditingRepairEvent(false);
     
     // Save repair events to the database by updating the piece
+    // Note: Repair events are stored in the InventoryItem for now
+    // In the future, they should be stored in RepairOrder/RepairLineItem tables
     try {
       const pieceToSave: InventoryItem = {
         ...item,
         repairEvents: updatedEvents.length > 0 ? updatedEvents : undefined,
       };
       
-      const success = await piecesStorage.save(pieceToSave);
+      const success = await saveInventoryItem(pieceToSave);
       if (!success) {
         console.error("Failed to save repair events to database");
         // Still update UI even if database save fails
@@ -294,10 +340,14 @@ export default function PieceInfoCard({
         onRepairEventsUpdate(pieceId, updatedEvents);
       }
       
+      setIsRefreshing(true);
+      // Small delay to ensure database write is committed
+      await new Promise(resolve => setTimeout(resolve, 100));
       // Notify parent to refresh piece data
       if (onPieceUpdated) {
-        onPieceUpdated();
+        await onPieceUpdated();
       }
+      setIsRefreshing(false);
     } catch (error) {
       console.error("Error saving repair events:", error);
       // Still update UI even if database save fails
@@ -375,9 +425,11 @@ export default function PieceInfoCard({
       const pieceWithNotes: InventoryItem = {
         ...pieceToSave,
         notes: notesToSave.length > 0 ? notesToSave : undefined,
+        // Preserve repair events from original item
+        repairEvents: item.repairEvents,
       };
 
-      const success = await piecesStorage.save(pieceWithNotes);
+      const success = await saveInventoryItem(pieceWithNotes);
       if (success) {
         // Save notes via callback
         if (onNotesUpdate) {
@@ -386,10 +438,14 @@ export default function PieceInfoCard({
         }
         
         setIsEditing(false);
+        setIsRefreshing(true);
+        // Small delay to ensure database write is committed
+        await new Promise(resolve => setTimeout(resolve, 100));
         // Notify parent to refresh
         if (onPieceUpdated) {
-          onPieceUpdated();
+          await onPieceUpdated();
         }
+        setIsRefreshing(false);
       } else {
         alert("Error saving piece. Please try again.");
       }
@@ -402,7 +458,17 @@ export default function PieceInfoCard({
   };
 
   return (
-    <div className="rounded-xl border p-6 space-y-6">
+    <div className="rounded-xl border p-6 space-y-6 relative">
+      {/* Refreshing overlay */}
+      {isRefreshing && (
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-xl">
+          <div className="flex flex-col items-center gap-2">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <p className="text-sm text-muted-foreground">Refreshing data...</p>
+          </div>
+        </div>
+      )}
+      
       {/* Header with Edit Button */}
       <div className="flex justify-end items-center border-b pb-4">
         {!isEditing ? (
@@ -472,9 +538,18 @@ export default function PieceInfoCard({
                 },
                 {
                   label: "Turbine",
-                  value: editedPiece.turbine,
-                  type: "text",
-                  onChange: (value) => setEditedPiece(prev => ({ ...prev, turbine: value })),
+                  value: editedPiece.turbine || "unassigned",
+                  type: "select",
+                  options: ["unassigned", ...turbines.map(t => t.id)],
+                  optionLabels: {
+                    "unassigned": "Unassigned",
+                    ...Object.fromEntries(turbines.map(t => {
+                      // Display format: "Unit 3A - T-301" (name - id)
+                      const displayName = `${t.name} - ${t.id}`;
+                      return [t.id, displayName];
+                    })),
+                  },
+                  onChange: (value) => setEditedPiece(prev => ({ ...prev, turbine: value === "unassigned" ? "" : value })),
                 },
               ]}
             />
@@ -973,6 +1048,7 @@ type EditableRow = {
   value: string;
   type: "text" | "number" | "select" | "readonly";
   options?: string[];
+  optionLabels?: Record<string, string>; // Map of option values to display labels
   onChange?: (value: string) => void;
   tone?: any;
   colorName?: string;
@@ -1001,13 +1077,19 @@ function EditableInfoCard({ rows }: { rows: EditableRow[] }) {
                   )
                 ) : row.type === "select" ? (
                   <Select value={row.value} onValueChange={row.onChange!}>
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue />
+                    <SelectTrigger className="h-8 text-sm w-full">
+                      <SelectValue>
+                        {row.optionLabels && row.optionLabels[row.value]
+                          ? row.optionLabels[row.value]
+                          : row.value}
+                      </SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[300px]">
                       {row.options?.map((option) => (
                         <SelectItem key={option} value={option}>
-                          {option}
+                          {row.optionLabels && row.optionLabels[option]
+                            ? row.optionLabels[option]
+                            : option}
                         </SelectItem>
                       ))}
                     </SelectContent>
