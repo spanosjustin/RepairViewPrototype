@@ -72,6 +72,7 @@ export default function ComponentInfoCard({
   // Edit mode state
   const [isEditing, setIsEditing] = React.useState(false);
   const [isSavingComponent, setIsSavingComponent] = React.useState(false);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [editedComponent, setEditedComponent] = React.useState({
     componentName: item.componentName || "",
     componentType: item.componentType || "",
@@ -221,10 +222,14 @@ export default function ComponentInfoCard({
         setPieceSearchTerm("");
         setIsPieceDropdownOpen(false);
         
+        setIsRefreshing(true);
+        // Small delay to ensure database write is committed
+        await new Promise(resolve => setTimeout(resolve, 100));
         // Notify parent to refresh
         if (onPieceAdded) {
-          onPieceAdded();
+          await onPieceAdded();
         }
+        setIsRefreshing(false);
       } else {
         console.error("Failed to save piece");
         alert("Failed to assign piece. Please try again.");
@@ -540,13 +545,17 @@ export default function ComponentInfoCard({
       setOriginalPiecePositions({});
       setOriginalPieceSNs({});
       
+      setIsRefreshing(true);
+      // Small delay to ensure database write is committed
+      await new Promise(resolve => setTimeout(resolve, 100));
       // Notify parent to refresh
       if (onComponentUpdated) {
-        onComponentUpdated();
+        await onComponentUpdated();
       }
       if (onPieceAdded) {
-        onPieceAdded();
+        await onPieceAdded();
       }
+      setIsRefreshing(false);
     } catch (error) {
       console.error("Error saving component:", error);
       alert("Error saving component. Please try again.");
@@ -590,7 +599,17 @@ export default function ComponentInfoCard({
     }
   };
   return (
-    <div className="w-full bg-gray-100 rounded-lg p-6 space-y-6">
+    <div className="w-full bg-gray-100 rounded-lg p-6 space-y-6 relative">
+      {/* Refreshing overlay */}
+      {isRefreshing && (
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg">
+          <div className="flex flex-col items-center gap-2">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <p className="text-sm text-muted-foreground">Refreshing data...</p>
+          </div>
+        </div>
+      )}
+      
       {/* Top Section: General Component Information */}
       <div className="space-y-4">
         {/* Header Row with Edit Button */}

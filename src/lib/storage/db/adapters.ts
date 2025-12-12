@@ -234,6 +234,15 @@ export async function getAllInventoryItems(): Promise<InventoryItem[]> {
       }
     }
 
+    // Load notes for this piece
+    const { noteStorage, noteLinkStorage } = await import('./storage');
+    const noteLinks = await noteLinkStorage.getByEntity('piece', piece.id);
+    const allNotes = await noteStorage.getAll();
+    const pieceNotes = noteLinks
+      .map(link => allNotes.find(n => n.id === link.note_id))
+      .filter((n): n is NonNullable<typeof n> => n !== undefined)
+      .map(n => n.body);
+
     inventoryItems.push({
       id: piece.id,
       sn: piece.sn,
@@ -247,11 +256,320 @@ export async function getAllInventoryItems(): Promise<InventoryItem[]> {
       componentType: componentType?.name || 'Unknown',
       turbine: turbine?.id || 'unassigned',
       position: position,
-      notes: [],
-      repairEvents: [],
+      notes: pieceNotes,
+      repairEvents: [], // TODO: Load repair events from RepairOrder/RepairLineItem tables
     });
   }
 
   return inventoryItems;
+}
+
+/**
+ * Save an InventoryItem to the new database structure
+ * Handles all related tables: Piece, Product, Component, ComponentPiece, ComponentAssignment, Notes
+ */
+export async function saveInventoryItem(item: InventoryItem): Promise<boolean> {
+  const { 
+    pieceStorage, 
+    productStorage, 
+    componentStorage, 
+    componentTypeStorage,
+    componentPieceStorage, 
+    componentAssignmentStorage,
+    turbineStorage,
+    useStatusStorage,
+    conditionCodeStorage,
+    noteStorage,
+    noteLinkStorage
+  } = await import('./storage');
+  
+  try {
+    // 1. Find or create Product by part number
+    let product = await productStorage.getByPartNumber(item.pn);
+    if (!product) {
+      // Create new product
+      const productId = `product-${Date.now()}`;
+      product = {
+        id: productId,
+        part_number: item.pn,
+        name: item.pn,
+        created_at: new Date().toISOString(),
+      };
+      await productStorage.save(product);
+    }
+
+    // 2. Find or get UseStatus by name
+    let useStatusCode: string | undefined;
+    if (item.status && item.status !== 'Unknown') {
+      const allStatuses = await useStatusStorage.getAll();
+      let useStatus = allStatuses.find(s => s.name === item.status);
+      if (!useStatus) {
+        // Create new status (using code as lowercase name)
+        useStatusCode = item.status.toLowerCase().replace(/\s+/g, '_');
+        useStatus = {
+          code: useStatusCode,
+          name: item.status,
+          severity: item.status === 'Replace Now' ? 7 : 
+                   item.status === 'Replace Soon' ? 6 :
+                   item.status === 'Degraded' ? 5 :
+                   item.status === 'Monitor' ? 4 : 1,
+        };
+        await useStatusStorage.saveAll([useStatus]);
+      } else {
+        useStatusCode = useStatus.code;
+      }
+    }
+
+    // 3. Find or get ConditionCode by name
+    let conditionCode: string | undefined;
+    if (item.state && item.state !== 'In Service') {
+      const allConditions = await conditionCodeStorage.getAll();
+      let condition = allConditions.find(c => c.name === item.state);
+      if (!condition) {
+        // Create new condition (using code as lowercase name)
+        conditionCode = item.state.toLowerCase().replace(/\s+/g, '_');
+        condition = {
+          code: conditionCode,
+          name: item.state,
+        };
+        await conditionCodeStorage.saveAll([condition]);
+      } else {
+        conditionCode = condition.code;
+      }
+    }
+
+    // 4. Find or create ComponentType
+    let componentType = null;
+    if (item.componentType) {
+      const typeCode = item.componentType.toLowerCase().replace(/\s+/g, '');
+      componentType = await componentTypeStorage.get(typeCode);
+      if (!componentType) {
+        // Create new component type
+        componentType = {
+          code: typeCode,
+          name: item.componentType,
+        };
+        await componentTypeStorage.saveAll([componentType]);
+      }
+    }
+
+    // 5. Find or create Component
+    let component = null;
+    if (item.component && item.component !== 'Unassigned') {
+      const allComponents = await componentStorage.getAll();
+      component = allComponents.find(c => c.name === item.component);
+      if (!component && componentType) {
+        // Create new component
+        const componentId = `component-${Date.now()}`;
+        component = {
+          id: componentId,
+          name: item.component,
+          type_code: componentType.code,
+          created_at: new Date().toISOString(),
+        };
+        await componentStorage.save(component);
+      }
+    }
+
+    // 6. Get or create Piece
+    let piece = null;
+    if (item.id) {
+      piece = await pieceStorage.get(item.id);
+    }
+    if (!piece && item.sn) {
+      piece = await pieceStorage.getBySerialNumber(item.sn);
+    }
+
+    const now = new Date().toISOString();
+    if (!piece) {
+      // Create new piece
+      const pieceId = `piece-${Date.now()}`;
+      piece = {
+        id: pieceId,
+        sn: item.sn,
+        product_id: product.id,
+        pn: item.pn,
+        use_status_code: useStatusCode,
+        condition_code: conditionCode,
+        hours: item.hours || 0,
+        trips: item.trips || 0,
+        starts: item.starts || 0,
+        created_at: now,
+        updated_at: now,
+      };
+    } else {
+      // Update existing piece
+      piece = {
+        ...piece,
+        sn: item.sn,
+        product_id: product.id,
+        pn: item.pn,
+        use_status_code: useStatusCode,
+        condition_code: conditionCode,
+        hours: item.hours || 0,
+        trips: item.trips || 0,
+        starts: item.starts || 0,
+        updated_at: now,
+      };
+    }
+    await pieceStorage.save(piece);
+
+    // 7. Update ComponentPiece junction table
+    if (component && item.position) {
+      const existingComponentPiece = await componentPieceStorage.getCurrentByPiece(piece.id);
+      const positionNum = parseInt(item.position, 10) || 1;
+      
+      if (existingComponentPiece) {
+        // Update existing assignment if component or position changed
+        if (existingComponentPiece.component_id !== component.id || 
+            existingComponentPiece.position !== positionNum) {
+          // End the old assignment
+          const oldAssignment = {
+            ...existingComponentPiece,
+            valid_to: now,
+          };
+          await componentPieceStorage.save(oldAssignment);
+          
+          // Create new assignment
+          const newComponentPiece = {
+            id: `componentpiece-${Date.now()}`,
+            component_id: component.id,
+            piece_id: piece.id,
+            position: positionNum,
+            valid_from: now,
+            valid_to: undefined,
+            created_at: now,
+          };
+          await componentPieceStorage.save(newComponentPiece);
+        }
+      } else {
+        // Create new assignment
+        const newComponentPiece = {
+          id: `componentpiece-${Date.now()}`,
+          component_id: component.id,
+          piece_id: piece.id,
+          position: positionNum,
+          valid_from: now,
+          valid_to: undefined,
+          created_at: now,
+        };
+        await componentPieceStorage.save(newComponentPiece);
+      }
+
+      // 8. Update ComponentAssignment if turbine changed
+      if (item.turbine && item.turbine !== 'unassigned') {
+        const existingAssignment = await componentAssignmentStorage.getCurrentByComponent(component.id);
+        const turbine = await turbineStorage.get(item.turbine);
+        
+        if (turbine) {
+          if (existingAssignment) {
+            if (existingAssignment.turbine_id !== turbine.id) {
+              // End old assignment
+              const oldAssignment = {
+                ...existingAssignment,
+                valid_to: now,
+              };
+              await componentAssignmentStorage.save(oldAssignment);
+              
+              // Create new assignment
+              const newAssignment = {
+                id: `assignment-${Date.now()}`,
+                turbine_id: turbine.id,
+                component_id: component.id,
+                position: positionNum,
+                valid_from: now,
+                valid_to: undefined,
+                created_at: now,
+              };
+              await componentAssignmentStorage.save(newAssignment);
+            }
+          } else {
+            // Create new assignment
+            const newAssignment = {
+              id: `assignment-${Date.now()}`,
+              turbine_id: turbine.id,
+              component_id: component.id,
+              position: positionNum,
+              valid_from: now,
+              valid_to: undefined,
+              created_at: now,
+            };
+            await componentAssignmentStorage.save(newAssignment);
+          }
+        }
+      }
+    }
+
+    // 9. Save notes to Note and NoteLink tables
+    if (item.notes && item.notes.length > 0) {
+      // Get existing notes for this piece
+      const existingNoteLinks = await noteLinkStorage.getByEntity('piece', piece.id);
+      const existingNoteIds = new Set(existingNoteLinks.map(link => link.note_id));
+      const allNotes = await noteStorage.getAll();
+      const existingNotesForPiece = existingNoteLinks
+        .map(link => allNotes.find(n => n.id === link.note_id))
+        .filter((n): n is NonNullable<typeof n> => n !== undefined);
+      
+      // Create a set of note texts that should exist
+      const desiredNoteTexts = new Set(item.notes.filter(n => n.trim()));
+      
+      // Remove notes that are no longer in the list
+      for (const existingNote of existingNotesForPiece) {
+        if (!desiredNoteTexts.has(existingNote.body)) {
+          // Note was removed - delete the note link (but keep the note itself for history)
+          const linkToDelete = existingNoteLinks.find(link => link.note_id === existingNote.id);
+          if (linkToDelete) {
+            // In a production system, you might want to soft-delete or archive
+            // For now, we'll just not recreate the link
+          }
+        }
+      }
+      
+      // Create/update notes
+      for (const noteText of item.notes) {
+        if (!noteText.trim()) continue;
+        
+        // Check if note already exists for this piece (by text matching)
+        const existingNoteForPiece = existingNotesForPiece.find(n => n.body === noteText);
+        
+        if (existingNoteForPiece) {
+          // Note already exists and is linked - no action needed
+          continue;
+        }
+        
+        // Check if note exists elsewhere (by text matching)
+        let note = allNotes.find(n => n.body === noteText);
+        
+        if (!note) {
+          // Create new note
+          const noteId = `note-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          note = {
+            id: noteId,
+            note_type: 'piece',
+            body: noteText,
+            created_at: now,
+          };
+          await noteStorage.save(note);
+        }
+        
+        // Create note link if it doesn't exist
+        if (!existingNoteIds.has(note.id)) {
+          const noteLink = {
+            id: `notelink-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            note_id: note.id,
+            entity_table: 'piece',
+            entity_id: piece.id,
+            created_at: now,
+          };
+          await noteLinkStorage.save(noteLink);
+        }
+      }
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error saving inventory item:', error);
+    return false;
+  }
 }
 
