@@ -14,8 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { saveInventoryItem } from "@/lib/storage/db/adapters";
-import { turbineStorage } from "@/lib/storage/db/storage";
-import type { Turbine } from "@/lib/storage/db/types";
+import { turbineStorage, componentStorage } from "@/lib/storage/db/storage";
+import type { Turbine, Component } from "@/lib/storage/db/types";
 
 type ItemWithExtras = InventoryItem & {
   turbine?: string | null;
@@ -44,6 +44,17 @@ export default function PieceInfoCard({
   // Load turbines from database
   const [turbines, setTurbines] = React.useState<Turbine[]>([]);
   
+  // Load components from database
+  const [components, setComponents] = React.useState<Component[]>([]);
+  
+  // Turbine combobox state
+  const [turbineSearchTerm, setTurbineSearchTerm] = React.useState("");
+  const [isTurbineDropdownOpen, setIsTurbineDropdownOpen] = React.useState(false);
+  
+  // Component combobox state
+  const [componentSearchTerm, setComponentSearchTerm] = React.useState("");
+  const [isComponentDropdownOpen, setIsComponentDropdownOpen] = React.useState(false);
+  
   React.useEffect(() => {
     const loadTurbines = async () => {
       try {
@@ -57,6 +68,78 @@ export default function PieceInfoCard({
     
     loadTurbines();
   }, []);
+  
+  React.useEffect(() => {
+    const loadComponents = async () => {
+      try {
+        const allComponents = await componentStorage.getAll();
+        setComponents(allComponents);
+      } catch (error) {
+        console.error('Error loading components:', error);
+        setComponents([]);
+      }
+    };
+    
+    loadComponents();
+  }, []);
+  
+  // Filter turbines based on search term
+  const filteredTurbines = React.useMemo(() => {
+    if (!turbineSearchTerm.trim()) {
+      return turbines;
+    }
+    
+    const searchLower = turbineSearchTerm.toLowerCase();
+    return turbines.filter(t => {
+      const name = (t.name || "").toLowerCase();
+      const id = (t.id || "").toLowerCase();
+      const unit = (t.unit || "").toLowerCase();
+      const displayText = `${t.name} - ${t.id}`.toLowerCase();
+      return name.includes(searchLower) || 
+             id.includes(searchLower) || 
+             unit.includes(searchLower) ||
+             displayText.includes(searchLower);
+    });
+  }, [turbines, turbineSearchTerm]);
+  
+  // Get display text for a turbine
+  const getTurbineDisplayText = React.useCallback((turbineId: string) => {
+    if (turbineId === "unassigned" || !turbineId) {
+      return "Unassigned";
+    }
+    const turbine = turbines.find(t => t.id === turbineId);
+    if (!turbine) return turbineId;
+    return `${turbine.name} - ${turbine.id}`;
+  }, [turbines]);
+  
+  // Filter components based on search term
+  const filteredComponents = React.useMemo(() => {
+    if (!componentSearchTerm.trim()) {
+      return components;
+    }
+    
+    const searchLower = componentSearchTerm.toLowerCase();
+    return components.filter(c => {
+      const name = (c.name || "").toLowerCase();
+      const id = (c.id || "").toLowerCase();
+      const typeCode = (c.type_code || "").toLowerCase();
+      return name.includes(searchLower) || 
+             id.includes(searchLower) || 
+             typeCode.includes(searchLower);
+    });
+  }, [components, componentSearchTerm]);
+  
+  // Get display text for a component
+  const getComponentDisplayText = React.useCallback((componentName: string) => {
+    if (!componentName) return "";
+    // Try to find component by name first
+    const component = components.find(c => c.name === componentName);
+    if (component) {
+      return component.name;
+    }
+    // If not found, just return the name as-is
+    return componentName;
+  }, [components]);
 
   /* ---------- Edit Mode State ---------- */
   const [isEditing, setIsEditing] = React.useState(false);
@@ -76,7 +159,7 @@ export default function PieceInfoCard({
     turbine: item.turbine || "",
     position: item.position || "",
   });
-  const [editedNotes, setEditedNotes] = React.useState<string[]>([]);
+  const [editedNotes, setEditedNotes] = React.useState<Array<{ id: string; text: string }>>([]);
 
   /* ---------- Notes State ---------- */
   const notes = item.notes ?? [];
@@ -116,6 +199,12 @@ export default function PieceInfoCard({
         turbine: item.turbine || "",
         position: item.position || "",
       });
+      // Reset turbine search when exiting edit mode
+      setTurbineSearchTerm("");
+      setIsTurbineDropdownOpen(false);
+      // Reset component search when exiting edit mode
+      setComponentSearchTerm("");
+      setIsComponentDropdownOpen(false);
     }
   }, [item, isEditing]);
 
@@ -128,8 +217,11 @@ export default function PieceInfoCard({
       .map(n => String(n));
     setLocalNotes(validNotes);
     // Also update editedNotes if not in edit mode (to sync after save)
+    // Convert to structure with IDs
     if (!isEditing) {
-      setEditedNotes(validNotes);
+      setEditedNotes(
+        validNotes.map((text, idx) => ({ id: `note-${Date.now()}-${idx}`, text }))
+      );
     }
   }, [item.notes, isEditing]);
 
@@ -382,9 +474,14 @@ export default function PieceInfoCard({
       turbine: item.turbine || "",
       position: item.position || "",
     });
-    // Initialize edited notes from current notes
+    // Initialize edited notes from current notes with unique IDs
     const currentNotes = item.notes ?? [];
-    setEditedNotes(currentNotes.map(n => n ?? "").filter(n => n !== ""));
+    setEditedNotes(
+      currentNotes
+        .map(n => n ?? "")
+        .filter(n => n !== "")
+        .map((text, idx) => ({ id: `note-${Date.now()}-${idx}`, text }))
+    );
     setIsEditing(true);
   };
 
@@ -405,9 +502,14 @@ export default function PieceInfoCard({
       turbine: item.turbine || "",
       position: item.position || "",
     });
-    // Reset edited notes to original values
+    // Reset edited notes to original values with unique IDs
     const currentNotes = item.notes ?? [];
-    setEditedNotes(currentNotes.map(n => n ?? "").filter(n => n !== ""));
+    setEditedNotes(
+      currentNotes
+        .map(n => n ?? "")
+        .filter(n => n !== "")
+        .map((text, idx) => ({ id: `note-${Date.now()}-${idx}`, text }))
+    );
   };
 
   const handleSavePiece = async () => {
@@ -420,8 +522,10 @@ export default function PieceInfoCard({
         starts: Number(editedPiece.starts) || 0,
       };
 
-      // Include notes in the piece to save
-      const notesToSave = editedNotes.filter(n => n.trim() !== "");
+      // Include notes in the piece to save (extract text from note objects)
+      const notesToSave = editedNotes
+        .map(n => n.text.trim())
+        .filter(text => text !== "");
       const pieceWithNotes: InventoryItem = {
         ...pieceToSave,
         notes: notesToSave.length > 0 ? notesToSave : undefined,
@@ -532,14 +636,26 @@ export default function PieceInfoCard({
                 },
                 {
                   label: "Component",
-                  value: editedPiece.component,
-                  type: "text",
-                  onChange: (value) => setEditedPiece(prev => ({ ...prev, component: value })),
+                  value: editedPiece.component || "",
+                  type: "combobox",
+                  options: components.map(c => c.name),
+                  optionLabels: Object.fromEntries(components.map(c => [c.name, c.name])),
+                  onChange: (value) => {
+                    setEditedPiece(prev => ({ ...prev, component: value }));
+                    setComponentSearchTerm(""); // Clear search when selection is made
+                  },
+                  // Combobox-specific props
+                  searchTerm: componentSearchTerm,
+                  onSearchChange: setComponentSearchTerm,
+                  isOpen: isComponentDropdownOpen,
+                  onOpenChange: setIsComponentDropdownOpen,
+                  filteredOptions: filteredComponents.map(c => c.name),
+                  getDisplayText: getComponentDisplayText,
                 },
                 {
                   label: "Turbine",
                   value: editedPiece.turbine || "unassigned",
-                  type: "select",
+                  type: "combobox",
                   options: ["unassigned", ...turbines.map(t => t.id)],
                   optionLabels: {
                     "unassigned": "Unassigned",
@@ -549,7 +665,17 @@ export default function PieceInfoCard({
                       return [t.id, displayName];
                     })),
                   },
-                  onChange: (value) => setEditedPiece(prev => ({ ...prev, turbine: value === "unassigned" ? "" : value })),
+                  onChange: (value) => {
+                    setEditedPiece(prev => ({ ...prev, turbine: value === "unassigned" ? "" : value }));
+                    setTurbineSearchTerm(""); // Clear search when selection is made
+                  },
+                  // Combobox-specific props
+                  searchTerm: turbineSearchTerm,
+                  onSearchChange: setTurbineSearchTerm,
+                  isOpen: isTurbineDropdownOpen,
+                  onOpenChange: setIsTurbineDropdownOpen,
+                  filteredOptions: ["unassigned", ...filteredTurbines.map(t => t.id)],
+                  getDisplayText: getTurbineDisplayText,
                 },
               ]}
             />
@@ -663,7 +789,7 @@ export default function PieceInfoCard({
                 <h4 className="text-sm font-medium">Notes</h4>
                 <button
                   type="button"
-                  onClick={() => setEditedNotes([...editedNotes, ""])}
+                  onClick={() => setEditedNotes([...editedNotes, { id: `note-${Date.now()}-${Math.random()}`, text: "" }])}
                   className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1"
                   title="Add note"
                 >
@@ -677,17 +803,28 @@ export default function PieceInfoCard({
                   </div>
                 ) : (
                   editedNotes.map((note, index) => (
-                    <div key={index} className="space-y-1">
+                    <div key={note.id} className="space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">Note {index + 1}</span>
                         <button
                           type="button"
-                          onClick={() => {
-                            const newNotes = editedNotes.filter((_, i) => i !== index);
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const newNotes = editedNotes.filter(n => n.id !== note.id);
                             setEditedNotes(newNotes);
                             // Adjust noteIdx if needed
-                            if (noteIdx >= newNotes.length && newNotes.length > 0) {
-                              setNoteIdx(newNotes.length - 1);
+                            // If we deleted the note at the current index or after it, adjust
+                            if (noteIdx >= index) {
+                              if (newNotes.length === 0) {
+                                setNoteIdx(0);
+                              } else if (noteIdx >= newNotes.length) {
+                                setNoteIdx(newNotes.length - 1);
+                              } else if (noteIdx === index) {
+                                // If we deleted the current note, stay at the same index (which now points to the next note)
+                                // or move to the last note if we deleted the last one
+                                setNoteIdx(Math.min(noteIdx, newNotes.length - 1));
+                              }
                             }
                           }}
                           className="px-1.5 py-0.5 rounded text-xs bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300"
@@ -697,10 +834,11 @@ export default function PieceInfoCard({
                         </button>
                       </div>
                       <textarea
-                        value={note}
+                        value={note.text}
                         onChange={(e) => {
-                          const newNotes = [...editedNotes];
-                          newNotes[index] = e.target.value;
+                          const newNotes = editedNotes.map(n => 
+                            n.id === note.id ? { ...n, text: e.target.value } : n
+                          );
                           setEditedNotes(newNotes);
                         }}
                         className="w-full h-40 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
@@ -1046,12 +1184,19 @@ function InfoCard({ rows }: { rows: Array<[label: string, value: string, tone?: 
 type EditableRow = {
   label: string;
   value: string;
-  type: "text" | "number" | "select" | "readonly";
+  type: "text" | "number" | "select" | "readonly" | "combobox";
   options?: string[];
   optionLabels?: Record<string, string>; // Map of option values to display labels
   onChange?: (value: string) => void;
   tone?: any;
   colorName?: string;
+  // Combobox-specific props
+  searchTerm?: string;
+  onSearchChange?: (value: string) => void;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  filteredOptions?: string[];
+  getDisplayText?: (value: string) => string;
 };
 
 function EditableInfoCard({ rows }: { rows: EditableRow[] }) {
@@ -1094,6 +1239,97 @@ function EditableInfoCard({ rows }: { rows: EditableRow[] }) {
                       ))}
                     </SelectContent>
                   </Select>
+                ) : row.type === "combobox" ? (
+                  <div className="relative w-full">
+                    <Input
+                      type="text"
+                      value={row.searchTerm !== undefined && row.searchTerm !== "" 
+                        ? row.searchTerm 
+                        : (row.getDisplayText ? row.getDisplayText(row.value) : row.value)}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        if (row.onSearchChange) {
+                          row.onSearchChange(newValue);
+                        }
+                        if (row.onOpenChange) {
+                          row.onOpenChange(true);
+                        }
+                      }}
+                      onFocus={() => {
+                        if (row.onOpenChange) {
+                          row.onOpenChange(true);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // Delay closing to allow click events
+                        setTimeout(() => {
+                          if (row.onOpenChange) {
+                            row.onOpenChange(false);
+                          }
+                          // Clear search term if dropdown closes
+                          if (row.onSearchChange && row.searchTerm) {
+                            row.onSearchChange("");
+                          }
+                        }, 200);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && row.filteredOptions && row.filteredOptions.length > 0) {
+                          e.preventDefault();
+                          // Select first filtered option
+                          const firstOption = row.filteredOptions[0];
+                          if (row.onChange) {
+                            row.onChange(firstOption);
+                          }
+                          if (row.onSearchChange) {
+                            row.onSearchChange("");
+                          }
+                          if (row.onOpenChange) {
+                            row.onOpenChange(false);
+                          }
+                        } else if (e.key === "Escape") {
+                          if (row.onOpenChange) {
+                            row.onOpenChange(false);
+                          }
+                          if (row.onSearchChange) {
+                            row.onSearchChange("");
+                          }
+                        }
+                      }}
+                      className="h-8 text-sm w-full"
+                      placeholder="Type to search..."
+                    />
+                    {row.isOpen && row.filteredOptions && row.filteredOptions.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-[300px] overflow-auto">
+                        {row.filteredOptions.map((option) => {
+                          const displayText = row.getDisplayText 
+                            ? row.getDisplayText(option)
+                            : (row.optionLabels && row.optionLabels[option]
+                              ? row.optionLabels[option]
+                              : option);
+                          return (
+                            <div
+                              key={option}
+                              className="px-3 py-2 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground"
+                              onMouseDown={(e) => {
+                                e.preventDefault(); // Prevent input blur
+                                if (row.onChange) {
+                                  row.onChange(option);
+                                }
+                                if (row.onSearchChange) {
+                                  row.onSearchChange("");
+                                }
+                                if (row.onOpenChange) {
+                                  row.onOpenChange(false);
+                                }
+                              }}
+                            >
+                              {displayText}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 ) : row.type === "number" ? (
                   <Input
                     type="number"

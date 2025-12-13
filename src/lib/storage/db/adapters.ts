@@ -502,66 +502,90 @@ export async function saveInventoryItem(item: InventoryItem): Promise<boolean> {
 
     // 9. Save notes to Note and NoteLink tables
     if (item.notes && item.notes.length > 0) {
-      // Get existing notes for this piece
+      // Get existing notes for this piece (in order by creation time)
       const existingNoteLinks = await noteLinkStorage.getByEntity('piece', piece.id);
-      const existingNoteIds = new Set(existingNoteLinks.map(link => link.note_id));
+      // Sort note links by created_at to ensure consistent order
+      const sortedNoteLinks = [...existingNoteLinks].sort((a, b) => {
+        const aTime = new Date(a.created_at).getTime();
+        const bTime = new Date(b.created_at).getTime();
+        return aTime - bTime;
+      });
       const allNotes = await noteStorage.getAll();
-      const existingNotesForPiece = existingNoteLinks
+      const existingNotesForPiece = sortedNoteLinks
         .map(link => allNotes.find(n => n.id === link.note_id))
         .filter((n): n is NonNullable<typeof n> => n !== undefined);
       
-      // Create a set of note texts that should exist
-      const desiredNoteTexts = new Set(item.notes.filter(n => n.trim()));
-      
-      // Remove notes that are no longer in the list
-      for (const existingNote of existingNotesForPiece) {
-        if (!desiredNoteTexts.has(existingNote.body)) {
-          // Note was removed - delete the note link (but keep the note itself for history)
-          const linkToDelete = existingNoteLinks.find(link => link.note_id === existingNote.id);
-          if (linkToDelete) {
-            // In a production system, you might want to soft-delete or archive
-            // For now, we'll just not recreate the link
-          }
-        }
-      }
-      
-      // Create/update notes
-      for (const noteText of item.notes) {
+      // Process notes by position/index to maintain order
+      for (let index = 0; index < item.notes.length; index++) {
+        const noteText = item.notes[index];
         if (!noteText.trim()) continue;
         
-        // Check if note already exists for this piece (by text matching)
-        const existingNoteForPiece = existingNotesForPiece.find(n => n.body === noteText);
+        // Get the existing note at this position (if any)
+        const existingNoteAtPosition = existingNotesForPiece[index];
         
-        if (existingNoteForPiece) {
-          // Note already exists and is linked - no action needed
-          continue;
-        }
-        
-        // Check if note exists elsewhere (by text matching)
-        let note = allNotes.find(n => n.body === noteText);
-        
-        if (!note) {
-          // Create new note
+        if (existingNoteAtPosition) {
+          // Note exists at this position - update it if text changed
+          if (existingNoteAtPosition.body !== noteText) {
+            // Update the existing note's body
+            const updatedNote = {
+              ...existingNoteAtPosition,
+              body: noteText,
+            };
+            await noteStorage.save(updatedNote);
+          }
+          // Note link already exists, no need to create it
+        } else {
+          // No note at this position - create a new note
           const noteId = `note-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          note = {
+          const newNote = {
             id: noteId,
             note_type: 'piece',
             body: noteText,
             created_at: now,
           };
-          await noteStorage.save(note);
-        }
-        
-        // Create note link if it doesn't exist
-        if (!existingNoteIds.has(note.id)) {
+          await noteStorage.save(newNote);
+          
+          // Create note link
           const noteLink = {
             id: `notelink-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            note_id: note.id,
+            note_id: newNote.id,
             entity_table: 'piece',
             entity_id: piece.id,
             created_at: now,
           };
           await noteLinkStorage.save(noteLink);
+        }
+      }
+      
+      // Remove note links for notes that are beyond the new array length
+      // (i.e., notes that were deleted)
+      if (existingNotesForPiece.length > item.notes.length) {
+        for (let index = item.notes.length; index < existingNotesForPiece.length; index++) {
+          const noteToRemove = existingNotesForPiece[index];
+          if (noteToRemove) {
+            const linkToRemove = sortedNoteLinks.find(link => link.note_id === noteToRemove.id);
+            if (linkToRemove) {
+              // Delete the note link (but keep the note itself for history)
+              // In a production system, you might want to soft-delete or archive
+              try {
+                const { IndexedDBStorage, STORES } = await import('./indexedDB');
+                await IndexedDBStorage.delete(STORES.NOTE_LINKS, linkToRemove.id);
+              } catch (error) {
+                console.error('Error deleting note link:', error);
+              }
+            }
+          }
+        }
+      }
+    } else {
+      // No notes in the array - remove all note links for this piece
+      const existingNoteLinks = await noteLinkStorage.getByEntity('piece', piece.id);
+      const { IndexedDBStorage, STORES } = await import('./indexedDB');
+      for (const link of existingNoteLinks) {
+        try {
+          await IndexedDBStorage.delete(STORES.NOTE_LINKS, link.id);
+        } catch (error) {
+          console.error('Error deleting note link:', error);
         }
       }
     }
