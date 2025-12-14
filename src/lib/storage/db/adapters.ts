@@ -181,6 +181,7 @@ export function dbPieceToInventoryItem(
 /**
  * Get all inventory items from database
  * Gets ALL pieces directly from the pieces table
+ * OPTIMIZED: Uses batch loading and lookup tables to avoid N+1 queries
  */
 export async function getAllInventoryItems(): Promise<InventoryItem[]> {
   const { 
@@ -192,27 +193,94 @@ export async function getAllInventoryItems(): Promise<InventoryItem[]> {
     componentAssignmentStorage,
     turbineStorage,
     useStatusStorage,
-    conditionCodeStorage
+    conditionCodeStorage,
+    noteStorage,
+    noteLinkStorage
   } = await import('./storage');
   
+  // Step 1: Load all pieces at once
   const allPieces = await pieceStorage.getAll();
+  
+  // Step 2: Pre-load all lookup tables in parallel
+  const [
+    allProducts,
+    allUseStatuses,
+    allConditionCodes,
+    allComponents,
+    allComponentTypes,
+    allTurbines,
+    allComponentPieces,
+    allComponentAssignments,
+    allNotes,
+    allNoteLinks
+  ] = await Promise.all([
+    productStorage.getAll(),
+    useStatusStorage.getAll(),
+    conditionCodeStorage.getAll(),
+    componentStorage.getAll(),
+    componentTypeStorage.getAll(),
+    turbineStorage.getAll(),
+    componentPieceStorage.getAll(),
+    componentAssignmentStorage.getAll(),
+    noteStorage.getAll(),
+    noteLinkStorage.getAll()
+  ]);
+
+  // Step 3: Build lookup Maps for O(1) access
+  const productMap = new Map(allProducts.map(p => [p.id, p]));
+  const useStatusMap = new Map(allUseStatuses.map(s => [s.code, s]));
+  const conditionCodeMap = new Map(allConditionCodes.map(c => [c.code, c]));
+  const componentMap = new Map(allComponents.map(c => [c.id, c]));
+  const componentTypeMap = new Map(allComponentTypes.map(t => [t.code, t]));
+  const turbineMap = new Map(allTurbines.map(t => [t.id, t]));
+  const noteMap = new Map(allNotes.map(n => [n.id, n]));
+
+  // Step 4: Build lookup Maps for component pieces and assignments
+  // Filter to only current assignments (valid_to is null/undefined)
+  const currentComponentPieces = allComponentPieces.filter(cp => !cp.valid_to);
+  const currentComponentAssignments = allComponentAssignments.filter(ca => !ca.valid_to);
+  
+  // Map: piece_id -> ComponentPiece (current assignment only)
+  const pieceToComponentPieceMap = new Map<string, typeof allComponentPieces[0]>();
+  currentComponentPieces.forEach(cp => {
+    pieceToComponentPieceMap.set(cp.piece_id, cp);
+  });
+
+  // Map: component_id -> ComponentAssignment (current assignment only)
+  const componentToAssignmentMap = new Map<string, typeof allComponentAssignments[0]>();
+  currentComponentAssignments.forEach(ca => {
+    componentToAssignmentMap.set(ca.component_id, ca);
+  });
+
+  // Step 5: Group note links by entity (piece_id)
+  const noteLinksByPiece = new Map<string, typeof allNoteLinks>();
+  allNoteLinks
+    .filter(link => link.entity_table === 'piece')
+    .forEach(link => {
+      if (!noteLinksByPiece.has(link.entity_id)) {
+        noteLinksByPiece.set(link.entity_id, []);
+      }
+      noteLinksByPiece.get(link.entity_id)!.push(link);
+    });
+
+  // Step 6: Process pieces using cached lookups (no more database calls!)
   const inventoryItems: InventoryItem[] = [];
 
   for (const piece of allPieces) {
-    // Get product
-    const product = await productStorage.get(piece.product_id);
+    // Get product from cache
+    const product = productMap.get(piece.product_id);
     if (!product) continue;
 
-    // Get status and condition
+    // Get status and condition from cache
     const useStatus = piece.use_status_code 
-      ? await useStatusStorage.get(piece.use_status_code)
+      ? useStatusMap.get(piece.use_status_code)
       : undefined;
     const condition = piece.condition_code
-      ? await conditionCodeStorage.get(piece.condition_code)
+      ? conditionCodeMap.get(piece.condition_code)
       : undefined;
 
-    // Find which component this piece is in
-    const componentPiece = await componentPieceStorage.getCurrentByPiece(piece.id);
+    // Find which component this piece is in (from cache)
+    const componentPiece = pieceToComponentPieceMap.get(piece.id);
     
     let component = null;
     let componentType = null;
@@ -220,26 +288,23 @@ export async function getAllInventoryItems(): Promise<InventoryItem[]> {
     let position = '1';
 
     if (componentPiece) {
-      component = await componentStorage.get(componentPiece.component_id);
+      component = componentMap.get(componentPiece.component_id);
       if (component) {
-        componentType = await componentTypeStorage.get(component.type_code);
+        componentType = componentTypeMap.get(component.type_code);
         position = componentPiece.position.toString();
         
-        // Find which turbine this component is assigned to
-        // NOTE: getCurrentByComponent returns a single assignment (or null), not an array
-        const assignment = await componentAssignmentStorage.getCurrentByComponent(component.id);
+        // Find which turbine this component is assigned to (from cache)
+        const assignment = componentToAssignmentMap.get(component.id);
         if (assignment) {
-          turbine = await turbineStorage.get(assignment.turbine_id);
+          turbine = turbineMap.get(assignment.turbine_id);
         }
       }
     }
 
-    // Load notes for this piece
-    const { noteStorage, noteLinkStorage } = await import('./storage');
-    const noteLinks = await noteLinkStorage.getByEntity('piece', piece.id);
-    const allNotes = await noteStorage.getAll();
-    const pieceNotes = noteLinks
-      .map(link => allNotes.find(n => n.id === link.note_id))
+    // Load notes for this piece (from cache)
+    const pieceNoteLinks = noteLinksByPiece.get(piece.id) || [];
+    const pieceNotes = pieceNoteLinks
+      .map(link => noteMap.get(link.note_id))
       .filter((n): n is NonNullable<typeof n> => n !== undefined)
       .map(n => n.body);
 

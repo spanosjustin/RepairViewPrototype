@@ -417,52 +417,31 @@ export default function InventoryListPage() {
   const [pieceSortColumn, setPieceSortColumn] = React.useState<SortablePieceColumn | undefined>(undefined);
   const [pieceSortDirection, setPieceSortDirection] = React.useState<SortDirection>(null);
 
-  // Load pieces from new database
-  React.useEffect(() => {
-    const loadPieces = async () => {
-      try {
-        setLoading(true);
-        // Load all inventory items from new database structure
-        const inventoryItems = await getAllInventoryItems();
-        setPieces(inventoryItems);
-      } catch (error) {
-        console.error('Error loading pieces:', error);
-        setPieces([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadPieces();
-  }, []);
-
-  // Load components and plants from new database
+  // Load all data from database (consolidated to avoid duplicate getAllInventoryItems calls)
   React.useEffect(() => {
     const loadData = async () => {
       try {
-        // Load components from database
-        const dbComps = await componentStorage.getAll();
+        setLoading(true);
         
-        // Debug: Check if components have hours/trips/starts
-        if (dbComps.length > 0) {
-          const firstComp = dbComps[0];
-          console.log('Loaded component from DB:', {
-            id: firstComp.id,
-            name: firstComp.name,
-            type_code: firstComp.type_code,
-            hours: firstComp.hours,
-            trips: firstComp.trips,
-            starts: firstComp.starts,
-            hasHours: 'hours' in firstComp,
-            hasTrips: 'trips' in firstComp,
-            hasStarts: 'starts' in firstComp,
-          });
-        }
+        // Load all data in parallel where possible
+        const [
+          inventoryItems,
+          dbComps,
+          plants
+        ] = await Promise.all([
+          getAllInventoryItems(), // Load pieces (this is the expensive operation, now optimized)
+          componentStorage.getAll(),
+          plantStorage.getAll()
+        ]);
         
+        // Set pieces and components (components is just for compatibility, same as pieces)
+        setPieces(inventoryItems);
+        setComponents(inventoryItems);
+        
+        // Set database components
         setDbComponents(dbComps as Component[]);
         
-        // Load plants and their turbines
-        const plants = await plantStorage.getAll();
+        // Load plants with their turbines
         const plantsWithTurbines = await Promise.all(
           plants.map(async (plant) => {
             const plantTurbines = await turbineStorage.getByPlant(plant.id);
@@ -474,15 +453,14 @@ export default function InventoryListPage() {
           })
         );
         setAllPlants(plantsWithTurbines);
-        
-        // Set components for compatibility (using pieces data)
-        const inventoryItems = await getAllInventoryItems();
-        setComponents(inventoryItems);
       } catch (error) {
         console.error('Error loading data:', error);
+        setPieces([]);
+        setComponents([]);
         setDbComponents([]);
         setAllPlants([]);
-        setComponents([]);
+      } finally {
+        setLoading(false);
       }
     };
     
