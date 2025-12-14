@@ -17,7 +17,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { piecesStorage, componentsStorage, type Component } from "@/lib/storage/indexedDB";
+import { componentStorage, componentTypeStorage, turbineStorage, componentAssignmentStorage } from "@/lib/storage/db/storage";
+import type { Component, Turbine, ComponentAssignment } from "@/lib/storage/db/types";
+import { saveInventoryItem } from "@/lib/storage/db/adapters";
 import { Pencil, Check, X, Trash2 } from "lucide-react";
 import { useStatusColors } from "@/hooks/useStatusColors";
 import { getTone, getColorName, getBadgeClasses } from "@/lib/settings/colorMapper";
@@ -69,6 +71,11 @@ export default function ComponentInfoCard({
   const [pieceSearchTerm, setPieceSearchTerm] = React.useState<string>("");
   const [isPieceDropdownOpen, setIsPieceDropdownOpen] = React.useState(false);
   
+  // Turbine dropdown state
+  const [turbines, setTurbines] = React.useState<Turbine[]>([]);
+  const [turbineSearchTerm, setTurbineSearchTerm] = React.useState<string>("");
+  const [isTurbineDropdownOpen, setIsTurbineDropdownOpen] = React.useState(false);
+  
   // Edit mode state
   const [isEditing, setIsEditing] = React.useState(false);
   const [isSavingComponent, setIsSavingComponent] = React.useState(false);
@@ -76,9 +83,9 @@ export default function ComponentInfoCard({
   const [editedComponent, setEditedComponent] = React.useState({
     componentName: item.componentName || "",
     componentType: item.componentType || "",
-    hours: item.hours || "",
-    starts: item.starts || "",
-    trips: item.trips || "",
+    hours: item.hours !== undefined && item.hours !== null ? item.hours : "",
+    starts: item.starts !== undefined && item.starts !== null ? item.starts : "",
+    trips: item.trips !== undefined && item.trips !== null ? item.trips : "",
     turbine: item.turbine || "",
     status: item.status || "",
     state: item.state || "",
@@ -181,6 +188,53 @@ export default function ComponentInfoCard({
     return `${piece.sn || "—"} - ${piece.pn || "—"}`;
   }, [selectedPieceId, allPieces]);
 
+  // Load turbines on mount
+  React.useEffect(() => {
+    const loadTurbines = async () => {
+      try {
+        const allTurbines = await turbineStorage.getAll();
+        setTurbines(allTurbines);
+      } catch (error) {
+        console.error('Error loading turbines:', error);
+        setTurbines([]);
+      }
+    };
+    loadTurbines();
+  }, []);
+
+  // Filter turbines based on search term
+  const filteredTurbines = React.useMemo(() => {
+    if (!turbineSearchTerm.trim()) {
+      return turbines;
+    }
+    
+    const searchLower = turbineSearchTerm.toLowerCase();
+    return turbines.filter(turbine => {
+      const name = (turbine.name || "").toLowerCase();
+      const id = (turbine.id || "").toLowerCase();
+      const unit = (turbine.unit || "").toLowerCase();
+      return name.includes(searchLower) || id.includes(searchLower) || unit.includes(searchLower);
+    });
+  }, [turbines, turbineSearchTerm]);
+
+  // Get display text for a turbine
+  const getTurbineDisplayText = React.useCallback((turbineId: string) => {
+    if (turbineId === "unassigned" || !turbineId) {
+      return "Unassigned";
+    }
+    const turbine = turbines.find(t => t.id === turbineId);
+    if (!turbine) return turbineId;
+    // Display format: "Unit 3A - T-301" (name - id)
+    return `${turbine.name} - ${turbine.id}`;
+  }, [turbines]);
+
+  // Get current turbine display text
+  const currentTurbineDisplay = React.useMemo(() => {
+    const turbineId = editedComponent.turbine || "";
+    if (!turbineId) return "Unassigned";
+    return getTurbineDisplayText(turbineId);
+  }, [editedComponent.turbine, getTurbineDisplayText]);
+
   const v = (x: unknown) =>
     x === null || x === undefined || x === "" ? "—" : String(x);
 
@@ -213,7 +267,7 @@ export default function ComponentInfoCard({
         position: positionInput.trim(),
       };
 
-      const success = await piecesStorage.save(updatedPiece);
+      const success = await saveInventoryItem(updatedPiece);
       
       if (success) {
         setIsAddDialogOpen(false);
@@ -255,9 +309,9 @@ export default function ComponentInfoCard({
     const originalComp = {
       componentName: item.componentName || "",
       componentType: item.componentType || "",
-      hours: item.hours || "",
-      starts: item.starts || "",
-      trips: item.trips || "",
+      hours: item.hours !== undefined && item.hours !== null ? item.hours : "",
+      starts: item.starts !== undefined && item.starts !== null ? item.starts : "",
+      trips: item.trips !== undefined && item.trips !== null ? item.trips : "",
       turbine: item.turbine || "",
       status: item.status || "",
       state: item.state || "",
@@ -319,9 +373,9 @@ export default function ComponentInfoCard({
       setEditedComponent({
         componentName: item.componentName || "",
         componentType: item.componentType || "",
-        hours: item.hours || "",
-        starts: item.starts || "",
-        trips: item.trips || "",
+        hours: item.hours !== undefined && item.hours !== null ? item.hours : "",
+        starts: item.starts !== undefined && item.starts !== null ? item.starts : "",
+        trips: item.trips !== undefined && item.trips !== null ? item.trips : "",
         turbine: item.turbine || "",
         status: item.status || "",
         state: item.state || "",
@@ -341,6 +395,10 @@ export default function ComponentInfoCard({
     setSnSearchTerms(resetSearchTerms);
     setOpenSnDropdowns({});
     setDeletedPieceIds(new Set());
+    
+    // Reset turbine search term
+    setTurbineSearchTerm("");
+    setIsTurbineDropdownOpen(false);
     
     // Clear original values
     setOriginalComponent(null);
@@ -382,34 +440,63 @@ export default function ComponentInfoCard({
       // Try to find existing component by ID first, or by name if ID doesn't exist
       let existingComponent: Component | null = null;
       if (item.id) {
-        existingComponent = await componentsStorage.get(item.id);
+        existingComponent = await componentStorage.get(String(item.id));
       }
       
       // If not found by ID, try to find by name (in case component was created from mock data)
       if (!existingComponent && editedComponent.componentName) {
-        const allComponents = await componentsStorage.getAll();
+        const allComponents = await componentStorage.getAll();
         existingComponent = allComponents.find(
           c => c.name === editedComponent.componentName
         ) || null;
       }
       
-      // Prepare component data to save
+      // Find or create ComponentType
+      let typeCode: string | undefined;
+      if (editedComponent.componentType) {
+        const normalizedTypeCode = editedComponent.componentType.toLowerCase().replace(/\s+/g, '');
+        let componentType = await componentTypeStorage.get(normalizedTypeCode);
+        if (!componentType) {
+          // Create new component type
+          componentType = {
+            code: normalizedTypeCode,
+            name: editedComponent.componentType,
+          };
+          await componentTypeStorage.saveAll([componentType]);
+        }
+        typeCode = componentType.code;
+      }
+      
+      // Prepare component data to save (matching database schema)
+      const now = new Date().toISOString();
+      
+      // Parse hours, trips, starts from edited values
+      const parseNumber = (value: string | number | undefined): number => {
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string' && value !== "" && value !== "—") {
+          const parsed = parseFloat(value);
+          return isNaN(parsed) ? 0 : parsed;
+        }
+        return 0;
+      };
+      
+      const componentHours = parseNumber(editedComponent.hours);
+      const componentTrips = parseNumber(editedComponent.trips);
+      const componentStarts = parseNumber(editedComponent.starts);
+      
       const componentToSave: Component = {
-        // Use existing ID if found, otherwise let IndexedDB auto-generate
-        id: existingComponent?.id || item.id,
+        // Use existing ID if found, otherwise generate new ID
+        id: existingComponent?.id || `component-${Date.now()}`,
         name: editedComponent.componentName,
-        type: editedComponent.componentType,
-        componentType: editedComponent.componentType,
-        turbine: editedComponent.turbine || undefined,
-        status: item.status || undefined, // Status is read-only, use original value
-        state: editedComponent.state || undefined,
-        hours: editedComponent.hours ? Number(editedComponent.hours) : undefined,
-        starts: editedComponent.starts ? Number(editedComponent.starts) : undefined,
-        trips: editedComponent.trips ? Number(editedComponent.trips) : undefined,
+        type_code: typeCode || existingComponent?.type_code || '',
+        hours: componentHours,
+        trips: componentTrips,
+        starts: componentStarts,
+        created_at: existingComponent?.created_at || now,
       };
 
       // Save component to database
-      const componentSuccess = await componentsStorage.save(componentToSave);
+      const componentSuccess = await componentStorage.save(componentToSave);
       
       if (!componentSuccess) {
         alert("Failed to save component. Please try again.");
@@ -523,13 +610,122 @@ export default function ComponentInfoCard({
 
       // Save all piece updates to database
       if (pieceUpdates.length > 0) {
-        const piecesSuccess = await piecesStorage.saveAll(pieceUpdates);
-        if (!piecesSuccess) {
-          console.error("Failed to save some piece position changes");
+        // Save each piece using saveInventoryItem (handles new database structure)
+        const savePromises = pieceUpdates.map(piece => saveInventoryItem(piece));
+        const saveResults = await Promise.all(savePromises);
+        const successCount = saveResults.filter(result => result === true).length;
+        
+        if (successCount < pieceUpdates.length) {
+          console.error(`Failed to save ${pieceUpdates.length - successCount} of ${pieceUpdates.length} piece position changes`);
           // Still show success for component, but warn about pieces
-          alert("Component saved, but some piece position changes may not have been saved.");
+          alert(`Component saved, but ${pieceUpdates.length - successCount} piece position changes may not have been saved.`);
         } else {
           console.log(`Successfully saved ${pieceUpdates.length} piece updates`);
+        }
+      }
+
+      // Update pieces with status, state, and turbine if any were edited
+      // NOTE: Component hours/trips/starts are independent and should NOT update pieces
+      const statusChanged = editedComponent.status !== item.status && editedComponent.status !== "";
+      const stateChanged = editedComponent.state !== item.state && editedComponent.state !== "";
+      const turbineChanged = editedComponent.turbine !== item.turbine;
+      
+      if (statusChanged || stateChanged || turbineChanged) {
+        const pieceUpdates: InventoryItem[] = [];
+        
+        // Get all pieces that belong to this component (including ones not in the current pieces list)
+        const allComponentPieces = allPieces.filter(p => {
+          const pieceComponent = p.component || "";
+          return pieceComponent === componentName;
+        });
+        
+        allComponentPieces.forEach(piece => {
+          // Skip if piece is marked for deletion
+          const pieceId = piece.id?.toString() || piece.sn || String(piece.pn);
+          if (deletedPieceIds.has(pieceId)) return;
+          
+          const updatedPiece: InventoryItem = { ...piece };
+          let hasChanges = false;
+          
+          // Update status if changed
+          if (statusChanged && editedComponent.status) {
+            updatedPiece.status = editedComponent.status as InventoryItem['status'];
+            hasChanges = true;
+          }
+          
+          // Update state if changed
+          if (stateChanged && editedComponent.state) {
+            updatedPiece.state = editedComponent.state as InventoryItem['state'];
+            hasChanges = true;
+          }
+          
+          // Update turbine if changed
+          if (turbineChanged) {
+            updatedPiece.turbine = editedComponent.turbine || "";
+            hasChanges = true;
+          }
+          
+          if (hasChanges) {
+            pieceUpdates.push(updatedPiece);
+          }
+        });
+        
+        // Save all piece updates (status, state, turbine)
+        if (pieceUpdates.length > 0) {
+          const savePromises = pieceUpdates.map(piece => saveInventoryItem(piece));
+          const saveResults = await Promise.all(savePromises);
+          const successCount = saveResults.filter(result => result === true).length;
+          
+          if (successCount < pieceUpdates.length) {
+            console.error(`Failed to save ${pieceUpdates.length - successCount} of ${pieceUpdates.length} piece updates`);
+          } else {
+            console.log(`Successfully saved ${pieceUpdates.length} piece updates`);
+          }
+        }
+      }
+
+      // Update ComponentAssignment if turbine was changed
+      if (turbineChanged && componentToSave.id) {
+        try {
+          const now = new Date().toISOString();
+          
+          // Get current assignment (if any)
+          const currentAssignment = await componentAssignmentStorage.getCurrentByComponent(componentToSave.id);
+          
+          // If there's a current assignment to a different turbine, end it
+          if (currentAssignment && currentAssignment.turbine_id !== editedComponent.turbine) {
+            const oldAssignment: ComponentAssignment = {
+              ...currentAssignment,
+              valid_to: now,
+            };
+            await componentAssignmentStorage.save(oldAssignment);
+          }
+          
+          // Create new assignment if turbine is set
+          if (editedComponent.turbine && editedComponent.turbine !== "" && editedComponent.turbine !== "unassigned") {
+            const newAssignment: ComponentAssignment = {
+              id: `assignment-${Date.now()}`,
+              turbine_id: editedComponent.turbine,
+              component_id: componentToSave.id,
+              position: 1, // Default position, could be made editable later
+              valid_from: now,
+              valid_to: undefined, // Currently assigned
+              created_at: now,
+            };
+            await componentAssignmentStorage.save(newAssignment);
+            console.log("Component assignment updated:", newAssignment);
+          } else if (currentAssignment) {
+            // If turbine is cleared, end the current assignment
+            const endedAssignment: ComponentAssignment = {
+              ...currentAssignment,
+              valid_to: now,
+            };
+            await componentAssignmentStorage.save(endedAssignment);
+            console.log("Component assignment ended:", endedAssignment);
+          }
+        } catch (error) {
+          console.error("Error updating component assignment:", error);
+          // Don't fail the whole save if assignment update fails
         }
       }
 
@@ -679,12 +875,93 @@ export default function ComponentInfoCard({
           <div className="flex items-center justify-between py-1">
             <span className="text-sm font-medium text-gray-700">Turbine Engine</span>
             {isEditing ? (
-              <Input
-                value={editedComponent.turbine}
-                onChange={(e) => setEditedComponent(prev => ({ ...prev, turbine: e.target.value }))}
-                className="w-48"
-                placeholder="Turbine Engine"
-              />
+              <div className="relative w-48">
+                <Input
+                  value={turbineSearchTerm || currentTurbineDisplay}
+                  onChange={(e) => {
+                    const searchValue = e.target.value;
+                    setTurbineSearchTerm(searchValue);
+                    setIsTurbineDropdownOpen(true);
+                    
+                    // Try to find exact match
+                    const exactMatch = turbines.find(t => {
+                      const name = t.name || "";
+                      const id = t.id || "";
+                      const unit = t.unit || "";
+                      return name === searchValue || id === searchValue || unit === searchValue;
+                    });
+                    
+                    if (exactMatch) {
+                      setEditedComponent(prev => ({ ...prev, turbine: exactMatch.id }));
+                      setTurbineSearchTerm("");
+                      setIsTurbineDropdownOpen(false);
+                    } else if (searchValue.toLowerCase() === "unassigned" || searchValue === "") {
+                      setEditedComponent(prev => ({ ...prev, turbine: "" }));
+                      setTurbineSearchTerm("");
+                      setIsTurbineDropdownOpen(false);
+                    }
+                  }}
+                  onFocus={() => {
+                    setIsTurbineDropdownOpen(true);
+                    // Clear search term on focus so user can start typing fresh
+                    if (turbineSearchTerm === currentTurbineDisplay) {
+                      setTurbineSearchTerm("");
+                    }
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      setIsTurbineDropdownOpen(false);
+                      // Reset search term to show current selection
+                      setTurbineSearchTerm("");
+                    }, 200);
+                  }}
+                  className="w-full"
+                  placeholder="Search turbines..."
+                />
+                {isTurbineDropdownOpen && (
+                  <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border rounded-md shadow-lg max-h-60 overflow-auto">
+                    {/* Unassigned option */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditedComponent(prev => ({ ...prev, turbine: "" }));
+                        setTurbineSearchTerm("");
+                        setIsTurbineDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm ${
+                        !editedComponent.turbine ? "bg-blue-50 dark:bg-blue-900/20" : ""
+                      }`}
+                    >
+                      Unassigned
+                    </button>
+                    {filteredTurbines.map((turbine) => {
+                      const isSelected = editedComponent.turbine === turbine.id;
+                      const displayText = `${turbine.name} - ${turbine.id}`;
+                      return (
+                        <button
+                          key={turbine.id}
+                          type="button"
+                          onClick={() => {
+                            setEditedComponent(prev => ({ ...prev, turbine: turbine.id }));
+                            setTurbineSearchTerm("");
+                            setIsTurbineDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm ${
+                            isSelected ? "bg-blue-50 dark:bg-blue-900/20" : ""
+                          }`}
+                        >
+                          {displayText}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {isTurbineDropdownOpen && turbineSearchTerm.trim() && filteredTurbines.length === 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border rounded-md shadow-lg p-3">
+                    <p className="text-sm text-muted-foreground">No turbines found matching "{turbineSearchTerm}"</p>
+                  </div>
+                )}
+              </div>
             ) : (
               <span className="text-sm font-bold text-gray-900 bg-gray-50 px-3 py-1 rounded">
                 {v(item.turbine)}
@@ -755,7 +1032,7 @@ export default function ComponentInfoCard({
               />
             ) : (
               <span className="text-sm font-bold text-gray-900 bg-gray-50 px-3 py-1 rounded">
-                {item.hours || "###"}
+                {item.hours !== undefined && item.hours !== null ? item.hours : "###"}
               </span>
             )}
           </div>
@@ -771,7 +1048,7 @@ export default function ComponentInfoCard({
               />
             ) : (
               <span className="text-sm font-bold text-gray-900 bg-gray-50 px-3 py-1 rounded">
-                {item.starts || "###"}
+                {item.starts !== undefined && item.starts !== null ? item.starts : "###"}
               </span>
             )}
           </div>
@@ -787,7 +1064,7 @@ export default function ComponentInfoCard({
               />
             ) : (
               <span className="text-sm font-bold text-gray-900 bg-gray-50 px-3 py-1 rounded">
-                {item.trips || "###"}
+                {item.trips !== undefined && item.trips !== null ? item.trips : "###"}
               </span>
             )}
           </div>

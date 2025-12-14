@@ -35,6 +35,9 @@ export type Turbine = {
   plant_id: ID;
   name: string;
   unit?: string;
+  hours: number;
+  trips: number;
+  starts: number;
   created_at: string;
   updated_at: string;
 };
@@ -77,6 +80,9 @@ export type Component = {
   id: ID;
   name: string;
   type_code: string; // references ComponentType.code
+  hours: number;
+  trips: number;
+  starts: number;
   created_at: string;
 };
 

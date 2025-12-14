@@ -14,8 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { saveInventoryItem } from "@/lib/storage/db/adapters";
-import { turbineStorage } from "@/lib/storage/db/storage";
-import type { Turbine } from "@/lib/storage/db/types";
+import { turbineStorage, componentStorage } from "@/lib/storage/db/storage";
+import type { Turbine, Component } from "@/lib/storage/db/types";
 
 type ItemWithExtras = InventoryItem & {
   turbine?: string | null;
@@ -44,6 +44,17 @@ export default function PieceInfoCard({
   // Load turbines from database
   const [turbines, setTurbines] = React.useState<Turbine[]>([]);
   
+  // Load components from database
+  const [components, setComponents] = React.useState<Component[]>([]);
+  
+  // Turbine combobox state
+  const [turbineSearchTerm, setTurbineSearchTerm] = React.useState("");
+  const [isTurbineDropdownOpen, setIsTurbineDropdownOpen] = React.useState(false);
+  
+  // Component combobox state
+  const [componentSearchTerm, setComponentSearchTerm] = React.useState("");
+  const [isComponentDropdownOpen, setIsComponentDropdownOpen] = React.useState(false);
+  
   React.useEffect(() => {
     const loadTurbines = async () => {
       try {
@@ -57,6 +68,78 @@ export default function PieceInfoCard({
     
     loadTurbines();
   }, []);
+  
+  React.useEffect(() => {
+    const loadComponents = async () => {
+      try {
+        const allComponents = await componentStorage.getAll();
+        setComponents(allComponents);
+      } catch (error) {
+        console.error('Error loading components:', error);
+        setComponents([]);
+      }
+    };
+    
+    loadComponents();
+  }, []);
+  
+  // Filter turbines based on search term
+  const filteredTurbines = React.useMemo(() => {
+    if (!turbineSearchTerm.trim()) {
+      return turbines;
+    }
+    
+    const searchLower = turbineSearchTerm.toLowerCase();
+    return turbines.filter(t => {
+      const name = (t.name || "").toLowerCase();
+      const id = (t.id || "").toLowerCase();
+      const unit = (t.unit || "").toLowerCase();
+      const displayText = `${t.name} - ${t.id}`.toLowerCase();
+      return name.includes(searchLower) || 
+             id.includes(searchLower) || 
+             unit.includes(searchLower) ||
+             displayText.includes(searchLower);
+    });
+  }, [turbines, turbineSearchTerm]);
+  
+  // Get display text for a turbine
+  const getTurbineDisplayText = React.useCallback((turbineId: string) => {
+    if (turbineId === "unassigned" || !turbineId) {
+      return "Unassigned";
+    }
+    const turbine = turbines.find(t => t.id === turbineId);
+    if (!turbine) return turbineId;
+    return `${turbine.name} - ${turbine.id}`;
+  }, [turbines]);
+  
+  // Filter components based on search term
+  const filteredComponents = React.useMemo(() => {
+    if (!componentSearchTerm.trim()) {
+      return components;
+    }
+    
+    const searchLower = componentSearchTerm.toLowerCase();
+    return components.filter(c => {
+      const name = (c.name || "").toLowerCase();
+      const id = (c.id || "").toLowerCase();
+      const typeCode = (c.type_code || "").toLowerCase();
+      return name.includes(searchLower) || 
+             id.includes(searchLower) || 
+             typeCode.includes(searchLower);
+    });
+  }, [components, componentSearchTerm]);
+  
+  // Get display text for a component
+  const getComponentDisplayText = React.useCallback((componentName: string) => {
+    if (!componentName) return "";
+    // Try to find component by name first
+    const component = components.find(c => c.name === componentName);
+    if (component) {
+      return component.name;
+    }
+    // If not found, just return the name as-is
+    return componentName;
+  }, [components]);
 
   /* ---------- Edit Mode State ---------- */
   const [isEditing, setIsEditing] = React.useState(false);
@@ -76,7 +159,8 @@ export default function PieceInfoCard({
     turbine: item.turbine || "",
     position: item.position || "",
   });
-  const [editedNotes, setEditedNotes] = React.useState<string[]>([]);
+  const [editedNotes, setEditedNotes] = React.useState<Array<{ id: string; text: string }>>([]);
+  const [editedRepairEvents, setEditedRepairEvents] = React.useState<Array<{ id: string; event: RepairEvent }>>([]);
 
   /* ---------- Notes State ---------- */
   const notes = item.notes ?? [];
@@ -116,6 +200,12 @@ export default function PieceInfoCard({
         turbine: item.turbine || "",
         position: item.position || "",
       });
+      // Reset turbine search when exiting edit mode
+      setTurbineSearchTerm("");
+      setIsTurbineDropdownOpen(false);
+      // Reset component search when exiting edit mode
+      setComponentSearchTerm("");
+      setIsComponentDropdownOpen(false);
     }
   }, [item, isEditing]);
 
@@ -128,8 +218,11 @@ export default function PieceInfoCard({
       .map(n => String(n));
     setLocalNotes(validNotes);
     // Also update editedNotes if not in edit mode (to sync after save)
+    // Convert to structure with IDs
     if (!isEditing) {
-      setEditedNotes(validNotes);
+      setEditedNotes(
+        validNotes.map((text, idx) => ({ id: `note-${Date.now()}-${idx}`, text }))
+      );
     }
   }, [item.notes, isEditing]);
 
@@ -158,7 +251,13 @@ export default function PieceInfoCard({
   React.useEffect(() => {
     const newEvents = item.repairEvents ?? [];
     setLocalEvents(newEvents);
-  }, [item.repairEvents]);
+    // Also update editedRepairEvents if not in edit mode (to sync after save)
+    if (!isEditing) {
+      setEditedRepairEvents(
+        newEvents.map((event, idx) => ({ id: `event-${Date.now()}-${idx}`, event }))
+      );
+    }
+  }, [item.repairEvents, isEditing]);
 
   // Initialize edited repair/condition details when entering edit mode
   React.useEffect(() => {
@@ -382,9 +481,19 @@ export default function PieceInfoCard({
       turbine: item.turbine || "",
       position: item.position || "",
     });
-    // Initialize edited notes from current notes
+    // Initialize edited notes from current notes with unique IDs
     const currentNotes = item.notes ?? [];
-    setEditedNotes(currentNotes.map(n => n ?? "").filter(n => n !== ""));
+    setEditedNotes(
+      currentNotes
+        .map(n => n ?? "")
+        .filter(n => n !== "")
+        .map((text, idx) => ({ id: `note-${Date.now()}-${idx}`, text }))
+    );
+    // Initialize edited repair events from current events with unique IDs
+    const currentEvents = item.repairEvents ?? [];
+    setEditedRepairEvents(
+      currentEvents.map((event, idx) => ({ id: `event-${Date.now()}-${idx}`, event }))
+    );
     setIsEditing(true);
   };
 
@@ -405,9 +514,19 @@ export default function PieceInfoCard({
       turbine: item.turbine || "",
       position: item.position || "",
     });
-    // Reset edited notes to original values
+    // Reset edited notes to original values with unique IDs
     const currentNotes = item.notes ?? [];
-    setEditedNotes(currentNotes.map(n => n ?? "").filter(n => n !== ""));
+    setEditedNotes(
+      currentNotes
+        .map(n => n ?? "")
+        .filter(n => n !== "")
+        .map((text, idx) => ({ id: `note-${Date.now()}-${idx}`, text }))
+    );
+    // Reset edited repair events to original values with unique IDs
+    const currentEvents = item.repairEvents ?? [];
+    setEditedRepairEvents(
+      currentEvents.map((event, idx) => ({ id: `event-${Date.now()}-${idx}`, event }))
+    );
   };
 
   const handleSavePiece = async () => {
@@ -420,13 +539,21 @@ export default function PieceInfoCard({
         starts: Number(editedPiece.starts) || 0,
       };
 
-      // Include notes in the piece to save
-      const notesToSave = editedNotes.filter(n => n.trim() !== "");
+      // Include notes in the piece to save (extract text from note objects)
+      const notesToSave = editedNotes
+        .map(n => n.text.trim())
+        .filter(text => text !== "");
+      // Include repair events in the piece to save (extract events from event objects)
+      const repairEventsToSave = editedRepairEvents
+        .map(e => e.event)
+        .filter(event => {
+          // Keep events that have at least a title, repair details, or condition details
+          return event.title || event.repairDetails || event.conditionDetails;
+        });
       const pieceWithNotes: InventoryItem = {
         ...pieceToSave,
         notes: notesToSave.length > 0 ? notesToSave : undefined,
-        // Preserve repair events from original item
-        repairEvents: item.repairEvents,
+        repairEvents: repairEventsToSave.length > 0 ? repairEventsToSave : undefined,
       };
 
       const success = await saveInventoryItem(pieceWithNotes);
@@ -435,6 +562,11 @@ export default function PieceInfoCard({
         if (onNotesUpdate) {
           const pieceId = item.sn || item.id || String(item.pn);
           onNotesUpdate(pieceId, notesToSave);
+        }
+        // Save repair events via callback
+        if (onRepairEventsUpdate) {
+          const pieceId = item.sn || item.id || String(item.pn);
+          onRepairEventsUpdate(pieceId, repairEventsToSave);
         }
         
         setIsEditing(false);
@@ -532,14 +664,26 @@ export default function PieceInfoCard({
                 },
                 {
                   label: "Component",
-                  value: editedPiece.component,
-                  type: "text",
-                  onChange: (value) => setEditedPiece(prev => ({ ...prev, component: value })),
+                  value: editedPiece.component || "",
+                  type: "combobox",
+                  options: components.map(c => c.name),
+                  optionLabels: Object.fromEntries(components.map(c => [c.name, c.name])),
+                  onChange: (value) => {
+                    setEditedPiece(prev => ({ ...prev, component: value }));
+                    setComponentSearchTerm(""); // Clear search when selection is made
+                  },
+                  // Combobox-specific props
+                  searchTerm: componentSearchTerm,
+                  onSearchChange: setComponentSearchTerm,
+                  isOpen: isComponentDropdownOpen,
+                  onOpenChange: setIsComponentDropdownOpen,
+                  filteredOptions: filteredComponents.map(c => c.name),
+                  getDisplayText: getComponentDisplayText,
                 },
                 {
                   label: "Turbine",
                   value: editedPiece.turbine || "unassigned",
-                  type: "select",
+                  type: "combobox",
                   options: ["unassigned", ...turbines.map(t => t.id)],
                   optionLabels: {
                     "unassigned": "Unassigned",
@@ -549,7 +693,17 @@ export default function PieceInfoCard({
                       return [t.id, displayName];
                     })),
                   },
-                  onChange: (value) => setEditedPiece(prev => ({ ...prev, turbine: value === "unassigned" ? "" : value })),
+                  onChange: (value) => {
+                    setEditedPiece(prev => ({ ...prev, turbine: value === "unassigned" ? "" : value }));
+                    setTurbineSearchTerm(""); // Clear search when selection is made
+                  },
+                  // Combobox-specific props
+                  searchTerm: turbineSearchTerm,
+                  onSearchChange: setTurbineSearchTerm,
+                  isOpen: isTurbineDropdownOpen,
+                  onOpenChange: setIsTurbineDropdownOpen,
+                  filteredOptions: ["unassigned", ...filteredTurbines.map(t => t.id)],
+                  getDisplayText: getTurbineDisplayText,
                 },
               ]}
             />
@@ -663,7 +817,7 @@ export default function PieceInfoCard({
                 <h4 className="text-sm font-medium">Notes</h4>
                 <button
                   type="button"
-                  onClick={() => setEditedNotes([...editedNotes, ""])}
+                  onClick={() => setEditedNotes([...editedNotes, { id: `note-${Date.now()}-${Math.random()}`, text: "" }])}
                   className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1"
                   title="Add note"
                 >
@@ -677,17 +831,28 @@ export default function PieceInfoCard({
                   </div>
                 ) : (
                   editedNotes.map((note, index) => (
-                    <div key={index} className="space-y-1">
+                    <div key={note.id} className="space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">Note {index + 1}</span>
                         <button
                           type="button"
-                          onClick={() => {
-                            const newNotes = editedNotes.filter((_, i) => i !== index);
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const newNotes = editedNotes.filter(n => n.id !== note.id);
                             setEditedNotes(newNotes);
                             // Adjust noteIdx if needed
-                            if (noteIdx >= newNotes.length && newNotes.length > 0) {
-                              setNoteIdx(newNotes.length - 1);
+                            // If we deleted the note at the current index or after it, adjust
+                            if (noteIdx >= index) {
+                              if (newNotes.length === 0) {
+                                setNoteIdx(0);
+                              } else if (noteIdx >= newNotes.length) {
+                                setNoteIdx(newNotes.length - 1);
+                              } else if (noteIdx === index) {
+                                // If we deleted the current note, stay at the same index (which now points to the next note)
+                                // or move to the last note if we deleted the last one
+                                setNoteIdx(Math.min(noteIdx, newNotes.length - 1));
+                              }
                             }
                           }}
                           className="px-1.5 py-0.5 rounded text-xs bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300"
@@ -697,10 +862,11 @@ export default function PieceInfoCard({
                         </button>
                       </div>
                       <textarea
-                        value={note}
+                        value={note.text}
                         onChange={(e) => {
-                          const newNotes = [...editedNotes];
-                          newNotes[index] = e.target.value;
+                          const newNotes = editedNotes.map(n => 
+                            n.id === note.id ? { ...n, text: e.target.value } : n
+                          );
                           setEditedNotes(newNotes);
                         }}
                         className="w-full h-40 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
@@ -816,196 +982,322 @@ export default function PieceInfoCard({
         <div className={`md:col-start-2 flex flex-col ${
           isRepairEventExpanded ? 'md:row-start-1 md:row-span-2' : 'md:row-start-2'
         }`}>
-          <div 
-            className={`rounded-lg border transition-all duration-500 ease-in-out flex flex-col flex-1 ${
-              isRepairEventExpanded ? 'h-full' : 'min-h-[136px]'
-            }`}
-          >
-            <div className="flex items-center justify-between border-b px-3 py-2">
-              {isEditingRepairEvent ? (
-                <div className="flex-1" onClick={(e) => e.stopPropagation()}>
-                  <Select
-                    value={String(eventIdx)}
-                    onValueChange={(value) => {
-                      const newIdx = parseInt(value, 10);
-                      if (!isNaN(newIdx) && newIdx >= 0 && newIdx < localEvents.length) {
-                        setEventIdx(newIdx);
-                        // Update edited values when switching events
-                        const selectedEvent = localEvents[newIdx];
-                        if (selectedEvent) {
-                          setEditedRepairDetails(selectedEvent.repairDetails ?? "");
-                          setEditedConditionDetails(selectedEvent.conditionDetails ?? "");
+          {isEditing ? (
+            /* Edit Mode: Show all repair events as editable */
+            <div className="rounded-lg border flex flex-col h-full">
+              <div className="flex items-center justify-between border-b px-3 py-2">
+                <h4 className="text-sm font-medium">Repair Events</h4>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newEvent: RepairEvent = {
+                      title: `Repair Event ${editedRepairEvents.length + 1}`,
+                      date: new Date().toISOString().split('T')[0],
+                      repairDetails: null,
+                      conditionDetails: null,
+                    };
+                    setEditedRepairEvents([...editedRepairEvents, { id: `event-${Date.now()}-${Math.random()}`, event: newEvent }]);
+                  }}
+                  className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1"
+                  title="Add repair event"
+                >
+                  + Add Event
+                </button>
+              </div>
+              <div className="px-3 py-3 space-y-3 max-h-[400px] overflow-y-auto">
+                {editedRepairEvents.length === 0 ? (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    No repair events. Click "Add Event" to create one.
+                  </div>
+                ) : (
+                  editedRepairEvents.map((eventObj, index) => (
+                    <div key={eventObj.id} className="space-y-2 border rounded-md p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Event {index + 1}</span>
+                          {eventObj.event.title && (
+                            <span className="text-xs font-medium">{eventObj.event.title}</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const newEvents = editedRepairEvents.filter(e => e.id !== eventObj.id);
+                            setEditedRepairEvents(newEvents);
+                          }}
+                          className="px-1.5 py-0.5 rounded text-xs bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300"
+                          title="Delete event"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground">Title</label>
+                          <Input
+                            type="text"
+                            value={eventObj.event.title || ""}
+                            onChange={(e) => {
+                              const newEvents = editedRepairEvents.map(e => 
+                                e.id === eventObj.id 
+                                  ? { ...e, event: { ...e.event, title: e.target.value || null } }
+                                  : e
+                              );
+                              setEditedRepairEvents(newEvents);
+                            }}
+                            className="h-8 text-sm mt-1"
+                            placeholder="Enter event title..."
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground">Date</label>
+                          <Input
+                            type="date"
+                            value={eventObj.event.date || ""}
+                            onChange={(e) => {
+                              const newEvents = editedRepairEvents.map(e => 
+                                e.id === eventObj.id 
+                                  ? { ...e, event: { ...e.event, date: e.target.value || null } }
+                                  : e
+                              );
+                              setEditedRepairEvents(newEvents);
+                            }}
+                            className="h-8 text-sm mt-1"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground">Repair Details</label>
+                          <textarea
+                            value={eventObj.event.repairDetails || ""}
+                            onChange={(e) => {
+                              const newEvents = editedRepairEvents.map(e => 
+                                e.id === eventObj.id 
+                                  ? { ...e, event: { ...e.event, repairDetails: e.target.value || null } }
+                                  : e
+                              );
+                              setEditedRepairEvents(newEvents);
+                            }}
+                            className="w-full h-32 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary mt-1"
+                            placeholder="Enter repair details..."
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground">Condition Details</label>
+                          <textarea
+                            value={eventObj.event.conditionDetails || ""}
+                            onChange={(e) => {
+                              const newEvents = editedRepairEvents.map(e => 
+                                e.id === eventObj.id 
+                                  ? { ...e, event: { ...e.event, conditionDetails: e.target.value || null } }
+                                  : e
+                              );
+                              setEditedRepairEvents(newEvents);
+                            }}
+                            className="w-full h-32 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary mt-1"
+                            placeholder="Enter condition details..."
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : (
+            /* View Mode: Show repair events with navigation */
+            <div 
+              className={`rounded-lg border transition-all duration-500 ease-in-out flex flex-col flex-1 ${
+                isRepairEventExpanded ? 'h-full' : 'min-h-[136px]'
+              }`}
+            >
+              <div className="flex items-center justify-between border-b px-3 py-2">
+                {isEditingRepairEvent ? (
+                  <div className="flex-1" onClick={(e) => e.stopPropagation()}>
+                    <Select
+                      value={String(eventIdx)}
+                      onValueChange={(value) => {
+                        const newIdx = parseInt(value, 10);
+                        if (!isNaN(newIdx) && newIdx >= 0 && newIdx < localEvents.length) {
+                          setEventIdx(newIdx);
+                          // Update edited values when switching events
+                          const selectedEvent = localEvents[newIdx];
+                          if (selectedEvent) {
+                            setEditedRepairDetails(selectedEvent.repairDetails ?? "");
+                            setEditedConditionDetails(selectedEvent.conditionDetails ?? "");
+                          }
                         }
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue>
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue>
+                          {hasAnyEvents
+                            ? v(currentLocalEvent?.title ?? `Repair Event ${eventIdx + 1}`)
+                            : "Repair Event"}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {localEvents.map((event, idx) => (
+                          <SelectItem key={idx} value={String(idx)}>
+                            {v(event.title ?? `Repair Event ${idx + 1}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEventIdx((i) => Math.max(0, i - 1));
+                      }}
+                      disabled={!hasAnyEvents || eventIdx === 0}
+                    >
+                      ◀
+                    </button>
+                    <div className="text-center flex-1 flex flex-col items-center">
+                      <h4 className="text-sm font-medium">
                         {hasAnyEvents
                           ? v(currentLocalEvent?.title ?? `Repair Event ${eventIdx + 1}`)
                           : "Repair Event"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {localEvents.map((event, idx) => (
-                        <SelectItem key={idx} value={String(idx)}>
-                          {v(event.title ?? `Repair Event ${idx + 1}`)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEventIdx((i) => Math.max(0, i - 1));
-                    }}
-                    disabled={!hasAnyEvents || eventIdx === 0}
-                  >
-                    ◀
-                  </button>
-                  <div className="text-center flex-1 flex flex-col items-center">
-                    <h4 className="text-sm font-medium">
-                      {hasAnyEvents
-                        ? v(currentLocalEvent?.title ?? `Repair Event ${eventIdx + 1}`)
-                        : "Repair Event"}
-                    </h4>
-                    <span className="text-xs text-muted-foreground mt-0.5">
-                      {formatEventDate(currentLocalEvent)}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEventIdx((i) => Math.min(localEvents.length - 1, i + 1));
-                    }}
-                    disabled={!hasAnyEvents || eventIdx === localEvents.length - 1}
-                  >
-                    ▶
-                  </button>
-                </>
-              )}
-            </div>
-            {hasAnyEvents && (
-              <div className="text-center text-xs text-muted-foreground border-b py-1">
-                {eventIdx + 1} / {localEvents.length}
+                      </h4>
+                      <span className="text-xs text-muted-foreground mt-0.5">
+                        {formatEventDate(currentLocalEvent)}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 disabled:opacity-50"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEventIdx((i) => Math.min(localEvents.length - 1, i + 1));
+                      }}
+                      disabled={!hasAnyEvents || eventIdx === localEvents.length - 1}
+                    >
+                      ▶
+                    </button>
+                  </>
+                )}
               </div>
-            )}
-
-            {/* Toggle buttons underneath */}
-            <div className="flex justify-center gap-2 border-b px-3 py-2">
-              <Toggle
-                small
-                active={tab === "repair"}
-                onClick={(e) => {
-                  e?.stopPropagation();
-                  setTab("repair");
-                }}
-              >
-                Repair Details
-              </Toggle>
-              <Toggle
-                small
-                active={tab === "condition"}
-                onClick={(e) => {
-                  e?.stopPropagation();
-                  setTab("condition");
-                }}
-              >
-                Condition Details
-              </Toggle>
-            </div>
-
-            <div className={`px-3 py-3 text-sm transition-all duration-500 ease-in-out relative ${
-              isRepairEventExpanded ? 'flex-1 overflow-auto' : 'min-h-[240px]'
-            }`}>
-              {!hasAnyEvents ? (
-                <p className="text-muted-foreground">No repair events.</p>
-              ) : bothNull && !isEditingRepairEvent ? (
-                <p className="text-muted-foreground">No details for this event.</p>
-              ) : isEditingRepairEvent ? (
-                <div className="space-y-3" onClick={(e) => e.stopPropagation()}>
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">Repair Details</label>
-                    <textarea
-                      value={editedRepairDetails}
-                      onChange={(e) => setEditedRepairDetails(e.target.value)}
-                      className="w-full h-48 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                      placeholder="Enter repair details..."
-                      autoFocus
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">Condition Details</label>
-                    <textarea
-                      value={editedConditionDetails}
-                      onChange={(e) => setEditedConditionDetails(e.target.value)}
-                      className="w-full h-48 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                      placeholder="Enter condition details..."
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={handleSaveRepairEvent}
-                      className="px-3 py-1.5 rounded-md text-xs bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50 flex items-center gap-1"
-                      title="Save changes"
-                    >
-                      <Check className="h-3 w-3" />
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCancelRepairEventEdit}
-                      className="px-3 py-1.5 rounded-md text-xs bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 flex items-center gap-1"
-                      title="Cancel editing"
-                    >
-                      <X className="h-3 w-3" />
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : tab === "repair" ? (
-                <div className="space-y-2">
-                  <p className={`${hasRepair ? "" : "text-muted-foreground"} transition-all duration-500 ${
-                    isRepairEventExpanded ? 'text-base leading-relaxed' : 'text-sm'
-                  }`}>
-                    {v(currentLocalEvent?.repairDetails)}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className={`${hasCondition ? "" : "text-muted-foreground"} transition-all duration-500 ${
-                    isRepairEventExpanded ? 'text-base leading-relaxed' : 'text-sm'
-                  }`}>
-                    {v(currentLocalEvent?.conditionDetails)}
-                  </p>
+              {hasAnyEvents && (
+                <div className="text-center text-xs text-muted-foreground border-b py-1">
+                  {eventIdx + 1} / {localEvents.length}
                 </div>
               )}
-              {!isEditing && !isEditingRepairEvent && hasAnyEvents && !bothNull && (
-                <div className="absolute bottom-3 left-3">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditRepairEvent();
-                    }}
-                    className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1"
-                    title={tab === "repair" ? "Edit repair details" : "Edit condition details"}
-                  >
-                    <Pencil className="h-3 w-3" />
-                    Edit
-                  </button>
-                </div>
-              )}
+
+              {/* Toggle buttons underneath */}
+              <div className="flex justify-center gap-2 border-b px-3 py-2">
+                <Toggle
+                  small
+                  active={tab === "repair"}
+                  onClick={(e) => {
+                    e?.stopPropagation();
+                    setTab("repair");
+                  }}
+                >
+                  Repair Details
+                </Toggle>
+                <Toggle
+                  small
+                  active={tab === "condition"}
+                  onClick={(e) => {
+                    e?.stopPropagation();
+                    setTab("condition");
+                  }}
+                >
+                  Condition Details
+                </Toggle>
+              </div>
+
+              <div className={`px-3 py-3 text-sm transition-all duration-500 ease-in-out relative ${
+                isRepairEventExpanded ? 'flex-1 overflow-auto' : 'min-h-[240px]'
+              }`}>
+                {!hasAnyEvents ? (
+                  <p className="text-muted-foreground">No repair events.</p>
+                ) : bothNull && !isEditingRepairEvent ? (
+                  <p className="text-muted-foreground">No details for this event.</p>
+                ) : isEditingRepairEvent ? (
+                  <div className="space-y-3" onClick={(e) => e.stopPropagation()}>
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-muted-foreground">Repair Details</label>
+                      <textarea
+                        value={editedRepairDetails}
+                        onChange={(e) => setEditedRepairDetails(e.target.value)}
+                        className="w-full h-48 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="Enter repair details..."
+                        autoFocus
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-muted-foreground">Condition Details</label>
+                      <textarea
+                        value={editedConditionDetails}
+                        onChange={(e) => setEditedConditionDetails(e.target.value)}
+                        className="w-full h-48 p-2 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="Enter condition details..."
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveRepairEvent}
+                        className="px-3 py-1.5 rounded-md text-xs bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50 flex items-center gap-1"
+                        title="Save changes"
+                      >
+                        <Check className="h-3 w-3" />
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelRepairEventEdit}
+                        className="px-3 py-1.5 rounded-md text-xs bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 flex items-center gap-1"
+                        title="Cancel editing"
+                      >
+                        <X className="h-3 w-3" />
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : tab === "repair" ? (
+                  <div className="space-y-2">
+                    <p className={`${hasRepair ? "" : "text-muted-foreground"} transition-all duration-500 ${
+                      isRepairEventExpanded ? 'text-base leading-relaxed' : 'text-sm'
+                    }`}>
+                      {v(currentLocalEvent?.repairDetails)}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className={`${hasCondition ? "" : "text-muted-foreground"} transition-all duration-500 ${
+                      isRepairEventExpanded ? 'text-base leading-relaxed' : 'text-sm'
+                    }`}>
+                      {v(currentLocalEvent?.conditionDetails)}
+                    </p>
+                  </div>
+                )}
+                {!isEditing && !isEditingRepairEvent && hasAnyEvents && !bothNull && (
+                  <div className="absolute bottom-3 left-3">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditRepairEvent();
+                      }}
+                      className="px-2 py-1 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1"
+                      title={tab === "repair" ? "Edit repair details" : "Edit condition details"}
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Edit
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
@@ -1046,12 +1338,19 @@ function InfoCard({ rows }: { rows: Array<[label: string, value: string, tone?: 
 type EditableRow = {
   label: string;
   value: string;
-  type: "text" | "number" | "select" | "readonly";
+  type: "text" | "number" | "select" | "readonly" | "combobox";
   options?: string[];
   optionLabels?: Record<string, string>; // Map of option values to display labels
   onChange?: (value: string) => void;
   tone?: any;
   colorName?: string;
+  // Combobox-specific props
+  searchTerm?: string;
+  onSearchChange?: (value: string) => void;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  filteredOptions?: string[];
+  getDisplayText?: (value: string) => string;
 };
 
 function EditableInfoCard({ rows }: { rows: EditableRow[] }) {
@@ -1094,6 +1393,97 @@ function EditableInfoCard({ rows }: { rows: EditableRow[] }) {
                       ))}
                     </SelectContent>
                   </Select>
+                ) : row.type === "combobox" ? (
+                  <div className="relative w-full">
+                    <Input
+                      type="text"
+                      value={row.searchTerm !== undefined && row.searchTerm !== "" 
+                        ? row.searchTerm 
+                        : (row.getDisplayText ? row.getDisplayText(row.value) : row.value)}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        if (row.onSearchChange) {
+                          row.onSearchChange(newValue);
+                        }
+                        if (row.onOpenChange) {
+                          row.onOpenChange(true);
+                        }
+                      }}
+                      onFocus={() => {
+                        if (row.onOpenChange) {
+                          row.onOpenChange(true);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // Delay closing to allow click events
+                        setTimeout(() => {
+                          if (row.onOpenChange) {
+                            row.onOpenChange(false);
+                          }
+                          // Clear search term if dropdown closes
+                          if (row.onSearchChange && row.searchTerm) {
+                            row.onSearchChange("");
+                          }
+                        }, 200);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && row.filteredOptions && row.filteredOptions.length > 0) {
+                          e.preventDefault();
+                          // Select first filtered option
+                          const firstOption = row.filteredOptions[0];
+                          if (row.onChange) {
+                            row.onChange(firstOption);
+                          }
+                          if (row.onSearchChange) {
+                            row.onSearchChange("");
+                          }
+                          if (row.onOpenChange) {
+                            row.onOpenChange(false);
+                          }
+                        } else if (e.key === "Escape") {
+                          if (row.onOpenChange) {
+                            row.onOpenChange(false);
+                          }
+                          if (row.onSearchChange) {
+                            row.onSearchChange("");
+                          }
+                        }
+                      }}
+                      className="h-8 text-sm w-full"
+                      placeholder="Type to search..."
+                    />
+                    {row.isOpen && row.filteredOptions && row.filteredOptions.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-[300px] overflow-auto">
+                        {row.filteredOptions.map((option) => {
+                          const displayText = row.getDisplayText 
+                            ? row.getDisplayText(option)
+                            : (row.optionLabels && row.optionLabels[option]
+                              ? row.optionLabels[option]
+                              : option);
+                          return (
+                            <div
+                              key={option}
+                              className="px-3 py-2 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground"
+                              onMouseDown={(e) => {
+                                e.preventDefault(); // Prevent input blur
+                                if (row.onChange) {
+                                  row.onChange(option);
+                                }
+                                if (row.onSearchChange) {
+                                  row.onSearchChange("");
+                                }
+                                if (row.onOpenChange) {
+                                  row.onOpenChange(false);
+                                }
+                              }}
+                            >
+                              {displayText}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 ) : row.type === "number" ? (
                   <Input
                     type="number"

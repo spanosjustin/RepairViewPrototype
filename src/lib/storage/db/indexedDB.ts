@@ -1,13 +1,13 @@
 /**
- * IndexedDB Database Schema - Version 2
+ * IndexedDB Database Schema - Version 3
  * Normalized relational structure matching SQL schema
  * 
  * Database: "repairview_db"
- * Version: 2
+ * Version: 3 - Added hours/trips/starts to Component and Turbine types
  */
 
 const DB_NAME = 'repairview_db';
-const DB_VERSION = 2; // Updated from version 1
+const DB_VERSION = 3; // Updated to add hours/trips/starts to Component and Turbine
 
 // Object store names
 export const STORES = {
@@ -79,6 +79,10 @@ function getDB(): Promise<IDBDatabase> {
           }
         });
       }
+
+      // Migration for version 3: Add hours/trips/starts to Component and Turbine
+      // Note: IndexedDB doesn't enforce schema, so we'll update records in seed/init code
+      // This version bump ensures the upgrade handler runs
 
       // Create all new object stores
       
