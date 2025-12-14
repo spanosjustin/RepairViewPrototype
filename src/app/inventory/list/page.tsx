@@ -31,7 +31,7 @@ import ComponentInfoCard from "@/components/inventory/ComponentInfoCard";
 import TreeView from "@/components/TreeView";
 import VisualTreeView from "@/components/VisualTreeView";
 import { getAllInventoryItems } from "@/lib/storage/db/adapters";
-import { pieceStorage, componentStorage, plantStorage, turbineStorage } from "@/lib/storage/db/storage";
+import { pieceStorage, componentStorage, componentTypeStorage, plantStorage, turbineStorage } from "@/lib/storage/db/storage";
 import type { Component } from "@/lib/storage/db/types";
 import { getMockRepairEvents } from "@/lib/inventory/mockRepairEvents";
 
@@ -191,71 +191,122 @@ function aggregatePiecesIntoComponentStats(pieces: InventoryItem[]): ComponentRo
 }
 
 // Function to merge database components with aggregated piece stats
+// Components now have independent hours/trips/starts, so we use those from the database
+// We only aggregate status/state from pieces
 function mergeComponentsWithPieceStats(
   pieces: InventoryItem[],
   dbComponents: Component[]
 ): ComponentRow[] {
-  // First, aggregate stats from pieces
-  const aggregatedStats = aggregatePiecesIntoComponentStats(pieces);
-  
-  // Create a map of database components by name for quick lookup
-  const dbComponentMap = new Map<string, Component>();
-  dbComponents.forEach(comp => {
-    const name = comp.name || "";
-    if (name) {
-      dbComponentMap.set(name, comp);
-    }
-  });
-  
-  // Merge: use database component data for component-level fields,
-  // but keep aggregated status/state from pieces
-  const mergedStats: ComponentRow[] = aggregatedStats.map(aggregated => {
-    const dbComponent = dbComponentMap.get(aggregated.componentName);
+  // Group pieces by component name for status/state aggregation
+  const componentPiecesMap = new Map<string, InventoryItem[]>();
+  pieces.forEach((piece) => {
+    const componentName = piece.component || "";
+    if (!componentName) return;
     
-    if (dbComponent) {
-      // Component exists in database - use its data for component-level fields
-      return {
-        componentName: dbComponent.name || aggregated.componentName,
-        componentType: dbComponent.type || dbComponent.componentType || aggregated.componentType,
-        hours: dbComponent.hours !== undefined && dbComponent.hours !== null 
-          ? dbComponent.hours 
-          : aggregated.hours,
-        trips: dbComponent.trips !== undefined && dbComponent.trips !== null
-          ? dbComponent.trips
-          : aggregated.trips,
-        starts: dbComponent.starts !== undefined && dbComponent.starts !== null
-          ? dbComponent.starts
-          : aggregated.starts,
-        status: aggregated.status, // Always use aggregated status from pieces
-        state: dbComponent.state || aggregated.state, // Use DB state if available, otherwise aggregated
-        turbine: dbComponent.turbine || aggregated.turbine,
-        id: dbComponent.id || aggregated.id || aggregated.componentName,
-      };
-    } else {
-      // Component not in database - use aggregated data
-      return aggregated;
+    if (!componentPiecesMap.has(componentName)) {
+      componentPiecesMap.set(componentName, []);
     }
+    componentPiecesMap.get(componentName)!.push(piece);
   });
-  
-  // Also include components from database that don't have any pieces yet
-  dbComponents.forEach(dbComponent => {
-    const name = dbComponent.name || "";
-    if (name && !mergedStats.some(stat => stat.componentName === name)) {
-      mergedStats.push({
-        componentName: name,
-        componentType: dbComponent.type || dbComponent.componentType || "—",
-        hours: dbComponent.hours !== undefined && dbComponent.hours !== null ? dbComponent.hours : "—",
-        trips: dbComponent.trips !== undefined && dbComponent.trips !== null ? dbComponent.trips : "—",
-        starts: dbComponent.starts !== undefined && dbComponent.starts !== null ? dbComponent.starts : "—",
-        status: "—", // No pieces, so no status
-        state: dbComponent.state || "—",
-        turbine: dbComponent.turbine || "—",
-        id: dbComponent.id || name,
+
+  // Helper to aggregate status/state from pieces (not hours/trips/starts)
+  const aggregateStatusAndState = (componentPieces: InventoryItem[]) => {
+    if (componentPieces.length === 0) {
+      return { status: "—", state: "—" };
+    }
+
+    // Determine status: use worst status if multiple pieces have different statuses
+    const statusPriority: Record<string, number> = {
+      "Replace Now": 7,
+      "Replace Soon": 6,
+      "Degraded": 5,
+      "Monitor": 4,
+      "Unknown": 3,
+      "Spare": 2,
+      "OK": 1,
+    };
+    
+    const statuses = componentPieces
+      .map(p => p.status)
+      .filter((s): s is InventoryItem['status'] => !!s);
+    
+    let status = "—";
+    if (statuses.length > 0) {
+      status = statuses.reduce((worst, current) => {
+        const worstPriority = statusPriority[worst] || 0;
+        const currentPriority = statusPriority[current] || 0;
+        return currentPriority > worstPriority ? current : worst;
+      }, statuses[0]);
+    }
+
+    // Determine state: use most common state
+    const stateCounts = new Map<string, number>();
+    componentPieces.forEach(piece => {
+      if (piece.state) {
+        stateCounts.set(piece.state, (stateCounts.get(piece.state) || 0) + 1);
+      }
+    });
+    
+    let state = "—";
+    if (stateCounts.size > 0) {
+      let maxCount = 0;
+      stateCounts.forEach((count, stateValue) => {
+        if (count > maxCount) {
+          maxCount = count;
+          state = stateValue;
+        }
+      });
+    }
+
+    return { status, state };
+  };
+
+  // Build component stats from database components (source of truth for hours/trips/starts)
+  const componentStats: ComponentRow[] = dbComponents.map(dbComponent => {
+    const componentName = dbComponent.name || "";
+    const componentPieces = componentPiecesMap.get(componentName) || [];
+    const { status, state } = aggregateStatusAndState(componentPieces);
+    
+    // Get turbine from first piece (components don't store turbine directly)
+    const turbine = componentPieces.length > 0 
+      ? (componentPieces[0].turbine || "—")
+      : "—";
+
+    return {
+      componentName,
+      componentType: dbComponent.type_code || "—", // type_code will be displayed as-is or resolved elsewhere
+      hours: dbComponent.hours ?? 0,
+      trips: dbComponent.trips ?? 0,
+      starts: dbComponent.starts ?? 0,
+      status,
+      state,
+      turbine,
+      id: dbComponent.id || componentName,
+    };
+  });
+
+  // Also include components that exist only in pieces (not in database yet)
+  const dbComponentNames = new Set(dbComponents.map(c => c.name || ""));
+  componentPiecesMap.forEach((componentPieces, componentName) => {
+    if (!dbComponentNames.has(componentName)) {
+      const { status, state } = aggregateStatusAndState(componentPieces);
+      const firstPiece = componentPieces[0];
+      
+      componentStats.push({
+        componentName,
+        componentType: firstPiece.componentType || "—",
+        hours: "—", // No database component, so no hours
+        trips: "—",
+        starts: "—",
+        status,
+        state,
+        turbine: firstPiece.turbine || "—",
+        id: componentName,
       });
     }
   });
-  
-  return mergedStats;
+
+  return componentStats;
 }
 
 // Function to generate 12 pieces per component
@@ -391,6 +442,23 @@ export default function InventoryListPage() {
       try {
         // Load components from database
         const dbComps = await componentStorage.getAll();
+        
+        // Debug: Check if components have hours/trips/starts
+        if (dbComps.length > 0) {
+          const firstComp = dbComps[0];
+          console.log('Loaded component from DB:', {
+            id: firstComp.id,
+            name: firstComp.name,
+            type_code: firstComp.type_code,
+            hours: firstComp.hours,
+            trips: firstComp.trips,
+            starts: firstComp.starts,
+            hasHours: 'hours' in firstComp,
+            hasTrips: 'trips' in firstComp,
+            hasStarts: 'starts' in firstComp,
+          });
+        }
+        
         setDbComponents(dbComps as Component[]);
         
         // Load plants and their turbines
@@ -1920,16 +1988,95 @@ export default function InventoryListPage() {
       const dbComps = await componentStorage.getAll();
       setDbComponents(dbComps);
       
+      // Refresh pieces to get latest data
+      const inventoryItems = await getAllInventoryItems();
+      setPieces(inventoryItems);
+      
       // Update selected component if dialog is open
-      if (selectedComponent?.id) {
-        const updatedComponent = await componentStorage.get(selectedComponent.id);
-        if (updatedComponent) {
-          setSelectedComponent({
-            ...updatedComponent,
-            componentName: updatedComponent.name,
-            componentType: updatedComponent.type || updatedComponent.componentType,
+      if (selectedComponent?.componentName) {
+        const componentName = selectedComponent.componentName;
+        
+        // Get the updated component from database (source of truth for hours/trips/starts)
+        const dbComponent = dbComps.find(c => c.name === componentName);
+        
+        // Get component pieces for status/state aggregation
+        const componentPieces = inventoryItems.filter(p => p.component === componentName);
+        
+        // Get component type name
+        let componentTypeName = "—";
+        if (dbComponent?.type_code) {
+          const componentTypeObj = await componentTypeStorage.get(dbComponent.type_code);
+          if (componentTypeObj) {
+            componentTypeName = componentTypeObj.name;
+          }
+        } else if (componentPieces.length > 0) {
+          // Fallback to piece data if no database component
+          componentTypeName = componentPieces[0].componentType || "—";
+        }
+
+        // Get turbine from pieces (components don't store turbine directly)
+        const turbine = componentPieces.length > 0 
+          ? (componentPieces[0].turbine || "—")
+          : "—";
+
+        // Determine status: use worst status from pieces
+        const statusPriority: Record<string, number> = {
+          "Replace Now": 7,
+          "Replace Soon": 6,
+          "Degraded": 5,
+          "Monitor": 4,
+          "Unknown": 3,
+          "Spare": 2,
+          "OK": 1,
+        };
+        
+        const statuses = componentPieces
+          .map(p => p.status)
+          .filter((s): s is InventoryItem['status'] => !!s);
+        
+        let status = "—";
+        if (statuses.length > 0) {
+          status = statuses.reduce((worst, current) => {
+            const worstPriority = statusPriority[worst] || 0;
+            const currentPriority = statusPriority[current] || 0;
+            return currentPriority > worstPriority ? current : worst;
+          }, statuses[0]);
+        }
+
+        // Determine state: use most common state from pieces
+        const stateCounts = new Map<string, number>();
+        componentPieces.forEach(piece => {
+          if (piece.state) {
+            stateCounts.set(piece.state, (stateCounts.get(piece.state) || 0) + 1);
+          }
+        });
+        
+        let state = "—";
+        if (stateCounts.size > 0) {
+          let maxCount = 0;
+          stateCounts.forEach((count, stateValue) => {
+            if (count > maxCount) {
+              maxCount = count;
+              state = stateValue;
+            }
           });
         }
+
+        // Update selected component - use database values for hours/trips/starts
+        setSelectedComponent({
+          id: dbComponent?.id || selectedComponent.id,
+          componentName: componentName,
+          componentType: componentTypeName,
+          hours: dbComponent?.hours ?? "—",
+          trips: dbComponent?.trips ?? "—",
+          starts: dbComponent?.starts ?? "—",
+          status: status,
+          state: state,
+          turbine: turbine,
+        });
+        
+        // Also update component pieces in the dialog
+        setComponentPieces(componentPieces);
       }
     } catch (error) {
       console.error('Error refreshing component:', error);

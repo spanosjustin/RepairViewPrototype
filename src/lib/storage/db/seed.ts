@@ -230,19 +230,42 @@ export async function seedPlants(): Promise<void> {
 export async function seedTurbines(): Promise<void> {
   // Create turbines: 1-3 per site
   // Site 1: 3 turbines, Site 2: 2 turbines, Site 3: 3 turbines
-  const turbines: Turbine[] = [
-    // Site 1: 3 turbines
-    { id: 'T-101', plant_id: 'site-1', name: 'Unit 1A', unit: '1A', created_at: randomDateInPastYears(3), updated_at: new Date().toISOString() },
-    { id: 'T-102', plant_id: 'site-1', name: 'Unit 1B', unit: '1B', created_at: randomDateInPastYears(3), updated_at: new Date().toISOString() },
-    { id: 'T-103', plant_id: 'site-1', name: 'Unit 1C', unit: '1C', created_at: randomDateInPastYears(3), updated_at: new Date().toISOString() },
-    // Site 2: 2 turbines
-    { id: 'T-201', plant_id: 'site-2', name: 'Unit 2A', unit: '2A', created_at: randomDateInPastYears(3), updated_at: new Date().toISOString() },
-    { id: 'T-202', plant_id: 'site-2', name: 'Unit 2B', unit: '2B', created_at: randomDateInPastYears(3), updated_at: new Date().toISOString() },
-    // Site 3: 3 turbines
-    { id: 'T-301', plant_id: 'site-3', name: 'Unit 3A', unit: '3A', created_at: randomDateInPastYears(3), updated_at: new Date().toISOString() },
-    { id: 'T-302', plant_id: 'site-3', name: 'Unit 3B', unit: '3B', created_at: randomDateInPastYears(3), updated_at: new Date().toISOString() },
-    { id: 'T-303', plant_id: 'site-3', name: 'Unit 3C', unit: '3C', created_at: randomDateInPastYears(3), updated_at: new Date().toISOString() },
-  ];
+  const turbines: Turbine[] = [];
+  
+  // Helper function to generate realistic turbine operational values
+  const generateTurbineValues = () => {
+    const hours = 15000 + Math.floor(Math.random() * 10000); // 15,000 - 25,000 hours
+    const starts = 600 + Math.floor(Math.random() * 600); // 600 - 1,200 starts
+    const trips = 100 + Math.floor(Math.random() * 100); // 100 - 200 trips
+    return { hours, starts, trips };
+  };
+
+  // Site 1: 3 turbines
+  const t101 = generateTurbineValues();
+  turbines.push({ id: 'T-101', plant_id: 'site-1', name: 'Unit 1A', unit: '1A', ...t101, created_at: randomDateInPastYears(3), updated_at: new Date().toISOString() });
+  
+  const t102 = generateTurbineValues();
+  turbines.push({ id: 'T-102', plant_id: 'site-1', name: 'Unit 1B', unit: '1B', ...t102, created_at: randomDateInPastYears(3), updated_at: new Date().toISOString() });
+  
+  const t103 = generateTurbineValues();
+  turbines.push({ id: 'T-103', plant_id: 'site-1', name: 'Unit 1C', unit: '1C', ...t103, created_at: randomDateInPastYears(3), updated_at: new Date().toISOString() });
+  
+  // Site 2: 2 turbines
+  const t201 = generateTurbineValues();
+  turbines.push({ id: 'T-201', plant_id: 'site-2', name: 'Unit 2A', unit: '2A', ...t201, created_at: randomDateInPastYears(3), updated_at: new Date().toISOString() });
+  
+  const t202 = generateTurbineValues();
+  turbines.push({ id: 'T-202', plant_id: 'site-2', name: 'Unit 2B', unit: '2B', ...t202, created_at: randomDateInPastYears(3), updated_at: new Date().toISOString() });
+  
+  // Site 3: 3 turbines
+  const t301 = generateTurbineValues();
+  turbines.push({ id: 'T-301', plant_id: 'site-3', name: 'Unit 3A', unit: '3A', ...t301, created_at: randomDateInPastYears(3), updated_at: new Date().toISOString() });
+  
+  const t302 = generateTurbineValues();
+  turbines.push({ id: 'T-302', plant_id: 'site-3', name: 'Unit 3B', unit: '3B', ...t302, created_at: randomDateInPastYears(3), updated_at: new Date().toISOString() });
+  
+  const t303 = generateTurbineValues();
+  turbines.push({ id: 'T-303', plant_id: 'site-3', name: 'Unit 3C', unit: '3C', ...t303, created_at: randomDateInPastYears(3), updated_at: new Date().toISOString() });
 
   await turbineStorage.saveAll(turbines);
 }
@@ -492,10 +515,20 @@ export async function seedComponents(): Promise<Map<string, string>> {
       const id = generateId();
       componentMap.set(componentName, id);
 
+      // Generate realistic component operational values
+      // Components typically have similar but slightly different values than turbines
+      // since they may have been replaced or have different service histories
+      const baseHours = Math.floor(Math.random() * 20000) + 5000; // 5,000 - 25,000 hours
+      const trips = Math.floor(baseHours / 100) + Math.floor(Math.random() * 50); // Roughly 1 trip per 100 hours, with variation
+      const starts = Math.floor(trips / 2) + Math.floor(Math.random() * 20); // Roughly 1 start per 2 trips, with variation
+
       components.push({
         id,
         name: componentName,
         type_code: componentType.code,
+        hours: baseHours,
+        trips,
+        starts,
         created_at: randomDateInPastYears(2),
       });
     }
@@ -503,6 +536,23 @@ export async function seedComponents(): Promise<Map<string, string>> {
 
   await componentStorage.saveAll(components);
   console.log(`Created ${components.length} components`);
+  
+  // Debug: Verify first component has the new fields
+  if (components.length > 0) {
+    const firstComponent = components[0];
+    console.log('Sample component structure:', {
+      id: firstComponent.id,
+      name: firstComponent.name,
+      type_code: firstComponent.type_code,
+      hours: firstComponent.hours,
+      trips: firstComponent.trips,
+      starts: firstComponent.starts,
+      hasHours: 'hours' in firstComponent,
+      hasTrips: 'trips' in firstComponent,
+      hasStarts: 'starts' in firstComponent,
+    });
+  }
+  
   return componentMap;
 }
 

@@ -365,6 +365,9 @@ export async function saveInventoryItem(item: InventoryItem): Promise<boolean> {
           id: componentId,
           name: item.component,
           type_code: componentType.code,
+          hours: typeof item.hours === 'number' ? item.hours : 0,
+          trips: typeof item.trips === 'number' ? item.trips : 0,
+          starts: typeof item.starts === 'number' ? item.starts : 0,
           created_at: new Date().toISOString(),
         };
         await componentStorage.save(component);
