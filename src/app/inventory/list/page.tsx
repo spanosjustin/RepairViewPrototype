@@ -2143,6 +2143,15 @@ export default function InventoryListPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={() => goToPage(1)}
+                    disabled={currentPage === 1}
+                  >
+                    First
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={goToPreviousPage}
                     disabled={currentPage === 1}
                   >
@@ -2184,6 +2193,15 @@ export default function InventoryListPage() {
                     disabled={currentPage === totalPages}
                   >
                     Next
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                  >
+                    Last
                   </Button>
                 </div>
               </div>
@@ -2212,6 +2230,15 @@ export default function InventoryListPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={() => goToPage(1)}
+                    disabled={currentPage === 1}
+                  >
+                    First
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={goToPreviousPage}
                     disabled={currentPage === 1}
                   >
@@ -2253,6 +2280,15 @@ export default function InventoryListPage() {
                     disabled={currentPage === totalPages}
                   >
                     Next
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                  >
+                    Last
                   </Button>
                 </div>
               </div>
