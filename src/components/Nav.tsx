@@ -24,7 +24,7 @@ export default function NavBar() {
     const [mobileOpen, setMobileOpen] = useState(false);
 
     return (
-        <header className="sticky top-0 z-30 w-full border-b border-zinc-200 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/40 dark:border-zinc-800 dark:bg-zinc-950/60">
+        <header className="sticky top-0 z-[60] w-full border-b border-zinc-200 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/40 dark:border-zinc-800 dark:bg-zinc-950/60">
             <nav className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3">
                 <div className="flex items-center gap-3">
                     <Link href="/" className="flex items-center gap-2">
