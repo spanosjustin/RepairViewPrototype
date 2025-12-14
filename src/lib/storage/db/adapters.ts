@@ -418,8 +418,20 @@ export async function saveInventoryItem(item: InventoryItem): Promise<boolean> {
     await pieceStorage.save(piece);
 
     // 7. Update ComponentPiece junction table
-    if (component && item.position) {
-      const existingComponentPiece = await componentPieceStorage.getCurrentByPiece(piece.id);
+    const existingComponentPiece = await componentPieceStorage.getCurrentByPiece(piece.id);
+    
+    // If component is empty or "Unassigned", remove piece from component
+    if (!component || item.component === 'Unassigned' || item.component === '' || !item.position) {
+      if (existingComponentPiece) {
+        // End the existing assignment
+        const oldAssignment = {
+          ...existingComponentPiece,
+          valid_to: now,
+        };
+        await componentPieceStorage.save(oldAssignment);
+      }
+    } else if (component && item.position) {
+      // Piece is being assigned to a component
       const positionNum = parseInt(item.position, 10) || 1;
       
       if (existingComponentPiece) {

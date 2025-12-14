@@ -127,7 +127,7 @@ export default function FilterbarContainer() {
     };
 
     return (
-        <div className="sticky top-0 z-10 border-b bg-white/70 p-2 dark:bg-zinc-900/70">
+        <div className="sticky top-0 z-50 border-b bg-white/70 p-2 dark:bg-zinc-900/70">
             <div className="mx-auto max-w-6xl">
                 <FilterBar
                     powerPlants={powerPlants}
