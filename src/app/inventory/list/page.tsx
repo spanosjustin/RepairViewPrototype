@@ -401,6 +401,7 @@ export default function InventoryListPage() {
   
   // Pagination state
   const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageInputValue, setPageInputValue] = React.useState("");
   const itemsPerPage = 50;
 
   // Sorting state for components view
@@ -1618,6 +1619,29 @@ export default function InventoryListPage() {
     setCurrentPage(prev => Math.min(totalPages, prev + 1));
   };
 
+  const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPageInputValue(e.target.value);
+  };
+
+  const handlePageInputSubmit = () => {
+    const pageNum = parseInt(pageInputValue, 10);
+    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+      goToPage(pageNum);
+      setPageInputValue("");
+    }
+  };
+
+  const handlePageInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handlePageInputSubmit();
+    }
+  };
+
+  // Update page input when currentPage changes externally
+  React.useEffect(() => {
+    setPageInputValue("");
+  }, [currentPage]);
+
   // Helper function to find notes for a piece
   // TODO: Update to use note_links table from new database
   const findNotesForPiece = React.useCallback((piece: any): string[] | null => {
@@ -2134,21 +2158,12 @@ export default function InventoryListPage() {
             
             {/* Pagination Controls */}
             {shouldPaginate && totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t">
-                <div className="text-sm text-muted-foreground">
+              <div className="flex items-center justify-between px-4 py-3 border-t gap-4">
+                <div className="text-sm text-muted-foreground flex-shrink-0">
                   Showing {startIndex + 1} to {Math.min(endIndex, currentData.length)} of {currentData.length} items
                 </div>
                 
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => goToPage(1)}
-                    disabled={currentPage === 1}
-                  >
-                    First
-                  </Button>
-                  
+                <div className="flex items-center gap-2 flex-1 justify-center">
                   <Button
                     variant="outline"
                     size="sm"
@@ -2159,6 +2174,35 @@ export default function InventoryListPage() {
                   </Button>
                   
                   <div className="flex items-center gap-1">
+                    {/* Show 1 ... if we're not showing page 1 */}
+                    {totalPages > 5 && (() => {
+                      let lowestPageShown;
+                      if (currentPage <= 3) {
+                        lowestPageShown = 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        lowestPageShown = totalPages - 4;
+                      } else {
+                        lowestPageShown = currentPage - 2;
+                      }
+                      
+                      if (lowestPageShown > 1) {
+                        return (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => goToPage(1)}
+                              className="w-8 h-8 p-0"
+                            >
+                              1
+                            </Button>
+                            <span className="text-muted-foreground px-1">...</span>
+                          </>
+                        );
+                      }
+                      return null;
+                    })()}
+                    
                     {/* Show page numbers */}
                     {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                       let pageNum;
@@ -2184,6 +2228,35 @@ export default function InventoryListPage() {
                         </Button>
                       );
                     })}
+                    
+                    {/* Show ... and last page if we're not showing the last page */}
+                    {totalPages > 5 && (() => {
+                      let highestPageShown;
+                      if (currentPage <= 3) {
+                        highestPageShown = 5;
+                      } else if (currentPage >= totalPages - 2) {
+                        highestPageShown = totalPages;
+                      } else {
+                        highestPageShown = currentPage + 2;
+                      }
+                      
+                      if (highestPageShown < totalPages) {
+                        return (
+                          <>
+                            <span className="text-muted-foreground px-1">...</span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => goToPage(totalPages)}
+                              className="w-8 h-8 p-0"
+                            >
+                              {totalPages}
+                            </Button>
+                          </>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                   
                   <Button
@@ -2194,14 +2267,27 @@ export default function InventoryListPage() {
                   >
                     Next
                   </Button>
-                  
+                </div>
+                
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">Go to page:</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={pageInputValue}
+                    onChange={handlePageInputChange}
+                    onKeyDown={handlePageInputKeyDown}
+                    className="w-16 h-8 text-center"
+                    placeholder={String(currentPage)}
+                  />
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => goToPage(totalPages)}
-                    disabled={currentPage === totalPages}
+                    onClick={handlePageInputSubmit}
+                    disabled={!pageInputValue || isNaN(parseInt(pageInputValue, 10))}
                   >
-                    Last
+                    Go
                   </Button>
                 </div>
               </div>
@@ -2221,21 +2307,12 @@ export default function InventoryListPage() {
             
             {/* Pagination Controls */}
             {shouldPaginate && totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t">
-                <div className="text-sm text-muted-foreground">
+              <div className="flex items-center justify-between px-4 py-3 border-t gap-4">
+                <div className="text-sm text-muted-foreground flex-shrink-0">
                   Showing {startIndex + 1} to {Math.min(endIndex, currentData.length)} of {currentData.length} items
                 </div>
                 
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => goToPage(1)}
-                    disabled={currentPage === 1}
-                  >
-                    First
-                  </Button>
-                  
+                <div className="flex items-center gap-2 flex-1 justify-center">
                   <Button
                     variant="outline"
                     size="sm"
@@ -2246,6 +2323,35 @@ export default function InventoryListPage() {
                   </Button>
                   
                   <div className="flex items-center gap-1">
+                    {/* Show 1 ... if we're not showing page 1 */}
+                    {totalPages > 5 && (() => {
+                      let lowestPageShown;
+                      if (currentPage <= 3) {
+                        lowestPageShown = 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        lowestPageShown = totalPages - 4;
+                      } else {
+                        lowestPageShown = currentPage - 2;
+                      }
+                      
+                      if (lowestPageShown > 1) {
+                        return (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => goToPage(1)}
+                              className="w-8 h-8 p-0"
+                            >
+                              1
+                            </Button>
+                            <span className="text-muted-foreground px-1">...</span>
+                          </>
+                        );
+                      }
+                      return null;
+                    })()}
+                    
                     {/* Show page numbers */}
                     {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                       let pageNum;
@@ -2271,6 +2377,35 @@ export default function InventoryListPage() {
                         </Button>
                       );
                     })}
+                    
+                    {/* Show ... and last page if we're not showing the last page */}
+                    {totalPages > 5 && (() => {
+                      let highestPageShown;
+                      if (currentPage <= 3) {
+                        highestPageShown = 5;
+                      } else if (currentPage >= totalPages - 2) {
+                        highestPageShown = totalPages;
+                      } else {
+                        highestPageShown = currentPage + 2;
+                      }
+                      
+                      if (highestPageShown < totalPages) {
+                        return (
+                          <>
+                            <span className="text-muted-foreground px-1">...</span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => goToPage(totalPages)}
+                              className="w-8 h-8 p-0"
+                            >
+                              {totalPages}
+                            </Button>
+                          </>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                   
                   <Button
@@ -2281,14 +2416,27 @@ export default function InventoryListPage() {
                   >
                     Next
                   </Button>
-                  
+                </div>
+                
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">Go to page:</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={pageInputValue}
+                    onChange={handlePageInputChange}
+                    onKeyDown={handlePageInputKeyDown}
+                    className="w-16 h-8 text-center"
+                    placeholder={String(currentPage)}
+                  />
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => goToPage(totalPages)}
-                    disabled={currentPage === totalPages}
+                    onClick={handlePageInputSubmit}
+                    disabled={!pageInputValue || isNaN(parseInt(pageInputValue, 10))}
                   >
-                    Last
+                    Go
                   </Button>
                 </div>
               </div>
