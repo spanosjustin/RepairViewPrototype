@@ -1405,6 +1405,10 @@ function EditableInfoCard({ rows }: { rows: EditableRow[] }) {
                         if (row.onSearchChange) {
                           row.onSearchChange(newValue);
                         }
+                        // Also update the actual value so it doesn't revert when searchTerm is cleared
+                        if (row.onChange) {
+                          row.onChange(newValue);
+                        }
                         if (row.onOpenChange) {
                           row.onOpenChange(true);
                         }
@@ -1420,10 +1424,8 @@ function EditableInfoCard({ rows }: { rows: EditableRow[] }) {
                           if (row.onOpenChange) {
                             row.onOpenChange(false);
                           }
-                          // Clear search term if dropdown closes
-                          if (row.onSearchChange && row.searchTerm) {
-                            row.onSearchChange("");
-                          }
+                          // Don't clear search term on blur - only clear when an option is selected
+                          // This prevents the field from reverting when user deletes all text
                         }, 200);
                       }}
                       onKeyDown={(e) => {
