@@ -76,6 +76,13 @@ export default function ComponentInfoCard({
   const [turbineSearchTerm, setTurbineSearchTerm] = React.useState<string>("");
   const [isTurbineDropdownOpen, setIsTurbineDropdownOpen] = React.useState(false);
   
+  // Helper to normalize turbine value (empty string and 'unassigned' are equivalent)
+  // Returns "unassigned" for consistency with database and save logic
+  const normalizeTurbineValue = React.useCallback((turbine: string | undefined): string => {
+    if (!turbine || turbine === "" || turbine === "unassigned") return "unassigned";
+    return turbine;
+  }, []);
+
   // Edit mode state
   const [isEditing, setIsEditing] = React.useState(false);
   const [isSavingComponent, setIsSavingComponent] = React.useState(false);
@@ -86,7 +93,7 @@ export default function ComponentInfoCard({
     hours: item.hours !== undefined && item.hours !== null ? item.hours : "",
     starts: item.starts !== undefined && item.starts !== null ? item.starts : "",
     trips: item.trips !== undefined && item.trips !== null ? item.trips : "",
-    turbine: item.turbine || "",
+    turbine: normalizeTurbineValue(item.turbine),
     status: item.status || "",
     state: item.state || "",
   });
@@ -188,6 +195,24 @@ export default function ComponentInfoCard({
     return `${piece.sn || "—"} - ${piece.pn || "—"}`;
   }, [selectedPieceId, allPieces]);
 
+  // Update editedComponent when item prop changes (e.g., after refresh)
+  React.useEffect(() => {
+    if (!isEditing) {
+      const normalizedTurbine = normalizeTurbineValue(item.turbine);
+      console.log("ComponentInfoCard useEffect - item.turbine:", item.turbine, "normalized to:", normalizedTurbine);
+      setEditedComponent({
+        componentName: item.componentName || "",
+        componentType: item.componentType || "",
+        hours: item.hours !== undefined && item.hours !== null ? item.hours : "",
+        starts: item.starts !== undefined && item.starts !== null ? item.starts : "",
+        trips: item.trips !== undefined && item.trips !== null ? item.trips : "",
+        turbine: normalizedTurbine,
+        status: item.status || "",
+        state: item.state || "",
+      });
+    }
+  }, [item, isEditing, normalizeTurbineValue]);
+
   // Load turbines on mount
   React.useEffect(() => {
     const loadTurbines = async () => {
@@ -231,7 +256,7 @@ export default function ComponentInfoCard({
   // Get current turbine display text
   const currentTurbineDisplay = React.useMemo(() => {
     const turbineId = editedComponent.turbine || "";
-    if (!turbineId) return "Unassigned";
+    if (!turbineId || turbineId === "unassigned") return "Unassigned";
     return getTurbineDisplayText(turbineId);
   }, [editedComponent.turbine, getTurbineDisplayText]);
 
@@ -312,7 +337,7 @@ export default function ComponentInfoCard({
       hours: item.hours !== undefined && item.hours !== null ? item.hours : "",
       starts: item.starts !== undefined && item.starts !== null ? item.starts : "",
       trips: item.trips !== undefined && item.trips !== null ? item.trips : "",
-      turbine: item.turbine || "",
+      turbine: normalizeTurbineValue(item.turbine),
       status: item.status || "",
       state: item.state || "",
     };
@@ -376,7 +401,7 @@ export default function ComponentInfoCard({
         hours: item.hours !== undefined && item.hours !== null ? item.hours : "",
         starts: item.starts !== undefined && item.starts !== null ? item.starts : "",
         trips: item.trips !== undefined && item.trips !== null ? item.trips : "",
-        turbine: item.turbine || "",
+        turbine: normalizeTurbineValue(item.turbine),
         status: item.status || "",
         state: item.state || "",
       });
@@ -437,6 +462,9 @@ export default function ComponentInfoCard({
   const handleSaveComponent = async () => {
     setIsSavingComponent(true);
     try {
+      // Use the same normalization function for consistency
+      const normalizeTurbine = normalizeTurbineValue;
+      
       // Try to find existing component by ID first, or by name if ID doesn't exist
       let existingComponent: Component | null = null;
       if (item.id) {
@@ -628,7 +656,11 @@ export default function ComponentInfoCard({
       // NOTE: Component hours/trips/starts are independent and should NOT update pieces
       const statusChanged = editedComponent.status !== item.status && editedComponent.status !== "";
       const stateChanged = editedComponent.state !== item.state && editedComponent.state !== "";
-      const turbineChanged = editedComponent.turbine !== item.turbine;
+      
+      // Normalize turbine values for comparison
+      const normalizedEditedTurbine = normalizeTurbine(editedComponent.turbine);
+      const normalizedItemTurbine = normalizeTurbine(item.turbine);
+      const turbineChanged = normalizedEditedTurbine !== normalizedItemTurbine;
       
       if (statusChanged || stateChanged || turbineChanged) {
         const pieceUpdates: InventoryItem[] = [];
@@ -661,7 +693,8 @@ export default function ComponentInfoCard({
           
           // Update turbine if changed
           if (turbineChanged) {
-            updatedPiece.turbine = editedComponent.turbine || "";
+            // Use normalized value to match database convention
+            updatedPiece.turbine = normalizeTurbine(editedComponent.turbine);
             hasChanges = true;
           }
           
@@ -692,20 +725,48 @@ export default function ComponentInfoCard({
           // Get current assignment (if any)
           const currentAssignment = await componentAssignmentStorage.getCurrentByComponent(componentToSave.id);
           
-          // If there's a current assignment to a different turbine, end it
-          if (currentAssignment && currentAssignment.turbine_id !== editedComponent.turbine) {
-            const oldAssignment: ComponentAssignment = {
-              ...currentAssignment,
-              valid_to: now,
-            };
-            await componentAssignmentStorage.save(oldAssignment);
+          // Check if turbine is being set to unassigned (empty, null, or 'unassigned')
+          const normalizedTurbine = normalizeTurbine(editedComponent.turbine);
+          const isUnassigning = normalizedTurbine === "unassigned";
+          
+          console.log("Updating ComponentAssignment:", {
+            componentId: componentToSave.id,
+            editedTurbine: editedComponent.turbine,
+            normalizedEditedTurbine,
+            isUnassigning,
+            currentAssignment: currentAssignment ? {
+              id: currentAssignment.id,
+              turbine_id: currentAssignment.turbine_id,
+            } : null,
+          });
+          
+          // If there's a current assignment and turbine changed (including unassignment), end it
+          // Also check for and end ALL active assignments (in case of data inconsistency)
+          if (currentAssignment || isUnassigning) {
+            // Get ALL assignments for this component to handle multiple active assignments
+            const allAssignments = await componentAssignmentStorage.getByComponent(componentToSave.id);
+            const activeAssignments = allAssignments.filter(ca => !ca.valid_to);
+            
+            console.log("Found active assignments to end:", activeAssignments.length, activeAssignments);
+            
+            // End ALL active assignments if unassigning or if turbine changed
+            if (isUnassigning || (currentAssignment && normalizeTurbine(currentAssignment.turbine_id) !== normalizedEditedTurbine)) {
+              for (const assignment of activeAssignments) {
+                const endedAssignment: ComponentAssignment = {
+                  ...assignment,
+                  valid_to: now,
+                };
+                await componentAssignmentStorage.save(endedAssignment);
+                console.log("Component assignment ended:", endedAssignment);
+              }
+            }
           }
           
-          // Create new assignment if turbine is set
-          if (editedComponent.turbine && editedComponent.turbine !== "" && editedComponent.turbine !== "unassigned") {
+          // Create new assignment only if turbine is being assigned (not unassigned)
+          if (!isUnassigning && normalizedTurbine !== "unassigned") {
             const newAssignment: ComponentAssignment = {
               id: `assignment-${Date.now()}`,
-              turbine_id: editedComponent.turbine,
+              turbine_id: normalizedTurbine, // Use normalized value to ensure consistency
               component_id: componentToSave.id,
               position: 1, // Default position, could be made editable later
               valid_from: now,
@@ -713,15 +774,9 @@ export default function ComponentInfoCard({
               created_at: now,
             };
             await componentAssignmentStorage.save(newAssignment);
-            console.log("Component assignment updated:", newAssignment);
-          } else if (currentAssignment) {
-            // If turbine is cleared, end the current assignment
-            const endedAssignment: ComponentAssignment = {
-              ...currentAssignment,
-              valid_to: now,
-            };
-            await componentAssignmentStorage.save(endedAssignment);
-            console.log("Component assignment ended:", endedAssignment);
+            console.log("Component assignment created:", newAssignment);
+          } else if (isUnassigning) {
+            console.log("Component is being unassigned - no new assignment created");
           }
         } catch (error) {
           console.error("Error updating component assignment:", error);
@@ -896,7 +951,7 @@ export default function ComponentInfoCard({
                       setTurbineSearchTerm("");
                       setIsTurbineDropdownOpen(false);
                     } else if (searchValue.toLowerCase() === "unassigned" || searchValue === "") {
-                      setEditedComponent(prev => ({ ...prev, turbine: "" }));
+                      setEditedComponent(prev => ({ ...prev, turbine: "unassigned" }));
                       setTurbineSearchTerm("");
                       setIsTurbineDropdownOpen(false);
                     }
@@ -924,12 +979,12 @@ export default function ComponentInfoCard({
                     <button
                       type="button"
                       onClick={() => {
-                        setEditedComponent(prev => ({ ...prev, turbine: "" }));
+                        setEditedComponent(prev => ({ ...prev, turbine: "unassigned" }));
                         setTurbineSearchTerm("");
                         setIsTurbineDropdownOpen(false);
                       }}
                       className={`w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm ${
-                        !editedComponent.turbine ? "bg-blue-50 dark:bg-blue-900/20" : ""
+                        !editedComponent.turbine || editedComponent.turbine === "unassigned" ? "bg-blue-50 dark:bg-blue-900/20" : ""
                       }`}
                     >
                       Unassigned
@@ -964,7 +1019,7 @@ export default function ComponentInfoCard({
               </div>
             ) : (
               <span className="text-sm font-bold text-gray-900 bg-gray-50 px-3 py-1 rounded">
-                {v(item.turbine)}
+                {getTurbineDisplayText(item.turbine || "unassigned")}
               </span>
             )}
           </div>

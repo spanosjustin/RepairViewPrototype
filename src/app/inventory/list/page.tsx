@@ -31,7 +31,7 @@ import ComponentInfoCard from "@/components/inventory/ComponentInfoCard";
 import TreeView from "@/components/TreeView";
 import VisualTreeView from "@/components/VisualTreeView";
 import { getAllInventoryItems } from "@/lib/storage/db/adapters";
-import { pieceStorage, componentStorage, componentTypeStorage, plantStorage, turbineStorage } from "@/lib/storage/db/storage";
+import { pieceStorage, componentStorage, componentTypeStorage, plantStorage, turbineStorage, componentAssignmentStorage } from "@/lib/storage/db/storage";
 import type { Component } from "@/lib/storage/db/types";
 import { getMockRepairEvents } from "@/lib/inventory/mockRepairEvents";
 
@@ -1736,7 +1736,28 @@ export default function InventoryListPage() {
   const [componentPieces, setComponentPieces] = React.useState<InventoryItem[]>([]);
 
   const openComponentCard = React.useCallback(async (item: any) => {
-    setSelectedComponent(item);
+    // Get the actual turbine from ComponentAssignment (source of truth)
+    let componentWithTurbine = { ...item };
+    if (item.id) {
+      try {
+        const currentAssignment = await componentAssignmentStorage.getCurrentByComponent(String(item.id));
+        if (currentAssignment && currentAssignment.turbine_id) {
+          // Component is assigned to a turbine
+          componentWithTurbine.turbine = currentAssignment.turbine_id;
+        } else {
+          // Component is unassigned
+          componentWithTurbine.turbine = "unassigned";
+        }
+      } catch (error) {
+        console.error('Error getting component assignment:', error);
+        // Fall back to item.turbine if there's an error, normalize to "unassigned" if empty
+        if (!componentWithTurbine.turbine || componentWithTurbine.turbine === "") {
+          componentWithTurbine.turbine = "unassigned";
+        }
+      }
+    }
+    
+    setSelectedComponent(componentWithTurbine);
     setComponentOpen(true);
     
     // Fetch pieces for this component
@@ -1992,10 +2013,20 @@ export default function InventoryListPage() {
           componentTypeName = componentPieces[0].componentType || "—";
         }
 
-        // Get turbine from pieces (components don't store turbine directly)
-        const turbine = componentPieces.length > 0 
-          ? (componentPieces[0].turbine || "—")
-          : "—";
+        // Get turbine from ComponentAssignment (source of truth)
+        let turbine = "unassigned";
+        if (dbComponent?.id) {
+          const currentAssignment = await componentAssignmentStorage.getCurrentByComponent(dbComponent.id);
+          console.log("handleComponentUpdated - currentAssignment:", currentAssignment);
+          if (currentAssignment && currentAssignment.turbine_id) {
+            const turbineObj = await turbineStorage.get(currentAssignment.turbine_id);
+            turbine = turbineObj?.id || "unassigned";
+          } else {
+            // No assignment means unassigned
+            turbine = "unassigned";
+          }
+        }
+        console.log("handleComponentUpdated - setting turbine to:", turbine);
 
         // Determine status: use worst status from pieces
         const statusPriority: Record<string, number> = {
