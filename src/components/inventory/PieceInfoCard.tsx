@@ -48,12 +48,14 @@ export default function PieceInfoCard({
   const [components, setComponents] = React.useState<Component[]>([]);
   
   // Turbine combobox state
-  const [turbineSearchTerm, setTurbineSearchTerm] = React.useState("");
+  const [turbineSearchTerm, setTurbineSearchTerm] = React.useState<string>("");
   const [isTurbineDropdownOpen, setIsTurbineDropdownOpen] = React.useState(false);
   
   // Component combobox state
-  const [componentSearchTerm, setComponentSearchTerm] = React.useState("");
+  const [componentSearchTerm, setComponentSearchTerm] = React.useState<string>("");
   const [isComponentDropdownOpen, setIsComponentDropdownOpen] = React.useState(false);
+  // Track if user has manually edited the component search term (to prevent auto-repopulation)
+  const componentSearchTermUserEditedRef = React.useRef(false);
   
   React.useEffect(() => {
     const loadTurbines = async () => {
@@ -114,7 +116,7 @@ export default function PieceInfoCard({
   
   // Filter components based on search term
   const filteredComponents = React.useMemo(() => {
-    if (!componentSearchTerm.trim()) {
+    if (!componentSearchTerm || !componentSearchTerm.trim()) {
       return components;
     }
     
@@ -266,6 +268,66 @@ export default function PieceInfoCard({
       setEditedConditionDetails(currentEvent.conditionDetails ?? "");
     }
   }, [isEditingRepairEvent, currentEvent]);
+
+  // Track if we've initialized search terms for this edit session
+  const searchTermsInitializedRef = React.useRef(false);
+  
+  // Initialize search terms when entering edit mode (only once per edit session)
+  // Only depend on isEditing to prevent re-initialization when other values change
+  React.useEffect(() => {
+    if (isEditing && !searchTermsInitializedRef.current) {
+      // Initialize component search term if we have a component value
+      if (editedPiece.component) {
+        setComponentSearchTerm(editedPiece.component);
+      }
+      // Initialize turbine search term if we have a turbine value
+      if (editedPiece.turbine) {
+        if (turbines.length > 0) {
+          const displayText = getTurbineDisplayText(editedPiece.turbine);
+          setTurbineSearchTerm(displayText);
+        } else {
+          setTurbineSearchTerm(editedPiece.turbine);
+        }
+      }
+      searchTermsInitializedRef.current = true;
+      componentSearchTermUserEditedRef.current = false; // Reset user edit flag when entering edit mode
+    } else if (!isEditing) {
+      // Reset the flags when exiting edit mode
+      searchTermsInitializedRef.current = false;
+      componentSearchTermUserEditedRef.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing]); // Only depend on isEditing - don't re-run when editedPiece or search terms change
+
+  // Update component and turbine search terms when components/turbines load and we're in edit mode
+  // This ensures the search terms show the proper display text (e.g., formatted turbine names)
+  // BUT only if the user hasn't manually edited the field
+  // IMPORTANT: Only update if searchTerm matches the value AND user hasn't edited - this prevents repopulation
+  React.useEffect(() => {
+    // Only update component search term if:
+    // 1. We're in edit mode
+    // 2. Components are loaded
+    // 3. Search term matches the component value (meaning it hasn't been user-edited to something else)
+    // 4. User hasn't manually edited the field
+    // 5. Search term is NOT empty (if empty, user cleared it, so don't repopulate)
+    if (isEditing && 
+        components.length > 0 && 
+        componentSearchTerm === editedPiece.component && 
+        editedPiece.component && 
+        componentSearchTerm !== "" &&  // Don't repopulate if user cleared it
+        !componentSearchTermUserEditedRef.current) {
+      const displayText = getComponentDisplayText(editedPiece.component);
+      if (displayText && displayText !== componentSearchTerm) {
+        setComponentSearchTerm(displayText);
+      }
+    }
+    if (isEditing && turbines.length > 0 && turbineSearchTerm === editedPiece.turbine && editedPiece.turbine && turbineSearchTerm !== "") {
+      const displayText = getTurbineDisplayText(editedPiece.turbine);
+      if (displayText && displayText !== turbineSearchTerm) {
+        setTurbineSearchTerm(displayText);
+      }
+    }
+  }, [isEditing, editedPiece.component, editedPiece.turbine, components.length, turbines.length, componentSearchTerm, turbineSearchTerm, getComponentDisplayText, getTurbineDisplayText]);
 
   const v = (x: unknown) =>
     x === null || x === undefined || x === "" ? "—" : String(x);
@@ -481,6 +543,22 @@ export default function PieceInfoCard({
       turbine: item.turbine || "",
       position: item.position || "",
     });
+    // Initialize component search term directly with the component name
+    // This ensures it shows immediately when entering edit mode
+    // Always set to a string (never undefined) so the value logic works consistently
+    setComponentSearchTerm(item.component || "");
+    // Initialize turbine search term - try to get display text if turbines are loaded
+    if (item.turbine) {
+      if (turbines.length > 0) {
+        const displayText = getTurbineDisplayText(item.turbine);
+        setTurbineSearchTerm(displayText);
+      } else {
+        // Turbines not loaded yet, use the ID directly - useEffect will update later
+        setTurbineSearchTerm(item.turbine);
+      }
+    } else {
+      setTurbineSearchTerm("");
+    }
     // Initialize edited notes from current notes with unique IDs
     const currentNotes = item.notes ?? [];
     setEditedNotes(
@@ -669,12 +747,23 @@ export default function PieceInfoCard({
                   options: components.map(c => c.name),
                   optionLabels: Object.fromEntries(components.map(c => [c.name, c.name])),
                   onChange: (value) => {
+                    // Set search term FIRST, before updating editedPiece
+                    // This ensures the field updates immediately
+                    const displayText = getComponentDisplayText(value);
+                    const finalDisplayText = displayText || value;
+                    console.log("Component onChange - setting search term:", { value, displayText, finalDisplayText, componentsLength: components.length });
+                    setComponentSearchTerm(finalDisplayText);
+                    componentSearchTermUserEditedRef.current = false; // Reset edit flag since this is a selection, not manual typing
+                    // Then update the actual piece component value
                     setEditedPiece(prev => ({ ...prev, component: value }));
-                    setComponentSearchTerm(""); // Clear search when selection is made
                   },
                   // Combobox-specific props
                   searchTerm: componentSearchTerm,
                   onSearchChange: setComponentSearchTerm,
+                  onSearchChangeWithEditFlag: (value: string) => {
+                    setComponentSearchTerm(value);
+                    componentSearchTermUserEditedRef.current = true;
+                  },
                   isOpen: isComponentDropdownOpen,
                   onOpenChange: setIsComponentDropdownOpen,
                   filteredOptions: filteredComponents.map(c => c.name),
@@ -1347,6 +1436,7 @@ type EditableRow = {
   // Combobox-specific props
   searchTerm?: string;
   onSearchChange?: (value: string) => void;
+  onSearchChangeWithEditFlag?: (value: string) => void; // Callback that also marks field as user-edited
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   filteredOptions?: string[];
@@ -1397,23 +1487,41 @@ function EditableInfoCard({ rows }: { rows: EditableRow[] }) {
                   <div className="relative w-full">
                     <Input
                       type="text"
-                      value={row.searchTerm !== undefined && row.searchTerm !== "" 
-                        ? row.searchTerm 
-                        : (row.getDisplayText ? row.getDisplayText(row.value) : row.value)}
+                      value={row.searchTerm || ""}
                       onChange={(e) => {
                         const newValue = e.target.value;
-                        if (row.onSearchChange) {
+                        // Always update search term when user types - this enables filtering
+                        // Use the edit flag callback if available (marks field as user-edited to prevent auto-repopulation)
+                        if (row.onSearchChangeWithEditFlag) {
+                          row.onSearchChangeWithEditFlag(newValue);
+                        } else if (row.onSearchChange) {
                           row.onSearchChange(newValue);
                         }
-                        // Also update the actual value so it doesn't revert when searchTerm is cleared
-                        if (row.onChange) {
-                          row.onChange(newValue);
-                        }
+                        // Don't update the actual value while typing - only when an option is selected
+                        // This allows the user to type freely and see filtered results
                         if (row.onOpenChange) {
                           row.onOpenChange(true);
                         }
                       }}
-                      onFocus={() => {
+                      onKeyDown={(e) => {
+                        // Mark as user-edited when user presses any key (including delete/backspace)
+                        if (row.onSearchChangeWithEditFlag && (e.key === "Backspace" || e.key === "Delete" || e.key.length === 1)) {
+                          // The onChange will handle the actual update, but we mark it as edited here too
+                          // This ensures that even if the user deletes all text, it stays deleted
+                          if (row.label === "Component") {
+                            componentSearchTermUserEditedRef.current = true;
+                          }
+                        }
+                      }}
+                      onFocus={(e) => {
+                        // Only initialize searchTerm on first focus if it's truly uninitialized
+                        // Don't repopulate if user has intentionally cleared the field
+                        // We check if searchTerm is empty AND value exists AND searchTerm was never set to a non-empty value
+                        // Since componentSearchTerm is initialized to "" in handleStartEdit, we need a different approach
+                        // Only initialize if searchTerm is empty AND we haven't initialized it yet (track via ref)
+                        // Actually, since we initialize in handleStartEdit, onFocus should NOT repopulate
+                        // The field should already be populated when entering edit mode
+                        // So we skip the initialization here - it's handled in handleStartEdit
                         if (row.onOpenChange) {
                           row.onOpenChange(true);
                         }
@@ -1431,13 +1539,10 @@ function EditableInfoCard({ rows }: { rows: EditableRow[] }) {
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && row.filteredOptions && row.filteredOptions.length > 0) {
                           e.preventDefault();
-                          // Select first filtered option
+                          // Select first filtered option - onChange will handle setting the search term
                           const firstOption = row.filteredOptions[0];
                           if (row.onChange) {
                             row.onChange(firstOption);
-                          }
-                          if (row.onSearchChange) {
-                            row.onSearchChange("");
                           }
                           if (row.onOpenChange) {
                             row.onOpenChange(false);
@@ -1446,9 +1551,7 @@ function EditableInfoCard({ rows }: { rows: EditableRow[] }) {
                           if (row.onOpenChange) {
                             row.onOpenChange(false);
                           }
-                          if (row.onSearchChange) {
-                            row.onSearchChange("");
-                          }
+                          // Don't clear search term on Escape - let user keep what they typed
                         }
                       }}
                       className="h-8 text-sm w-full"
@@ -1468,12 +1571,15 @@ function EditableInfoCard({ rows }: { rows: EditableRow[] }) {
                               className="px-3 py-2 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground"
                               onMouseDown={(e) => {
                                 e.preventDefault(); // Prevent input blur
+                                console.log("Dropdown option clicked - before onChange:", { option, displayText, currentSearchTerm: row.searchTerm });
+                                // Just call onChange - it will handle setting both editedPiece.component and componentSearchTerm
                                 if (row.onChange) {
                                   row.onChange(option);
                                 }
-                                if (row.onSearchChange) {
-                                  row.onSearchChange("");
-                                }
+                                // Force a small delay to ensure state updates, then verify
+                                setTimeout(() => {
+                                  console.log("After onChange - searchTerm should be:", displayText);
+                                }, 0);
                                 if (row.onOpenChange) {
                                   row.onOpenChange(false);
                                 }
