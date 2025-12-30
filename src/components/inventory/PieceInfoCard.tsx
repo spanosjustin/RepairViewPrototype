@@ -783,8 +783,13 @@ export default function PieceInfoCard({
                     })),
                   },
                   onChange: (value) => {
+                    // Set search term FIRST, before updating editedPiece
+                    // This ensures the field updates immediately
+                    const displayText = getTurbineDisplayText(value === "unassigned" ? "" : value);
+                    const finalDisplayText = displayText || (value === "unassigned" ? "Unassigned" : value);
+                    setTurbineSearchTerm(finalDisplayText);
+                    // Then update the actual piece turbine value
                     setEditedPiece(prev => ({ ...prev, turbine: value === "unassigned" ? "" : value }));
-                    setTurbineSearchTerm(""); // Clear search when selection is made
                   },
                   // Combobox-specific props
                   searchTerm: turbineSearchTerm,
