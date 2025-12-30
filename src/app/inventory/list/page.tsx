@@ -31,7 +31,7 @@ import ComponentInfoCard from "@/components/inventory/ComponentInfoCard";
 import TreeView from "@/components/TreeView";
 import VisualTreeView from "@/components/VisualTreeView";
 import { getAllInventoryItems } from "@/lib/storage/db/adapters";
-import { pieceStorage, componentStorage, componentTypeStorage, plantStorage, turbineStorage } from "@/lib/storage/db/storage";
+import { pieceStorage, componentStorage, componentTypeStorage, plantStorage, turbineStorage, componentAssignmentStorage } from "@/lib/storage/db/storage";
 import type { Component } from "@/lib/storage/db/types";
 import { getMockRepairEvents } from "@/lib/inventory/mockRepairEvents";
 
@@ -401,6 +401,7 @@ export default function InventoryListPage() {
   
   // Pagination state
   const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageInputValue, setPageInputValue] = React.useState("");
   const itemsPerPage = 50;
 
   // Sorting state for components view
@@ -417,52 +418,31 @@ export default function InventoryListPage() {
   const [pieceSortColumn, setPieceSortColumn] = React.useState<SortablePieceColumn | undefined>(undefined);
   const [pieceSortDirection, setPieceSortDirection] = React.useState<SortDirection>(null);
 
-  // Load pieces from new database
-  React.useEffect(() => {
-    const loadPieces = async () => {
-      try {
-        setLoading(true);
-        // Load all inventory items from new database structure
-        const inventoryItems = await getAllInventoryItems();
-        setPieces(inventoryItems);
-      } catch (error) {
-        console.error('Error loading pieces:', error);
-        setPieces([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadPieces();
-  }, []);
-
-  // Load components and plants from new database
+  // Load all data from database (consolidated to avoid duplicate getAllInventoryItems calls)
   React.useEffect(() => {
     const loadData = async () => {
       try {
-        // Load components from database
-        const dbComps = await componentStorage.getAll();
+        setLoading(true);
         
-        // Debug: Check if components have hours/trips/starts
-        if (dbComps.length > 0) {
-          const firstComp = dbComps[0];
-          console.log('Loaded component from DB:', {
-            id: firstComp.id,
-            name: firstComp.name,
-            type_code: firstComp.type_code,
-            hours: firstComp.hours,
-            trips: firstComp.trips,
-            starts: firstComp.starts,
-            hasHours: 'hours' in firstComp,
-            hasTrips: 'trips' in firstComp,
-            hasStarts: 'starts' in firstComp,
-          });
-        }
+        // Load all data in parallel where possible
+        const [
+          inventoryItems,
+          dbComps,
+          plants
+        ] = await Promise.all([
+          getAllInventoryItems(), // Load pieces (this is the expensive operation, now optimized)
+          componentStorage.getAll(),
+          plantStorage.getAll()
+        ]);
         
+        // Set pieces and components (components is just for compatibility, same as pieces)
+        setPieces(inventoryItems);
+        setComponents(inventoryItems);
+        
+        // Set database components
         setDbComponents(dbComps as Component[]);
         
-        // Load plants and their turbines
-        const plants = await plantStorage.getAll();
+        // Load plants with their turbines
         const plantsWithTurbines = await Promise.all(
           plants.map(async (plant) => {
             const plantTurbines = await turbineStorage.getByPlant(plant.id);
@@ -474,15 +454,14 @@ export default function InventoryListPage() {
           })
         );
         setAllPlants(plantsWithTurbines);
-        
-        // Set components for compatibility (using pieces data)
-        const inventoryItems = await getAllInventoryItems();
-        setComponents(inventoryItems);
       } catch (error) {
         console.error('Error loading data:', error);
+        setPieces([]);
+        setComponents([]);
         setDbComponents([]);
         setAllPlants([]);
-        setComponents([]);
+      } finally {
+        setLoading(false);
       }
     };
     
@@ -1640,6 +1619,29 @@ export default function InventoryListPage() {
     setCurrentPage(prev => Math.min(totalPages, prev + 1));
   };
 
+  const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPageInputValue(e.target.value);
+  };
+
+  const handlePageInputSubmit = () => {
+    const pageNum = parseInt(pageInputValue, 10);
+    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+      goToPage(pageNum);
+      setPageInputValue("");
+    }
+  };
+
+  const handlePageInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handlePageInputSubmit();
+    }
+  };
+
+  // Update page input when currentPage changes externally
+  React.useEffect(() => {
+    setPageInputValue("");
+  }, [currentPage]);
+
   // Helper function to find notes for a piece
   // TODO: Update to use note_links table from new database
   const findNotesForPiece = React.useCallback((piece: any): string[] | null => {
@@ -1758,7 +1760,28 @@ export default function InventoryListPage() {
   const [componentPieces, setComponentPieces] = React.useState<InventoryItem[]>([]);
 
   const openComponentCard = React.useCallback(async (item: any) => {
-    setSelectedComponent(item);
+    // Get the actual turbine from ComponentAssignment (source of truth)
+    let componentWithTurbine = { ...item };
+    if (item.id) {
+      try {
+        const currentAssignment = await componentAssignmentStorage.getCurrentByComponent(String(item.id));
+        if (currentAssignment && currentAssignment.turbine_id) {
+          // Component is assigned to a turbine
+          componentWithTurbine.turbine = currentAssignment.turbine_id;
+        } else {
+          // Component is unassigned
+          componentWithTurbine.turbine = "unassigned";
+        }
+      } catch (error) {
+        console.error('Error getting component assignment:', error);
+        // Fall back to item.turbine if there's an error, normalize to "unassigned" if empty
+        if (!componentWithTurbine.turbine || componentWithTurbine.turbine === "") {
+          componentWithTurbine.turbine = "unassigned";
+        }
+      }
+    }
+    
+    setSelectedComponent(componentWithTurbine);
     setComponentOpen(true);
     
     // Fetch pieces for this component
@@ -2014,10 +2037,20 @@ export default function InventoryListPage() {
           componentTypeName = componentPieces[0].componentType || "—";
         }
 
-        // Get turbine from pieces (components don't store turbine directly)
-        const turbine = componentPieces.length > 0 
-          ? (componentPieces[0].turbine || "—")
-          : "—";
+        // Get turbine from ComponentAssignment (source of truth)
+        let turbine = "unassigned";
+        if (dbComponent?.id) {
+          const currentAssignment = await componentAssignmentStorage.getCurrentByComponent(dbComponent.id);
+          console.log("handleComponentUpdated - currentAssignment:", currentAssignment);
+          if (currentAssignment && currentAssignment.turbine_id) {
+            const turbineObj = await turbineStorage.get(currentAssignment.turbine_id);
+            turbine = turbineObj?.id || "unassigned";
+          } else {
+            // No assignment means unassigned
+            turbine = "unassigned";
+          }
+        }
+        console.log("handleComponentUpdated - setting turbine to:", turbine);
 
         // Determine status: use worst status from pieces
         const statusPriority: Record<string, number> = {
@@ -2125,12 +2158,12 @@ export default function InventoryListPage() {
             
             {/* Pagination Controls */}
             {shouldPaginate && totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t">
-                <div className="text-sm text-muted-foreground">
+              <div className="flex items-center justify-between px-4 py-3 border-t gap-4">
+                <div className="text-sm text-muted-foreground flex-shrink-0">
                   Showing {startIndex + 1} to {Math.min(endIndex, currentData.length)} of {currentData.length} items
                 </div>
                 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-1 justify-center">
                   <Button
                     variant="outline"
                     size="sm"
@@ -2141,6 +2174,35 @@ export default function InventoryListPage() {
                   </Button>
                   
                   <div className="flex items-center gap-1">
+                    {/* Show 1 ... if we're not showing page 1 */}
+                    {totalPages > 5 && (() => {
+                      let lowestPageShown;
+                      if (currentPage <= 3) {
+                        lowestPageShown = 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        lowestPageShown = totalPages - 4;
+                      } else {
+                        lowestPageShown = currentPage - 2;
+                      }
+                      
+                      if (lowestPageShown > 1) {
+                        return (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => goToPage(1)}
+                              className="w-8 h-8 p-0"
+                            >
+                              1
+                            </Button>
+                            <span className="text-muted-foreground px-1">...</span>
+                          </>
+                        );
+                      }
+                      return null;
+                    })()}
+                    
                     {/* Show page numbers */}
                     {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                       let pageNum;
@@ -2166,6 +2228,35 @@ export default function InventoryListPage() {
                         </Button>
                       );
                     })}
+                    
+                    {/* Show ... and last page if we're not showing the last page */}
+                    {totalPages > 5 && (() => {
+                      let highestPageShown;
+                      if (currentPage <= 3) {
+                        highestPageShown = 5;
+                      } else if (currentPage >= totalPages - 2) {
+                        highestPageShown = totalPages;
+                      } else {
+                        highestPageShown = currentPage + 2;
+                      }
+                      
+                      if (highestPageShown < totalPages) {
+                        return (
+                          <>
+                            <span className="text-muted-foreground px-1">...</span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => goToPage(totalPages)}
+                              className="w-8 h-8 p-0"
+                            >
+                              {totalPages}
+                            </Button>
+                          </>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                   
                   <Button
@@ -2175,6 +2266,28 @@ export default function InventoryListPage() {
                     disabled={currentPage === totalPages}
                   >
                     Next
+                  </Button>
+                </div>
+                
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">Go to page:</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={pageInputValue}
+                    onChange={handlePageInputChange}
+                    onKeyDown={handlePageInputKeyDown}
+                    className="w-16 h-8 text-center"
+                    placeholder={String(currentPage)}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePageInputSubmit}
+                    disabled={!pageInputValue || isNaN(parseInt(pageInputValue, 10))}
+                  >
+                    Go
                   </Button>
                 </div>
               </div>
@@ -2194,12 +2307,12 @@ export default function InventoryListPage() {
             
             {/* Pagination Controls */}
             {shouldPaginate && totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t">
-                <div className="text-sm text-muted-foreground">
+              <div className="flex items-center justify-between px-4 py-3 border-t gap-4">
+                <div className="text-sm text-muted-foreground flex-shrink-0">
                   Showing {startIndex + 1} to {Math.min(endIndex, currentData.length)} of {currentData.length} items
                 </div>
                 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-1 justify-center">
                   <Button
                     variant="outline"
                     size="sm"
@@ -2210,6 +2323,35 @@ export default function InventoryListPage() {
                   </Button>
                   
                   <div className="flex items-center gap-1">
+                    {/* Show 1 ... if we're not showing page 1 */}
+                    {totalPages > 5 && (() => {
+                      let lowestPageShown;
+                      if (currentPage <= 3) {
+                        lowestPageShown = 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        lowestPageShown = totalPages - 4;
+                      } else {
+                        lowestPageShown = currentPage - 2;
+                      }
+                      
+                      if (lowestPageShown > 1) {
+                        return (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => goToPage(1)}
+                              className="w-8 h-8 p-0"
+                            >
+                              1
+                            </Button>
+                            <span className="text-muted-foreground px-1">...</span>
+                          </>
+                        );
+                      }
+                      return null;
+                    })()}
+                    
                     {/* Show page numbers */}
                     {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                       let pageNum;
@@ -2235,6 +2377,35 @@ export default function InventoryListPage() {
                         </Button>
                       );
                     })}
+                    
+                    {/* Show ... and last page if we're not showing the last page */}
+                    {totalPages > 5 && (() => {
+                      let highestPageShown;
+                      if (currentPage <= 3) {
+                        highestPageShown = 5;
+                      } else if (currentPage >= totalPages - 2) {
+                        highestPageShown = totalPages;
+                      } else {
+                        highestPageShown = currentPage + 2;
+                      }
+                      
+                      if (highestPageShown < totalPages) {
+                        return (
+                          <>
+                            <span className="text-muted-foreground px-1">...</span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => goToPage(totalPages)}
+                              className="w-8 h-8 p-0"
+                            >
+                              {totalPages}
+                            </Button>
+                          </>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                   
                   <Button
@@ -2244,6 +2415,28 @@ export default function InventoryListPage() {
                     disabled={currentPage === totalPages}
                   >
                     Next
+                  </Button>
+                </div>
+                
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">Go to page:</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={pageInputValue}
+                    onChange={handlePageInputChange}
+                    onKeyDown={handlePageInputKeyDown}
+                    className="w-16 h-8 text-center"
+                    placeholder={String(currentPage)}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePageInputSubmit}
+                    disabled={!pageInputValue || isNaN(parseInt(pageInputValue, 10))}
+                  >
+                    Go
                   </Button>
                 </div>
               </div>

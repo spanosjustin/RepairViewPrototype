@@ -37,7 +37,12 @@ function buildTreeData(items: InventoryItem[]): TurbineNode[] {
   const turbineMap = new Map<string, Map<string, InventoryItem[]>>();
   
   items.forEach(item => {
-    const turbineName = item.turbine || "Unknown Turbine";
+    // Check if turbine is unassigned (empty, undefined, null, or 'unassigned')
+    const isUnassigned = !item.turbine || 
+                         item.turbine === '' || 
+                         item.turbine === 'unassigned' || 
+                         item.turbine.toLowerCase() === 'unassigned';
+    const turbineName = isUnassigned ? "Unassigned" : (item.turbine || "Unknown Turbine");
     const componentName = item.component;
     
     if (!turbineMap.has(turbineName)) {
@@ -68,6 +73,13 @@ function buildTreeData(items: InventoryItem[]): TurbineNode[] {
       name: turbineName,
       components
     };
+  });
+
+  // Sort turbines so "Unassigned" appears first
+  turbines.sort((a, b) => {
+    if (a.name === "Unassigned") return -1;
+    if (b.name === "Unassigned") return 1;
+    return a.name.localeCompare(b.name);
   });
 
   return turbines;
