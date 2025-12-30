@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { saveInventoryItem } from "@/lib/storage/db/adapters";
-import { turbineStorage, componentStorage } from "@/lib/storage/db/storage";
+import { turbineStorage, componentStorage, componentAssignmentStorage } from "@/lib/storage/db/storage";
 import type { Turbine, Component } from "@/lib/storage/db/types";
 
 type ItemWithExtras = InventoryItem & {
@@ -57,6 +57,9 @@ export default function PieceInfoCard({
   // Track if user has manually edited the component search term (to prevent auto-repopulation)
   const componentSearchTermUserEditedRef = React.useRef(false);
   
+  // Component's turbine value (read-only, from ComponentAssignment)
+  const [componentTurbine, setComponentTurbine] = React.useState<string | null>(null);
+  
   React.useEffect(() => {
     const loadTurbines = async () => {
       try {
@@ -84,6 +87,43 @@ export default function PieceInfoCard({
     
     loadComponents();
   }, []);
+  
+  // Function to load component's turbine value
+  // Accepts componentName parameter to support both item.component and editedPiece.component
+  const loadComponentTurbine = React.useCallback(async (componentName?: string) => {
+    // Use provided componentName, or fall back to item.component
+    const nameToUse = componentName || item.component || "";
+    if (!nameToUse) {
+      setComponentTurbine(null);
+      return;
+    }
+    
+    try {
+      // Reload components to ensure we have the latest data (in case component was updated)
+      const allComponents = await componentStorage.getAll();
+      setComponents(allComponents);
+      
+      // Find component by name
+      const component = allComponents.find(c => c.name === nameToUse);
+      if (!component || !component.id) {
+        setComponentTurbine(null);
+        return;
+      }
+      
+      // Get component assignment to find turbine (this is the source of truth)
+      const currentAssignment = await componentAssignmentStorage.getCurrentByComponent(String(component.id));
+      if (currentAssignment && currentAssignment.turbine_id) {
+        setComponentTurbine(currentAssignment.turbine_id);
+      } else {
+        setComponentTurbine("unassigned");
+      }
+    } catch (error) {
+      console.error('Error loading component turbine:', error);
+      setComponentTurbine(null);
+    }
+  }, [item.component]);
+  
+
   
   // Filter turbines based on search term
   const filteredTurbines = React.useMemo(() => {
@@ -202,14 +242,125 @@ export default function PieceInfoCard({
         turbine: item.turbine || "",
         position: item.position || "",
       });
-      // Reset turbine search when exiting edit mode
-      setTurbineSearchTerm("");
-      setIsTurbineDropdownOpen(false);
       // Reset component search when exiting edit mode
       setComponentSearchTerm("");
       setIsComponentDropdownOpen(false);
     }
   }, [item, isEditing]);
+
+  // Update component turbine when editedPiece.component changes during editing
+  // This ensures the turbine field updates immediately when user changes the component
+  React.useEffect(() => {
+    console.log('Turbine update effect triggered:', { isEditing, component: editedPiece.component });
+    
+    if (isEditing && editedPiece.component) {
+      const loadTurbine = async () => {
+        try {
+          console.log('Loading turbine for component:', editedPiece.component);
+          
+          // Load components if not already loaded
+          const allComponents = await componentStorage.getAll();
+          setComponents(allComponents);
+          
+          console.log('Loaded components:', allComponents.length);
+          
+          // Find component by name
+          const component = allComponents.find(c => c.name === editedPiece.component);
+          console.log('Found component:', component);
+          
+          if (!component || !component.id) {
+            console.log('Component not found or no ID');
+            setComponentTurbine(null);
+            return;
+          }
+          
+          // Get component assignment to find turbine
+          const currentAssignment = await componentAssignmentStorage.getCurrentByComponent(String(component.id));
+          console.log('Component assignment:', currentAssignment);
+          
+          if (currentAssignment && currentAssignment.turbine_id) {
+            console.log('Setting turbine to:', currentAssignment.turbine_id);
+            setComponentTurbine(currentAssignment.turbine_id);
+          } else {
+            console.log('No assignment found, setting to unassigned');
+            setComponentTurbine("unassigned");
+          }
+        } catch (error) {
+          console.error('Error loading component turbine:', error);
+          setComponentTurbine(null);
+        }
+      };
+      
+      loadTurbine();
+    } else if (isEditing && !editedPiece.component) {
+      // Component cleared - clear turbine
+      console.log('Component cleared, clearing turbine');
+      setComponentTurbine(null);
+    }
+  }, [isEditing, editedPiece.component]);
+
+
+  // Load component turbine when item.component changes (fallback for external updates)
+  // This runs when not in edit mode to catch updates from parent component
+  React.useEffect(() => {
+    if (!isEditing && item.component) {
+      const loadTurbine = async () => {
+        try {
+          // Load components if not already loaded
+          const allComponents = await componentStorage.getAll();
+          setComponents(allComponents);
+          
+          // Find component by name
+          const component = allComponents.find(c => c.name === item.component);
+          if (!component || !component.id) {
+            setComponentTurbine(null);
+            return;
+          }
+          
+          // Get component assignment to find turbine
+          const currentAssignment = await componentAssignmentStorage.getCurrentByComponent(String(component.id));
+          if (currentAssignment && currentAssignment.turbine_id) {
+            setComponentTurbine(currentAssignment.turbine_id);
+          } else {
+            setComponentTurbine("unassigned");
+          }
+        } catch (error) {
+          console.error('Error loading component turbine:', error);
+          setComponentTurbine(null);
+        }
+      };
+      
+      loadTurbine();
+    }
+  }, [item.component, item.id, isEditing]);
+
+  // Refresh component turbine periodically to catch assignment changes
+  // This handles the case where component assignment changes in ComponentInfoCard
+  // but the piece item doesn't change (since assignment is stored separately)
+  React.useEffect(() => {
+    if (!item.component || isEditing) return; // Don't poll while editing
+    
+    // Refresh component turbine every 3 seconds when card is open and not editing
+    // This ensures the turbine field updates when component assignment is changed
+    const interval = setInterval(async () => {
+      try {
+        const allComponents = await componentStorage.getAll();
+        const component = allComponents.find(c => c.name === item.component);
+        if (component && component.id) {
+          const currentAssignment = await componentAssignmentStorage.getCurrentByComponent(String(component.id));
+          if (currentAssignment && currentAssignment.turbine_id) {
+            setComponentTurbine(currentAssignment.turbine_id);
+          } else {
+            setComponentTurbine("unassigned");
+          }
+        }
+      } catch (error) {
+        console.error('Error refreshing component turbine:', error);
+      }
+    }, 3000);
+    
+    return () => clearInterval(interval);
+  }, [item.component, isEditing]);
 
   // Update local notes when item.notes changes
   React.useEffect(() => {
@@ -280,15 +431,7 @@ export default function PieceInfoCard({
       if (editedPiece.component) {
         setComponentSearchTerm(editedPiece.component);
       }
-      // Initialize turbine search term if we have a turbine value
-      if (editedPiece.turbine) {
-        if (turbines.length > 0) {
-          const displayText = getTurbineDisplayText(editedPiece.turbine);
-          setTurbineSearchTerm(displayText);
-        } else {
-          setTurbineSearchTerm(editedPiece.turbine);
-        }
-      }
+      // Turbine field is now read-only, so no need to initialize search term
       searchTermsInitializedRef.current = true;
       componentSearchTermUserEditedRef.current = false; // Reset user edit flag when entering edit mode
     } else if (!isEditing) {
@@ -299,8 +442,8 @@ export default function PieceInfoCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditing]); // Only depend on isEditing - don't re-run when editedPiece or search terms change
 
-  // Update component and turbine search terms when components/turbines load and we're in edit mode
-  // This ensures the search terms show the proper display text (e.g., formatted turbine names)
+  // Update component search term when components load and we're in edit mode
+  // This ensures the search terms show the proper display text
   // BUT only if the user hasn't manually edited the field
   // IMPORTANT: Only update if searchTerm matches the value AND user hasn't edited - this prevents repopulation
   React.useEffect(() => {
@@ -321,13 +464,8 @@ export default function PieceInfoCard({
         setComponentSearchTerm(displayText);
       }
     }
-    if (isEditing && turbines.length > 0 && turbineSearchTerm === editedPiece.turbine && editedPiece.turbine && turbineSearchTerm !== "") {
-      const displayText = getTurbineDisplayText(editedPiece.turbine);
-      if (displayText && displayText !== turbineSearchTerm) {
-        setTurbineSearchTerm(displayText);
-      }
-    }
-  }, [isEditing, editedPiece.component, editedPiece.turbine, components.length, turbines.length, componentSearchTerm, turbineSearchTerm, getComponentDisplayText, getTurbineDisplayText]);
+    // Turbine field is now read-only, so no need to update search term
+  }, [isEditing, editedPiece.component, components.length, componentSearchTerm, getComponentDisplayText]);
 
   const v = (x: unknown) =>
     x === null || x === undefined || x === "" ? "—" : String(x);
@@ -547,18 +685,7 @@ export default function PieceInfoCard({
     // This ensures it shows immediately when entering edit mode
     // Always set to a string (never undefined) so the value logic works consistently
     setComponentSearchTerm(item.component || "");
-    // Initialize turbine search term - try to get display text if turbines are loaded
-    if (item.turbine) {
-      if (turbines.length > 0) {
-        const displayText = getTurbineDisplayText(item.turbine);
-        setTurbineSearchTerm(displayText);
-      } else {
-        // Turbines not loaded yet, use the ID directly - useEffect will update later
-        setTurbineSearchTerm(item.turbine);
-      }
-    } else {
-      setTurbineSearchTerm("");
-    }
+    // Turbine field is now read-only, so no need to initialize search term
     // Initialize edited notes from current notes with unique IDs
     const currentNotes = item.notes ?? [];
     setEditedNotes(
@@ -645,6 +772,25 @@ export default function PieceInfoCard({
         if (onRepairEventsUpdate) {
           const pieceId = item.sn || item.id || String(item.pn);
           onRepairEventsUpdate(pieceId, repairEventsToSave);
+        }
+        
+        // Reload turbine immediately using the saved component value
+        // This ensures the turbine field updates instantly after save
+        if (editedPiece.component) {
+          try {
+            const allComponents = await componentStorage.getAll();
+            const component = allComponents.find(c => c.name === editedPiece.component);
+            if (component && component.id) {
+              const currentAssignment = await componentAssignmentStorage.getCurrentByComponent(String(component.id));
+              if (currentAssignment && currentAssignment.turbine_id) {
+                setComponentTurbine(currentAssignment.turbine_id);
+              } else {
+                setComponentTurbine("unassigned");
+              }
+            }
+          } catch (error) {
+            console.error('Error reloading turbine after save:', error);
+          }
         }
         
         setIsEditing(false);
@@ -749,12 +895,12 @@ export default function PieceInfoCard({
                   onChange: (value) => {
                     // Set search term FIRST, before updating editedPiece
                     // This ensures the field updates immediately
+                    // NOTE: This only updates local state - database save happens in handleSavePiece
                     const displayText = getComponentDisplayText(value);
                     const finalDisplayText = displayText || value;
-                    console.log("Component onChange - setting search term:", { value, displayText, finalDisplayText, componentsLength: components.length });
                     setComponentSearchTerm(finalDisplayText);
                     componentSearchTermUserEditedRef.current = false; // Reset edit flag since this is a selection, not manual typing
-                    // Then update the actual piece component value
+                    // Then update the actual piece component value (local state only, not saved to DB yet)
                     setEditedPiece(prev => ({ ...prev, component: value }));
                   },
                   // Combobox-specific props
@@ -771,33 +917,10 @@ export default function PieceInfoCard({
                 },
                 {
                   label: "Turbine",
-                  value: editedPiece.turbine || "unassigned",
-                  type: "combobox",
-                  options: ["unassigned", ...turbines.map(t => t.id)],
-                  optionLabels: {
-                    "unassigned": "Unassigned",
-                    ...Object.fromEntries(turbines.map(t => {
-                      // Display format: "Unit 3A - T-301" (name - id)
-                      const displayName = `${t.name} - ${t.id}`;
-                      return [t.id, displayName];
-                    })),
-                  },
-                  onChange: (value) => {
-                    // Set search term FIRST, before updating editedPiece
-                    // This ensures the field updates immediately
-                    const displayText = getTurbineDisplayText(value === "unassigned" ? "" : value);
-                    const finalDisplayText = displayText || (value === "unassigned" ? "Unassigned" : value);
-                    setTurbineSearchTerm(finalDisplayText);
-                    // Then update the actual piece turbine value
-                    setEditedPiece(prev => ({ ...prev, turbine: value === "unassigned" ? "" : value }));
-                  },
-                  // Combobox-specific props
-                  searchTerm: turbineSearchTerm,
-                  onSearchChange: setTurbineSearchTerm,
-                  isOpen: isTurbineDropdownOpen,
-                  onOpenChange: setIsTurbineDropdownOpen,
-                  filteredOptions: ["unassigned", ...filteredTurbines.map(t => t.id)],
-                  getDisplayText: getTurbineDisplayText,
+                  value: componentTurbine !== null 
+                    ? (componentTurbine === "unassigned" ? "Unassigned" : getTurbineDisplayText(componentTurbine))
+                    : "—",
+                  type: "readonly",
                 },
               ]}
             />
@@ -808,7 +931,9 @@ export default function PieceInfoCard({
                 ["SN", v(item.sn)],
                 ["PN", v(item.pn)],
                 ["Component", v(item.component)],
-                ["Turbine", v(item.turbine)],
+                ["Turbine", componentTurbine !== null 
+                  ? (componentTurbine === "unassigned" ? "Unassigned" : getTurbineDisplayText(componentTurbine))
+                  : "—"],
               ]}
             />
           )}
@@ -1576,15 +1701,11 @@ function EditableInfoCard({ rows }: { rows: EditableRow[] }) {
                               className="px-3 py-2 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground"
                               onMouseDown={(e) => {
                                 e.preventDefault(); // Prevent input blur
-                                console.log("Dropdown option clicked - before onChange:", { option, displayText, currentSearchTerm: row.searchTerm });
-                                // Just call onChange - it will handle setting both editedPiece.component and componentSearchTerm
+                                // Just call onChange - it will handle setting both editedPiece and searchTerm
+                                // NOTE: This only updates local state - database save happens when user clicks Save
                                 if (row.onChange) {
                                   row.onChange(option);
                                 }
-                                // Force a small delay to ensure state updates, then verify
-                                setTimeout(() => {
-                                  console.log("After onChange - searchTerm should be:", displayText);
-                                }, 0);
                                 if (row.onOpenChange) {
                                   row.onOpenChange(false);
                                 }

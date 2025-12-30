@@ -536,48 +536,10 @@ export async function saveInventoryItem(item: InventoryItem): Promise<boolean> {
         await componentPieceStorage.save(newComponentPiece);
       }
 
-      // 8. Update ComponentAssignment if turbine changed
-      if (item.turbine && item.turbine !== 'unassigned') {
-        const existingAssignment = await componentAssignmentStorage.getCurrentByComponent(component.id);
-        const turbine = await turbineStorage.get(item.turbine);
-        
-        if (turbine) {
-          if (existingAssignment) {
-            if (existingAssignment.turbine_id !== turbine.id) {
-              // End old assignment
-              const oldAssignment = {
-                ...existingAssignment,
-                valid_to: now,
-              };
-              await componentAssignmentStorage.save(oldAssignment);
-              
-              // Create new assignment
-              const newAssignment = {
-                id: `assignment-${Date.now()}`,
-                turbine_id: turbine.id,
-                component_id: component.id,
-                position: positionNum,
-                valid_from: now,
-                valid_to: undefined,
-                created_at: now,
-              };
-              await componentAssignmentStorage.save(newAssignment);
-            }
-          } else {
-            // Create new assignment
-            const newAssignment = {
-              id: `assignment-${Date.now()}`,
-              turbine_id: turbine.id,
-              component_id: component.id,
-              position: positionNum,
-              valid_from: now,
-              valid_to: undefined,
-              created_at: now,
-            };
-            await componentAssignmentStorage.save(newAssignment);
-          }
-        }
-      }
+      // 8. ComponentAssignment is NOT updated here
+      // Component's turbine assignment should only be changed from ComponentInfoCard
+      // When saving a piece, we only update which component the piece belongs to (ComponentPiece),
+      // not the component's turbine assignment (ComponentAssignment)
     }
 
     // 9. Save notes to Note and NoteLink tables
