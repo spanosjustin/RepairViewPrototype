@@ -654,13 +654,38 @@ export default function ComponentInfoCard({
 
       // Update pieces with status, state, and turbine if any were edited
       // NOTE: Component hours/trips/starts are independent and should NOT update pieces
-      const statusChanged = editedComponent.status !== item.status && editedComponent.status !== "";
-      const stateChanged = editedComponent.state !== item.state && editedComponent.state !== "";
+      // Normalize values for comparison (handle "—" and empty strings)
+      const normalizeForComparison = (value: string | undefined): string => {
+        if (!value || value === "—" || value.trim() === "") return "";
+        return value.trim();
+      };
+      
+      const normalizedEditedStatus = normalizeForComparison(editedComponent.status);
+      const normalizedItemStatus = normalizeForComparison(item.status);
+      const statusChanged = normalizedEditedStatus !== normalizedItemStatus;
+      
+      const normalizedEditedState = normalizeForComparison(editedComponent.state);
+      const normalizedItemState = normalizeForComparison(item.state);
+      const stateChanged = normalizedEditedState !== normalizedItemState;
       
       // Normalize turbine values for comparison
       const normalizedEditedTurbine = normalizeTurbine(editedComponent.turbine);
       const normalizedItemTurbine = normalizeTurbine(item.turbine);
       const turbineChanged = normalizedEditedTurbine !== normalizedItemTurbine;
+      
+      console.log("Component save - field changes:", {
+        statusChanged,
+        stateChanged,
+        turbineChanged,
+        editedStatus: editedComponent.status,
+        itemStatus: item.status,
+        editedState: editedComponent.state,
+        itemState: item.state,
+        editedTurbine: editedComponent.turbine,
+        itemTurbine: item.turbine,
+        normalizedEditedTurbine,
+        normalizedItemTurbine,
+      });
       
       if (statusChanged || stateChanged || turbineChanged) {
         const pieceUpdates: InventoryItem[] = [];
@@ -679,15 +704,15 @@ export default function ComponentInfoCard({
           const updatedPiece: InventoryItem = { ...piece };
           let hasChanges = false;
           
-          // Update status if changed
-          if (statusChanged && editedComponent.status) {
-            updatedPiece.status = editedComponent.status as InventoryItem['status'];
+          // Update status if changed (allow empty to clear status)
+          if (statusChanged) {
+            updatedPiece.status = (editedComponent.status || undefined) as InventoryItem['status'] | undefined;
             hasChanges = true;
           }
           
-          // Update state if changed
-          if (stateChanged && editedComponent.state) {
-            updatedPiece.state = editedComponent.state as InventoryItem['state'];
+          // Update state if changed (allow empty to clear state)
+          if (stateChanged) {
+            updatedPiece.state = (editedComponent.state || undefined) as InventoryItem['state'] | undefined;
             hasChanges = true;
           }
           
@@ -797,8 +822,9 @@ export default function ComponentInfoCard({
       setOriginalPieceSNs({});
       
       setIsRefreshing(true);
-      // Small delay to ensure database write is committed
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Longer delay to ensure all database writes are committed
+      // (ComponentAssignment, pieces with state/status, etc.)
+      await new Promise(resolve => setTimeout(resolve, 300));
       // Notify parent to refresh
       if (onComponentUpdated) {
         await onComponentUpdated();
@@ -932,7 +958,7 @@ export default function ComponentInfoCard({
             {isEditing ? (
               <div className="relative w-48">
                 <Input
-                  value={turbineSearchTerm || currentTurbineDisplay}
+                  value={turbineSearchTerm || (editedComponent.turbine === "" ? "" : currentTurbineDisplay)}
                   onChange={(e) => {
                     const searchValue = e.target.value;
                     setTurbineSearchTerm(searchValue);
@@ -950,10 +976,13 @@ export default function ComponentInfoCard({
                       setEditedComponent(prev => ({ ...prev, turbine: exactMatch.id }));
                       setTurbineSearchTerm("");
                       setIsTurbineDropdownOpen(false);
-                    } else if (searchValue.toLowerCase() === "unassigned" || searchValue === "") {
+                    } else if (searchValue.toLowerCase() === "unassigned") {
                       setEditedComponent(prev => ({ ...prev, turbine: "unassigned" }));
                       setTurbineSearchTerm("");
                       setIsTurbineDropdownOpen(false);
+                    } else if (searchValue === "") {
+                      // Allow blank value - don't auto-set to "unassigned"
+                      setEditedComponent(prev => ({ ...prev, turbine: "" }));
                     }
                   }}
                   onFocus={() => {
