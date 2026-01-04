@@ -308,6 +308,20 @@ export async function getAllInventoryItems(): Promise<InventoryItem[]> {
       .filter((n): n is NonNullable<typeof n> => n !== undefined)
       .map(n => n.body);
 
+    // Load repair events from localStorage (temporary solution)
+    // TODO: Create proper IndexedDB store for repair events in future migration
+    let pieceRepairEvents: InventoryItem['repairEvents'] = undefined;
+    try {
+      const storageKey = `repair_events_${piece.id}`;
+      const storedEvents = localStorage.getItem(storageKey);
+      if (storedEvents) {
+        pieceRepairEvents = JSON.parse(storedEvents);
+      }
+    } catch (error) {
+      console.error('Error loading repair events from localStorage:', error);
+      pieceRepairEvents = undefined;
+    }
+
     inventoryItems.push({
       id: piece.id,
       sn: piece.sn,
@@ -322,7 +336,7 @@ export async function getAllInventoryItems(): Promise<InventoryItem[]> {
       turbine: turbine?.id || 'unassigned',
       position: position,
       notes: pieceNotes,
-      repairEvents: [], // TODO: Load repair events from RepairOrder/RepairLineItem tables
+      repairEvents: pieceRepairEvents,
     });
   }
 
@@ -629,6 +643,24 @@ export async function saveInventoryItem(item: InventoryItem): Promise<boolean> {
         } catch (error) {
           console.error('Error deleting note link:', error);
         }
+      }
+    }
+
+    // 10. Save repair events (stored by piece ID in localStorage as temporary solution)
+    // TODO: Create proper IndexedDB store for repair events in future migration
+    if (piece) {
+      try {
+        const storageKey = `repair_events_${piece.id}`;
+        if (item.repairEvents && item.repairEvents.length > 0) {
+          // Save repair events to localStorage
+          localStorage.setItem(storageKey, JSON.stringify(item.repairEvents));
+        } else {
+          // Remove repair events if they were cleared
+          localStorage.removeItem(storageKey);
+        }
+      } catch (error) {
+        console.error('Error saving repair events:', error);
+        // Don't fail the entire save if repair events fail
       }
     }
 

@@ -4,7 +4,7 @@ import * as React from "react";
 import type { InventoryItem, RepairEvent } from "@/lib/inventory/types";
 import { useStatusColors } from "@/hooks/useStatusColors";
 import { getTone, getColorName, getBadgeClasses } from "@/lib/settings/colorMapper";
-import { ChevronDown, Pencil, Check, X } from "lucide-react";
+import { ChevronDown, Pencil, Check, X, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -599,6 +599,59 @@ export default function PieceInfoCard({
     setEditedNote(localNotes[noteIdx] ?? "");
   };
 
+  const handleDeleteNote = async () => {
+    // Remove the note at the current index
+    const updatedNotes = localNotes.filter((_, index) => index !== noteIdx);
+    
+    // Adjust noteIdx if needed
+    if (updatedNotes.length === 0) {
+      setNoteIdx(0);
+    } else if (noteIdx >= updatedNotes.length) {
+      setNoteIdx(updatedNotes.length - 1);
+    }
+    
+    setLocalNotes(updatedNotes);
+    setIsEditingNote(false);
+    
+    // Save notes to the database by updating the piece
+    try {
+      const notesToSave = updatedNotes.filter(n => n.trim() !== "");
+      const pieceToSave: InventoryItem = {
+        ...item,
+        notes: notesToSave.length > 0 ? notesToSave : undefined,
+      };
+      
+      const success = await saveInventoryItem(pieceToSave);
+      if (!success) {
+        console.error("Failed to save notes to database");
+        // Still update UI even if database save fails
+      }
+      
+      // Notify parent component of the update
+      if (onNotesUpdate) {
+        const pieceId = item.sn || item.id || String(item.pn);
+        onNotesUpdate(pieceId, notesToSave);
+      }
+      
+      setIsRefreshing(true);
+      // Small delay to ensure database write is committed
+      await new Promise(resolve => setTimeout(resolve, 100));
+      // Notify parent to refresh piece data
+      if (onPieceUpdated) {
+        await onPieceUpdated();
+      }
+      setIsRefreshing(false);
+    } catch (error) {
+      console.error("Error deleting note:", error);
+      // Still update UI even if database save fails
+      if (onNotesUpdate) {
+        const pieceId = item.sn || item.id || String(item.pn);
+        const notesToSave = updatedNotes.filter(n => n.trim() !== "");
+        onNotesUpdate(pieceId, notesToSave);
+      }
+    }
+  };
+
   const handleEditRepairEvent = () => {
     if (!isEditing && currentLocalEvent) {
       setIsEditingRepairEvent(true);
@@ -665,6 +718,59 @@ export default function PieceInfoCard({
     }
   };
 
+  const handleDeleteRepairEvent = async () => {
+    if (!currentLocalEvent) return;
+    
+    // Remove the event at the current index
+    const updatedEvents = localEvents.filter((_, index) => index !== eventIdx);
+    
+    // Adjust eventIdx if needed
+    if (updatedEvents.length === 0) {
+      setEventIdx(0);
+    } else if (eventIdx >= updatedEvents.length) {
+      setEventIdx(updatedEvents.length - 1);
+    }
+    
+    setLocalEvents(updatedEvents);
+    setIsEditingRepairEvent(false);
+    
+    // Save repair events to the database by updating the piece
+    try {
+      const pieceToSave: InventoryItem = {
+        ...item,
+        repairEvents: updatedEvents.length > 0 ? updatedEvents : undefined,
+      };
+      
+      const success = await saveInventoryItem(pieceToSave);
+      if (!success) {
+        console.error("Failed to save repair events to database");
+        // Still update UI even if database save fails
+      }
+      
+      // Notify parent component of the update
+      if (onRepairEventsUpdate) {
+        const pieceId = item.sn || item.id || String(item.pn);
+        onRepairEventsUpdate(pieceId, updatedEvents);
+      }
+      
+      setIsRefreshing(true);
+      // Small delay to ensure database write is committed
+      await new Promise(resolve => setTimeout(resolve, 100));
+      // Notify parent to refresh piece data
+      if (onPieceUpdated) {
+        await onPieceUpdated();
+      }
+      setIsRefreshing(false);
+    } catch (error) {
+      console.error("Error deleting repair event:", error);
+      // Still update UI even if database save fails
+      if (onRepairEventsUpdate) {
+        const pieceId = item.sn || item.id || String(item.pn);
+        onRepairEventsUpdate(pieceId, updatedEvents);
+      }
+    }
+  };
+
   /* ---------- Piece Edit Handlers ---------- */
   const handleStartEdit = () => {
     setEditedPiece({
@@ -721,17 +827,23 @@ export default function PieceInfoCard({
     });
     // Reset edited notes to original values with unique IDs
     const currentNotes = item.notes ?? [];
+    const validNotes = currentNotes
+      .map(n => n ?? "")
+      .filter(n => n !== "")
+      .map(n => String(n));
     setEditedNotes(
-      currentNotes
-        .map(n => n ?? "")
-        .filter(n => n !== "")
-        .map((text, idx) => ({ id: `note-${Date.now()}-${idx}`, text }))
+      validNotes.map((text, idx) => ({ id: `note-${Date.now()}-${idx}`, text }))
     );
+    // Immediately sync localNotes back to original values
+    setLocalNotes(validNotes);
+    
     // Reset edited repair events to original values with unique IDs
     const currentEvents = item.repairEvents ?? [];
     setEditedRepairEvents(
       currentEvents.map((event, idx) => ({ id: `event-${Date.now()}-${idx}`, event }))
     );
+    // Immediately sync localEvents back to original values
+    setLocalEvents(currentEvents);
   };
 
   const handleSavePiece = async () => {
@@ -750,7 +862,16 @@ export default function PieceInfoCard({
         .filter(text => text !== "");
       // Include repair events in the piece to save (extract events from event objects)
       const repairEventsToSave = editedRepairEvents
-        .map(e => e.event)
+        .map(e => {
+          // Trim repair and condition details, convert empty strings to null
+          const repairDetails = e.event.repairDetails?.trim() || null;
+          const conditionDetails = e.event.conditionDetails?.trim() || null;
+          return {
+            ...e.event,
+            repairDetails: repairDetails || null,
+            conditionDetails: conditionDetails || null,
+          };
+        })
         .filter(event => {
           // Keep events that have at least a title, repair details, or condition details
           return event.title || event.repairDetails || event.conditionDetails;
@@ -763,6 +884,13 @@ export default function PieceInfoCard({
 
       const success = await saveInventoryItem(pieceWithNotes);
       if (success) {
+        // Immediately sync localEvents with the saved repair events
+        // This ensures the repair event section shows the saved state right away
+        setLocalEvents(repairEventsToSave);
+        
+        // Immediately sync localNotes with the saved notes
+        setLocalNotes(notesToSave);
+        
         // Save notes via callback
         if (onNotesUpdate) {
           const pieceId = item.sn || item.id || String(item.pn);
@@ -1160,11 +1288,19 @@ export default function PieceInfoCard({
                       </button>
                       <button
                         type="button"
-                        onClick={handleCancelEdit}
+                        onClick={handleDeleteNote}
                         className="px-3 py-1.5 rounded-md text-xs bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 flex items-center gap-1"
+                        title="Delete note"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Delete
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelEdit}
+                        className="px-3 py-1.5 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1"
                         title="Cancel editing"
                       >
-                        <X className="h-3 w-3" />
                         Cancel
                       </button>
                     </div>
@@ -1259,10 +1395,10 @@ export default function PieceInfoCard({
                             type="text"
                             value={eventObj.event.title || ""}
                             onChange={(e) => {
-                              const newEvents = editedRepairEvents.map(e => 
-                                e.id === eventObj.id 
-                                  ? { ...e, event: { ...e.event, title: e.target.value || null } }
-                                  : e
+                              const newEvents = editedRepairEvents.map(event => 
+                                event.id === eventObj.id 
+                                  ? { ...event, event: { ...event.event, title: e.target.value || null } }
+                                  : event
                               );
                               setEditedRepairEvents(newEvents);
                             }}
@@ -1276,10 +1412,10 @@ export default function PieceInfoCard({
                             type="date"
                             value={eventObj.event.date || ""}
                             onChange={(e) => {
-                              const newEvents = editedRepairEvents.map(e => 
-                                e.id === eventObj.id 
-                                  ? { ...e, event: { ...e.event, date: e.target.value || null } }
-                                  : e
+                              const newEvents = editedRepairEvents.map(event => 
+                                event.id === eventObj.id 
+                                  ? { ...event, event: { ...event.event, date: e.target.value || null } }
+                                  : event
                               );
                               setEditedRepairEvents(newEvents);
                             }}
@@ -1291,10 +1427,10 @@ export default function PieceInfoCard({
                           <textarea
                             value={eventObj.event.repairDetails || ""}
                             onChange={(e) => {
-                              const newEvents = editedRepairEvents.map(e => 
-                                e.id === eventObj.id 
-                                  ? { ...e, event: { ...e.event, repairDetails: e.target.value || null } }
-                                  : e
+                              const newEvents = editedRepairEvents.map(event => 
+                                event.id === eventObj.id 
+                                  ? { ...event, event: { ...event.event, repairDetails: e.target.value || null } }
+                                  : event
                               );
                               setEditedRepairEvents(newEvents);
                             }}
@@ -1307,10 +1443,10 @@ export default function PieceInfoCard({
                           <textarea
                             value={eventObj.event.conditionDetails || ""}
                             onChange={(e) => {
-                              const newEvents = editedRepairEvents.map(e => 
-                                e.id === eventObj.id 
-                                  ? { ...e, event: { ...e.event, conditionDetails: e.target.value || null } }
-                                  : e
+                              const newEvents = editedRepairEvents.map(event => 
+                                event.id === eventObj.id 
+                                  ? { ...event, event: { ...event.event, conditionDetails: e.target.value || null } }
+                                  : event
                               );
                               setEditedRepairEvents(newEvents);
                             }}
@@ -1472,8 +1608,17 @@ export default function PieceInfoCard({
                       </button>
                       <button
                         type="button"
-                        onClick={handleCancelRepairEventEdit}
+                        onClick={handleDeleteRepairEvent}
                         className="px-3 py-1.5 rounded-md text-xs bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 flex items-center gap-1"
+                        title="Delete repair event"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Delete
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelRepairEventEdit}
+                        className="px-3 py-1.5 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1"
                         title="Cancel editing"
                       >
                         <X className="h-3 w-3" />
