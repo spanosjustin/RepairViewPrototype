@@ -170,10 +170,38 @@ export default function PieceInfoCard({
              typeCode.includes(searchLower);
     });
   }, [components, componentSearchTerm]);
+
+  // Get all component options including "Unassigned"
+  const allComponentOptions = React.useMemo(() => {
+    return ["Unassigned", ...components.map(c => c.name)];
+  }, [components]);
+
+  // Filter component options (including "Unassigned") based on search term
+  const filteredComponentOptions = React.useMemo(() => {
+    if (!componentSearchTerm || !componentSearchTerm.trim()) {
+      return allComponentOptions;
+    }
+    
+    const searchLower = componentSearchTerm.toLowerCase();
+    return allComponentOptions.filter(option => {
+      if (option === "Unassigned") {
+        return "unassigned".includes(searchLower);
+      }
+      const component = components.find(c => c.name === option);
+      if (!component) return false;
+      const name = (component.name || "").toLowerCase();
+      const id = (component.id || "").toLowerCase();
+      const typeCode = (component.type_code || "").toLowerCase();
+      return name.includes(searchLower) || 
+             id.includes(searchLower) || 
+             typeCode.includes(searchLower);
+    });
+  }, [allComponentOptions, componentSearchTerm, components]);
   
   // Get display text for a component
   const getComponentDisplayText = React.useCallback((componentName: string) => {
     if (!componentName) return "";
+    if (componentName === "Unassigned") return "Unassigned";
     // Try to find component by name first
     const component = components.find(c => c.name === componentName);
     if (component) {
@@ -427,9 +455,11 @@ export default function PieceInfoCard({
   // Only depend on isEditing to prevent re-initialization when other values change
   React.useEffect(() => {
     if (isEditing && !searchTermsInitializedRef.current) {
-      // Initialize component search term if we have a component value
+      // Initialize component search term - show "Unassigned" if component is empty
       if (editedPiece.component) {
         setComponentSearchTerm(editedPiece.component);
+      } else {
+        setComponentSearchTerm("Unassigned");
       }
       // Turbine field is now read-only, so no need to initialize search term
       searchTermsInitializedRef.current = true;
@@ -718,59 +748,6 @@ export default function PieceInfoCard({
     }
   };
 
-  const handleDeleteRepairEvent = async () => {
-    if (!currentLocalEvent) return;
-    
-    // Remove the event at the current index
-    const updatedEvents = localEvents.filter((_, index) => index !== eventIdx);
-    
-    // Adjust eventIdx if needed
-    if (updatedEvents.length === 0) {
-      setEventIdx(0);
-    } else if (eventIdx >= updatedEvents.length) {
-      setEventIdx(updatedEvents.length - 1);
-    }
-    
-    setLocalEvents(updatedEvents);
-    setIsEditingRepairEvent(false);
-    
-    // Save repair events to the database by updating the piece
-    try {
-      const pieceToSave: InventoryItem = {
-        ...item,
-        repairEvents: updatedEvents.length > 0 ? updatedEvents : undefined,
-      };
-      
-      const success = await saveInventoryItem(pieceToSave);
-      if (!success) {
-        console.error("Failed to save repair events to database");
-        // Still update UI even if database save fails
-      }
-      
-      // Notify parent component of the update
-      if (onRepairEventsUpdate) {
-        const pieceId = item.sn || item.id || String(item.pn);
-        onRepairEventsUpdate(pieceId, updatedEvents);
-      }
-      
-      setIsRefreshing(true);
-      // Small delay to ensure database write is committed
-      await new Promise(resolve => setTimeout(resolve, 100));
-      // Notify parent to refresh piece data
-      if (onPieceUpdated) {
-        await onPieceUpdated();
-      }
-      setIsRefreshing(false);
-    } catch (error) {
-      console.error("Error deleting repair event:", error);
-      // Still update UI even if database save fails
-      if (onRepairEventsUpdate) {
-        const pieceId = item.sn || item.id || String(item.pn);
-        onRepairEventsUpdate(pieceId, updatedEvents);
-      }
-    }
-  };
-
   /* ---------- Piece Edit Handlers ---------- */
   const handleStartEdit = () => {
     setEditedPiece({
@@ -789,8 +766,8 @@ export default function PieceInfoCard({
     });
     // Initialize component search term directly with the component name
     // This ensures it shows immediately when entering edit mode
-    // Always set to a string (never undefined) so the value logic works consistently
-    setComponentSearchTerm(item.component || "");
+    // Show "Unassigned" if component is empty
+    setComponentSearchTerm(item.component || "Unassigned");
     // Turbine field is now read-only, so no need to initialize search term
     // Initialize edited notes from current notes with unique IDs
     const currentNotes = item.notes ?? [];
@@ -1018,18 +995,28 @@ export default function PieceInfoCard({
                   label: "Component",
                   value: editedPiece.component || "",
                   type: "combobox",
-                  options: components.map(c => c.name),
-                  optionLabels: Object.fromEntries(components.map(c => [c.name, c.name])),
+                  options: allComponentOptions,
+                  optionLabels: Object.fromEntries([
+                    ["Unassigned", "Unassigned"],
+                    ...components.map(c => [c.name, c.name])
+                  ]),
                   onChange: (value) => {
                     // Set search term FIRST, before updating editedPiece
                     // This ensures the field updates immediately
                     // NOTE: This only updates local state - database save happens in handleSavePiece
+                    // If "Unassigned" is selected, set component to empty string (save logic handles both "" and "Unassigned")
+                    const componentValue = value === "Unassigned" ? "" : value;
                     const displayText = getComponentDisplayText(value);
                     const finalDisplayText = displayText || value;
                     setComponentSearchTerm(finalDisplayText);
                     componentSearchTermUserEditedRef.current = false; // Reset edit flag since this is a selection, not manual typing
                     // Then update the actual piece component value (local state only, not saved to DB yet)
-                    setEditedPiece(prev => ({ ...prev, component: value }));
+                    // Also clear position when unassigning
+                    setEditedPiece(prev => ({ 
+                      ...prev, 
+                      component: componentValue,
+                      position: value === "Unassigned" ? "" : prev.position
+                    }));
                   },
                   // Combobox-specific props
                   searchTerm: componentSearchTerm,
@@ -1040,7 +1027,7 @@ export default function PieceInfoCard({
                   },
                   isOpen: isComponentDropdownOpen,
                   onOpenChange: setIsComponentDropdownOpen,
-                  filteredOptions: filteredComponents.map(c => c.name),
+                  filteredOptions: filteredComponentOptions,
                   getDisplayText: getComponentDisplayText,
                 },
                 {
@@ -1608,17 +1595,8 @@ export default function PieceInfoCard({
                       </button>
                       <button
                         type="button"
-                        onClick={handleDeleteRepairEvent}
-                        className="px-3 py-1.5 rounded-md text-xs bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 flex items-center gap-1"
-                        title="Delete repair event"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                        Delete
-                      </button>
-                      <button
-                        type="button"
                         onClick={handleCancelRepairEventEdit}
-                        className="px-3 py-1.5 rounded-md text-xs bg-muted hover:bg-muted/70 flex items-center gap-1"
+                        className="px-3 py-1.5 rounded-md text-xs bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 flex items-center gap-1"
                         title="Cancel editing"
                       >
                         <X className="h-3 w-3" />
@@ -1778,16 +1756,6 @@ function EditableInfoCard({ rows }: { rows: EditableRow[] }) {
                           row.onOpenChange(true);
                         }
                       }}
-                      onKeyDown={(e) => {
-                        // Mark as user-edited when user presses any key (including delete/backspace)
-                        if (row.onSearchChangeWithEditFlag && (e.key === "Backspace" || e.key === "Delete" || e.key.length === 1)) {
-                          // The onChange will handle the actual update, but we mark it as edited here too
-                          // This ensures that even if the user deletes all text, it stays deleted
-                          if (row.label === "Component") {
-                            componentSearchTermUserEditedRef.current = true;
-                          }
-                        }
-                      }}
                       onFocus={(e) => {
                         // Only initialize searchTerm on first focus if it's truly uninitialized
                         // Don't repopulate if user has intentionally cleared the field
@@ -1812,6 +1780,14 @@ function EditableInfoCard({ rows }: { rows: EditableRow[] }) {
                         }, 200);
                       }}
                       onKeyDown={(e) => {
+                        // Mark as user-edited when user presses any key (including delete/backspace)
+                        // This ensures that even if the user deletes all text, it stays deleted
+                        if (row.onSearchChangeWithEditFlag && (e.key === "Backspace" || e.key === "Delete" || e.key.length === 1)) {
+                          // The onChange will handle the actual update, but we mark it as edited here too
+                          // This ensures that even if the user deletes all text, it stays deleted
+                          // Note: onSearchChangeWithEditFlag callback handles setting the edit flag
+                        }
+                        
                         if (e.key === "Enter" && row.filteredOptions && row.filteredOptions.length > 0) {
                           e.preventDefault();
                           // Select first filtered option - onChange will handle setting the search term
