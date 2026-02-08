@@ -16,6 +16,9 @@ export * from './storage';
 // Export query helpers
 export * from './queries';
 
+// Export adapters
+export * from './adapters';
+
 // Export seed functions (DEVELOPMENT ONLY)
 export { seedDatabase, clearDatabase } from './seed';
 

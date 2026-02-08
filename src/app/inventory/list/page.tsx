@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import InventoryMatrix from "@/components/inventory/InventoryMatrix";
-import type { InventoryItem } from "@/lib/inventory/types";
+import type { InventoryItem, RepairEvent } from "@/lib/inventory/types";
 import { useFilter } from "@/app/FilterContext";
 
 // shadcn/ui dialog (modal) to show the card
@@ -1758,6 +1758,9 @@ export default function InventoryListPage() {
   const [componentOpen, setComponentOpen] = React.useState(false);
   const [selectedComponent, setSelectedComponent] = React.useState<any | null>(null);
   const [componentPieces, setComponentPieces] = React.useState<InventoryItem[]>([]);
+  
+  // State for component selection in events panel (separate from modal)
+  const [selectedComponentForEvents, setSelectedComponentForEvents] = React.useState<ComponentRow | null>(null);
 
   const openComponentCard = React.useCallback(async (item: any) => {
     // Get the actual turbine from ComponentAssignment (source of truth)
@@ -1800,6 +1803,68 @@ export default function InventoryListPage() {
       setComponentPieces([]);
     }
   }, [pieces]);
+
+  // Handler for component selection that sets events panel (without opening modal)
+  const handleComponentSelect = React.useCallback((component: ComponentRow) => {
+    // Set selected component for events panel
+    setSelectedComponentForEvents(component);
+    // Note: Modal can still be opened via double-click or other action if needed
+  }, []);
+
+  // Collect repair events from all pieces in a component
+  const componentRepairEvents = React.useMemo(() => {
+    if (!selectedComponentForEvents) return [];
+    
+    const componentName = selectedComponentForEvents.componentName || "";
+    if (!componentName) return [];
+    
+    // Find all pieces belonging to this component
+    const componentPieces = pieces.filter(
+      (p) => (p.component || p.piece || p.name || "") === componentName
+    );
+    
+    // Collect all repair events from these pieces
+    const allEvents: Array<{ event: RepairEvent; pieceSn: string; piecePn: string }> = [];
+    
+    componentPieces.forEach(piece => {
+      const pieceId = piece.sn || piece.id || String(piece.pn);
+      const pieceSn = piece.sn || "—";
+      const piecePn = piece.pn || "—";
+      
+      // Get repair events from database, updated state, or mock
+      let repairEvents: RepairEvent[] = [];
+      
+      if (piece.repairEvents && piece.repairEvents.length > 0) {
+        repairEvents = piece.repairEvents;
+      } else if (updatedRepairEvents[pieceId]) {
+        repairEvents = updatedRepairEvents[pieceId];
+      } else {
+        repairEvents = getMockRepairEvents(piece);
+      }
+      
+      // Add each event with piece info
+      repairEvents.forEach(event => {
+        allEvents.push({
+          event,
+          pieceSn,
+          piecePn,
+        });
+      });
+    });
+    
+    // Sort by date (most recent first), or by title if no date
+    return allEvents.sort((a, b) => {
+      const dateA = a.event.date ? new Date(a.event.date).getTime() : 0;
+      const dateB = b.event.date ? new Date(b.event.date).getTime() : 0;
+      if (dateA !== dateB) {
+        return dateB - dateA; // Most recent first
+      }
+      // If no dates or same date, sort by title
+      const titleA = a.event.title || "";
+      const titleB = b.event.title || "";
+      return titleB.localeCompare(titleA);
+    });
+  }, [selectedComponentForEvents, pieces, updatedRepairEvents]);
 
   // Wrapper for TreeView that looks up full component data from componentStats
   const handleTreeViewComponentSelect = React.useCallback((componentName: string, piecesForComponent: InventoryItem[]) => {
@@ -2294,153 +2359,231 @@ export default function InventoryListPage() {
             )}
           </div>
         ) : viewMode === "components" ? (
-          /* Components Matrix View */
-          <div className="space-y-4">
-            <InventoryMatrix
-              dataset="components"
-              componentStats={paginatedData}
-              onSelectComponent={openComponentCard}
-              sortColumn={sortColumn}
-              sortDirection={sortDirection}
-              onSort={handleSort}
-            />
-            
-            {/* Pagination Controls */}
-            {shouldPaginate && totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t gap-4">
-                <div className="text-sm text-muted-foreground flex-shrink-0">
-                  Showing {startIndex + 1} to {Math.min(endIndex, currentData.length)} of {currentData.length} items
-                </div>
-                
-                <div className="flex items-center gap-2 flex-1 justify-center">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToPreviousPage}
-                    disabled={currentPage === 1}
-                  >
-                    Previous
-                  </Button>
-                  
-                  <div className="flex items-center gap-1">
-                    {/* Show 1 ... if we're not showing page 1 */}
-                    {totalPages > 5 && (() => {
-                      let lowestPageShown;
-                      if (currentPage <= 3) {
-                        lowestPageShown = 1;
-                      } else if (currentPage >= totalPages - 2) {
-                        lowestPageShown = totalPages - 4;
-                      } else {
-                        lowestPageShown = currentPage - 2;
-                      }
-                      
-                      if (lowestPageShown > 1) {
-                        return (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => goToPage(1)}
-                              className="w-8 h-8 p-0"
-                            >
-                              1
-                            </Button>
-                            <span className="text-muted-foreground px-1">...</span>
-                          </>
-                        );
-                      }
-                      return null;
-                    })()}
-                    
-                    {/* Show page numbers */}
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      let pageNum;
-                      if (totalPages <= 5) {
-                        pageNum = i + 1;
-                      } else if (currentPage <= 3) {
-                        pageNum = i + 1;
-                      } else if (currentPage >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i;
-                      } else {
-                        pageNum = currentPage - 2 + i;
-                      }
-                      
-                      return (
-                        <Button
-                          key={pageNum}
-                          variant={currentPage === pageNum ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => goToPage(pageNum)}
-                          className="w-8 h-8 p-0"
-                        >
-                          {pageNum}
-                        </Button>
-                      );
-                    })}
-                    
-                    {/* Show ... and last page if we're not showing the last page */}
-                    {totalPages > 5 && (() => {
-                      let highestPageShown;
-                      if (currentPage <= 3) {
-                        highestPageShown = 5;
-                      } else if (currentPage >= totalPages - 2) {
-                        highestPageShown = totalPages;
-                      } else {
-                        highestPageShown = currentPage + 2;
-                      }
-                      
-                      if (highestPageShown < totalPages) {
-                        return (
-                          <>
-                            <span className="text-muted-foreground px-1">...</span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => goToPage(totalPages)}
-                              className="w-8 h-8 p-0"
-                            >
-                              {totalPages}
-                            </Button>
-                          </>
-                        );
-                      }
-                      return null;
-                    })()}
+          /* Components Matrix View with Events Panel */
+          <div className="grid grid-cols-[1fr_400px] gap-4">
+            {/* Components Table */}
+            <div className="space-y-4">
+              <InventoryMatrix
+                dataset="components"
+                componentStats={paginatedData}
+                onSelectComponent={handleComponentSelect}
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+              />
+              
+              {/* Pagination Controls */}
+              {shouldPaginate && totalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t gap-4">
+                  <div className="text-sm text-muted-foreground flex-shrink-0">
+                    Showing {startIndex + 1} to {Math.min(endIndex, currentData.length)} of {currentData.length} items
                   </div>
                   
+                  <div className="flex items-center gap-2 flex-1 justify-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={goToPreviousPage}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    
+                    <div className="flex items-center gap-1">
+                      {/* Show 1 ... if we're not showing page 1 */}
+                      {totalPages > 5 && (() => {
+                        let lowestPageShown;
+                        if (currentPage <= 3) {
+                          lowestPageShown = 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          lowestPageShown = totalPages - 4;
+                        } else {
+                          lowestPageShown = currentPage - 2;
+                        }
+                        
+                        if (lowestPageShown > 1) {
+                          return (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => goToPage(1)}
+                                className="w-8 h-8 p-0"
+                              >
+                                1
+                              </Button>
+                              <span className="text-muted-foreground px-1">...</span>
+                            </>
+                          );
+                        }
+                        return null;
+                      })()}
+                      
+                      {/* Show page numbers */}
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+                        
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={currentPage === pageNum ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => goToPage(pageNum)}
+                            className="w-8 h-8 p-0"
+                          >
+                            {pageNum}
+                          </Button>
+                        );
+                      })}
+                      
+                      {/* Show ... and last page if we're not showing the last page */}
+                      {totalPages > 5 && (() => {
+                        let highestPageShown;
+                        if (currentPage <= 3) {
+                          highestPageShown = 5;
+                        } else if (currentPage >= totalPages - 2) {
+                          highestPageShown = totalPages;
+                        } else {
+                          highestPageShown = currentPage + 2;
+                        }
+                        
+                        if (highestPageShown < totalPages) {
+                          return (
+                            <>
+                              <span className="text-muted-foreground px-1">...</span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => goToPage(totalPages)}
+                                className="w-8 h-8 p-0"
+                              >
+                                {totalPages}
+                              </Button>
+                            </>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={goToNextPage}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                  
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <span className="text-sm text-muted-foreground whitespace-nowrap">Go to page:</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={totalPages}
+                      value={pageInputValue}
+                      onChange={handlePageInputChange}
+                      onKeyDown={handlePageInputKeyDown}
+                      className="w-16 h-8 text-center"
+                      placeholder={String(currentPage)}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handlePageInputSubmit}
+                      disabled={!pageInputValue || isNaN(parseInt(pageInputValue, 10))}
+                    >
+                      Go
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Repair Events Panel - sticky below the global filter/search bar (z-50) so it stays visible when scrolling */}
+            <div className="sticky top-[7.5rem] self-start border rounded-lg p-4 bg-card max-h-[calc(100vh-8rem)] flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between mb-3 flex-shrink-0">
+                <h3 className="text-sm font-semibold">Repair Events</h3>
+                {selectedComponentForEvents && (
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={goToNextPage}
-                    disabled={currentPage === totalPages}
+                    onClick={() => openComponentCard(selectedComponentForEvents)}
+                    className="text-xs h-7"
                   >
-                    Next
+                    View Details
                   </Button>
-                </div>
-                
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <span className="text-sm text-muted-foreground whitespace-nowrap">Go to page:</span>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={totalPages}
-                    value={pageInputValue}
-                    onChange={handlePageInputChange}
-                    onKeyDown={handlePageInputKeyDown}
-                    className="w-16 h-8 text-center"
-                    placeholder={String(currentPage)}
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handlePageInputSubmit}
-                    disabled={!pageInputValue || isNaN(parseInt(pageInputValue, 10))}
-                  >
-                    Go
-                  </Button>
-                </div>
+                )}
               </div>
-            )}
+              {selectedComponentForEvents ? (
+                <div className="space-y-3 flex-1 min-h-0 flex flex-col overflow-hidden">
+                  <div className="text-xs text-muted-foreground mb-2 flex-shrink-0">
+                    <div className="font-medium text-foreground">{selectedComponentForEvents.componentName}</div>
+                    <div>{selectedComponentForEvents.componentType}</div>
+                  </div>
+                  
+                  {componentRepairEvents.length === 0 ? (
+                    <div className="text-sm text-muted-foreground text-center py-8">
+                      No repair events found for this component.
+                    </div>
+                  ) : (
+                    <div className="space-y-3 flex-1 min-h-0 overflow-y-auto">
+                      {componentRepairEvents.map((item, index) => (
+                        <div key={index} className="border rounded-md p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-medium text-foreground">
+                                {item.event.title || `Repair Event ${index + 1}`}
+                              </div>
+                              {item.event.date && (
+                                <div className="text-xs text-muted-foreground mt-0.5">
+                                  {new Date(item.event.date).toLocaleDateString()}
+                                </div>
+                              )}
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Piece: {item.pieceSn} ({item.piecePn})
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {item.event.repairDetails && (
+                            <div className="mt-2">
+                              <div className="text-xs font-medium text-muted-foreground mb-1">Repair Details:</div>
+                              <div className="text-xs text-foreground whitespace-pre-wrap">
+                                {item.event.repairDetails}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {item.event.conditionDetails && (
+                            <div className="mt-2">
+                              <div className="text-xs font-medium text-muted-foreground mb-1">Condition Details:</div>
+                              <div className="text-xs text-foreground whitespace-pre-wrap">
+                                {item.event.conditionDetails}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground text-center py-8">
+                  Select a component to view its repair events.
+                </div>
+              )}
+            </div>
           </div>
         ) : viewMode === "list" ? (
           /* Turbine View (Tree View) */

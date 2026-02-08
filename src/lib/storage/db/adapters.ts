@@ -671,3 +671,163 @@ export async function saveInventoryItem(item: InventoryItem): Promise<boolean> {
   }
 }
 
+// ============================================
+// REPAIR PAGE ADAPTERS
+// ============================================
+
+import type { Component as RepairComponent, Event as RepairEvent, RepairRow } from '@/lib/repair/types';
+import type { Component, RepairOrder, RepairLineItem, Piece, Product } from './types';
+
+/**
+ * Get repair components with events from database
+ * Converts database components + repair orders to repair page format
+ */
+export async function getRepairComponents(): Promise<RepairComponent[]> {
+  const {
+    componentStorage,
+    componentTypeStorage,
+    repairOrderStorage,
+    repairLineItemStorage,
+  } = await import('./storage');
+
+  // Load all data
+  const [components, componentTypes, repairOrders] = await Promise.all([
+    componentStorage.getAll(),
+    componentTypeStorage.getAll(),
+    repairOrderStorage.getAll(),
+  ]);
+
+  // Build lookup maps
+  const componentTypeMap = new Map(componentTypes.map(t => [t.code, t]));
+
+  // Group repair orders by component (via line items)
+  const ordersByComponent = new Map<string, RepairOrder[]>();
+  const allLineItems = await repairLineItemStorage.getAll();
+  
+  for (const lineItem of allLineItems) {
+    // Get component for this piece
+    const { componentPieceStorage, pieceStorage } = await import('./storage');
+    const piece = await pieceStorage.get(lineItem.piece_id);
+    if (!piece) continue;
+    
+    const componentPiece = await componentPieceStorage.getCurrentByPiece(piece.id);
+    if (componentPiece.length === 0) continue;
+    
+    const componentId = componentPiece[0].component_id;
+    const repairOrder = repairOrders.find(ro => ro.id === lineItem.repair_order_id);
+    if (!repairOrder) continue;
+    
+    if (!ordersByComponent.has(componentId)) {
+      ordersByComponent.set(componentId, []);
+    }
+    if (!ordersByComponent.get(componentId)!.find(ro => ro.id === repairOrder.id)) {
+      ordersByComponent.get(componentId)!.push(repairOrder);
+    }
+  }
+
+  // Convert components to repair format
+  const repairComponents: RepairComponent[] = [];
+
+  for (const component of components) {
+    const componentType = componentTypeMap.get(component.type_code);
+    if (!componentType) continue;
+
+    // Determine type (fuel or comb) based on component type name
+    const typeName = componentType.name.toLowerCase();
+    const type: "fuel" | "comb" = typeName.includes("fuel") ? "fuel" : "comb";
+
+    // Get repair orders for this component
+    const componentOrders = ordersByComponent.get(component.id) || [];
+
+    // Convert repair orders to repair events
+    const events: RepairEvent[] = componentOrders
+      .sort((a, b) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime())
+      .map((order, index) => {
+        return {
+          id: order.id,
+          name: `Repair Order ${order.repair_number}`,
+          date: order.opened_at,
+          intervalFH: component.hours || 0,
+          intervalFS: component.starts || 0,
+          intervalTrips: component.trips || 0,
+        };
+      });
+
+    repairComponents.push({
+      id: component.id,
+      name: component.name,
+      type,
+      events,
+    });
+  }
+
+  return repairComponents;
+}
+
+/**
+ * Get repair rows from database
+ * Converts repair line items + pieces to repair page format
+ */
+export async function getRepairRows(): Promise<RepairRow[]> {
+  const {
+    repairOrderStorage,
+    repairLineItemStorage,
+    pieceStorage,
+    productStorage,
+  } = await import('./storage');
+
+  // Load all data
+  const [repairOrders, repairLineItems, pieces, products] = await Promise.all([
+    repairOrderStorage.getAll(),
+    repairLineItemStorage.getAll(),
+    pieceStorage.getAll(),
+    productStorage.getAll(),
+  ]);
+
+  // Build lookup maps
+  const pieceMap = new Map(pieces.map(p => [p.id, p]));
+  const productMap = new Map(products.map(p => [p.id, p]));
+  const orderMap = new Map(repairOrders.map(ro => [ro.id, ro]));
+
+  // Filter to only open repair orders (or most recent closed ones)
+  const openOrders = repairOrders.filter(ro => !ro.closed_at);
+  const closedOrders = repairOrders.filter(ro => ro.closed_at)
+    .sort((a, b) => new Date(b.closed_at!).getTime() - new Date(a.closed_at!).getTime())
+    .slice(0, 10); // Get 10 most recent closed orders
+
+  const relevantOrders = [...openOrders, ...closedOrders];
+  const relevantOrderIds = new Set(relevantOrders.map(ro => ro.id));
+
+  // Get line items for relevant orders
+  const relevantLineItems = repairLineItems.filter(li => relevantOrderIds.has(li.repair_order_id));
+
+  // Convert to repair rows
+  const repairRows: RepairRow[] = relevantLineItems.map((lineItem, index) => {
+    const piece = pieceMap.get(lineItem.piece_id);
+    const product = piece ? productMap.get(piece.product_id) : null;
+
+    // Extract condition and repair from note (format: "condition|repair" or just note)
+    const note = lineItem.note || "";
+    const [condition, repair] = note.includes("|") 
+      ? note.split("|", 2).map(s => s.trim())
+      : ["", note];
+
+    // Determine status from repair order
+    const repairOrder = orderMap.get(lineItem.repair_order_id);
+    const status = repairOrder?.closed_at ? "Completed" : "In Progress";
+
+    return {
+      pos: index + 1,
+      pn: piece?.pn || product?.part_number || "—",
+      sn: piece?.sn || "—",
+      altSn: "", // Not stored in database currently
+      condition: condition || "—",
+      repair: repair || "—",
+      status,
+      verified: !!repairOrder?.closed_at,
+    };
+  });
+
+  return repairRows;
+}
+

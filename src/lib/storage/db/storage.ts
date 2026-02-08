@@ -775,3 +775,116 @@ export const statusColorStorage = {
   },
 };
 
+// ============================================
+// REPAIR ORDER STORAGE
+// ============================================
+
+export const repairOrderStorage = {
+  async getAll(): Promise<RepairOrder[]> {
+    return IndexedDBStorage.getAll<RepairOrder>(STORES.REPAIR_ORDERS);
+  },
+
+  async get(id: string): Promise<RepairOrder | null> {
+    return IndexedDBStorage.get<RepairOrder>(STORES.REPAIR_ORDERS, id);
+  },
+
+  async getByRepairNumber(repairNumber: string): Promise<RepairOrder | null> {
+    const results = await IndexedDBStorage.getByIndex<RepairOrder>(
+      STORES.REPAIR_ORDERS,
+      'repair_number',
+      repairNumber
+    );
+    return results[0] || null;
+  },
+
+  async save(repairOrder: RepairOrder): Promise<boolean> {
+    try {
+      await IndexedDBStorage.put(STORES.REPAIR_ORDERS, repairOrder);
+      return true;
+    } catch (error) {
+      console.error('Error saving repair order:', error);
+      return false;
+    }
+  },
+
+  async saveAll(repairOrders: RepairOrder[]): Promise<boolean> {
+    try {
+      await IndexedDBStorage.putAll(STORES.REPAIR_ORDERS, repairOrders);
+      return true;
+    } catch (error) {
+      console.error('Error saving repair orders:', error);
+      return false;
+    }
+  },
+
+  async delete(id: string): Promise<boolean> {
+    try {
+      await IndexedDBStorage.delete(STORES.REPAIR_ORDERS, id);
+      return true;
+    } catch (error) {
+      console.error('Error deleting repair order:', error);
+      return false;
+    }
+  },
+};
+
+// ============================================
+// REPAIR LINE ITEM STORAGE
+// ============================================
+
+export const repairLineItemStorage = {
+  async getAll(): Promise<RepairLineItem[]> {
+    return IndexedDBStorage.getAll<RepairLineItem>(STORES.REPAIR_LINE_ITEMS);
+  },
+
+  async get(id: string): Promise<RepairLineItem | null> {
+    return IndexedDBStorage.get<RepairLineItem>(STORES.REPAIR_LINE_ITEMS, id);
+  },
+
+  async getByRepairOrder(repairOrderId: string): Promise<RepairLineItem[]> {
+    return IndexedDBStorage.getByIndex<RepairLineItem>(
+      STORES.REPAIR_LINE_ITEMS,
+      'repair_order_id',
+      repairOrderId
+    );
+  },
+
+  async getByPiece(pieceId: string): Promise<RepairLineItem[]> {
+    return IndexedDBStorage.getByIndex<RepairLineItem>(
+      STORES.REPAIR_LINE_ITEMS,
+      'piece_id',
+      pieceId
+    );
+  },
+
+  async save(repairLineItem: RepairLineItem): Promise<boolean> {
+    try {
+      await IndexedDBStorage.put(STORES.REPAIR_LINE_ITEMS, repairLineItem);
+      return true;
+    } catch (error) {
+      console.error('Error saving repair line item:', error);
+      return false;
+    }
+  },
+
+  async saveAll(repairLineItems: RepairLineItem[]): Promise<boolean> {
+    try {
+      await IndexedDBStorage.putAll(STORES.REPAIR_LINE_ITEMS, repairLineItems);
+      return true;
+    } catch (error) {
+      console.error('Error saving repair line items:', error);
+      return false;
+    }
+  },
+
+  async delete(id: string): Promise<boolean> {
+    try {
+      await IndexedDBStorage.delete(STORES.REPAIR_LINE_ITEMS, id);
+      return true;
+    } catch (error) {
+      console.error('Error deleting repair line item:', error);
+      return false;
+    }
+  },
+};
+
