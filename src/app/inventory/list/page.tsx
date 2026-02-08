@@ -34,6 +34,7 @@ import { getAllInventoryItems } from "@/lib/storage/db/adapters";
 import { pieceStorage, componentStorage, componentTypeStorage, plantStorage, turbineStorage, componentAssignmentStorage } from "@/lib/storage/db/storage";
 import type { Component } from "@/lib/storage/db/types";
 import { getMockRepairEvents } from "@/lib/inventory/mockRepairEvents";
+import { ChevronRight, ChevronLeft } from "lucide-react";
 
 type ViewMode = "pieces" | "components" | "list" | "tree";
 
@@ -417,6 +418,9 @@ export default function InventoryListPage() {
   // Sorting state for pieces view
   const [pieceSortColumn, setPieceSortColumn] = React.useState<SortablePieceColumn | undefined>(undefined);
   const [pieceSortDirection, setPieceSortDirection] = React.useState<SortDirection>(null);
+
+  // Components view: collapse Repair Events panel to give more space to component rows
+  const [repairEventsPanelCollapsed, setRepairEventsPanelCollapsed] = React.useState(false);
 
   // Load all data from database (consolidated to avoid duplicate getAllInventoryItems calls)
   React.useEffect(() => {
@@ -2359,10 +2363,10 @@ export default function InventoryListPage() {
             )}
           </div>
         ) : viewMode === "components" ? (
-          /* Components Matrix View with Events Panel */
-          <div className="grid grid-cols-[1fr_400px] gap-4">
-            {/* Components Table */}
-            <div className="space-y-4">
+          /* Components Matrix View with Events Panel (collapsible) */
+          <div className="relative flex gap-0">
+            {/* Components Table - grows when panel is collapsed */}
+            <div className={`space-y-4 flex-1 min-w-0 ${repairEventsPanelCollapsed ? "" : "pr-4"}`}>
               <InventoryMatrix
                 dataset="components"
                 componentStats={paginatedData}
@@ -2510,20 +2514,45 @@ export default function InventoryListPage() {
               )}
             </div>
             
-            {/* Repair Events Panel - sticky below the global filter/search bar (z-50) so it stays visible when scrolling */}
-            <div className="sticky top-[7.5rem] self-start border rounded-lg p-4 bg-card max-h-[calc(100vh-8rem)] flex flex-col overflow-hidden">
+            {/* Repair Events Panel - sticky, collapsible to give component rows more space */}
+            {repairEventsPanelCollapsed ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRepairEventsPanelCollapsed(false)}
+                className="sticky top-[7.5rem] self-start h-20 w-10 flex flex-col items-center justify-center p-0 border rounded-l-lg rounded-r-none bg-card shadow-sm hover:bg-muted/50"
+                title="Expand Repair Events"
+                aria-label="Expand Repair Events panel"
+              >
+                <ChevronLeft className="h-5 w-5" />
+                <span className="text-[10px] font-medium mt-1">Repair</span>
+              </Button>
+            ) : (
+            <div className="sticky top-[7.5rem] self-start border rounded-lg p-4 bg-card max-h-[calc(100vh-8rem)] flex flex-col overflow-hidden w-[400px] flex-shrink-0">
               <div className="flex items-center justify-between mb-3 flex-shrink-0">
                 <h3 className="text-sm font-semibold">Repair Events</h3>
-                {selectedComponentForEvents && (
+                <div className="flex items-center gap-1">
+                  {selectedComponentForEvents && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openComponentCard(selectedComponentForEvents)}
+                      className="text-xs h-7"
+                    >
+                      View Details
+                    </Button>
+                  )}
                   <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openComponentCard(selectedComponentForEvents)}
-                    className="text-xs h-7"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setRepairEventsPanelCollapsed(true)}
+                    className="h-7 w-7 flex-shrink-0"
+                    title="Collapse panel"
+                    aria-label="Collapse Repair Events panel"
                   >
-                    View Details
+                    <ChevronRight className="h-4 w-4" />
                   </Button>
-                )}
+                </div>
               </div>
               {selectedComponentForEvents ? (
                 <div className="space-y-3 flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -2584,6 +2613,7 @@ export default function InventoryListPage() {
                 </div>
               )}
             </div>
+            )}
           </div>
         ) : viewMode === "list" ? (
           /* Turbine View (Tree View) */
