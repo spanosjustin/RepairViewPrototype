@@ -29,10 +29,13 @@ export type Component = {
   
   /** A row in the repair matrix (bottom table) */
   export type RepairRow = {
+    pos: number;                // Position/row number
     pn: string;                 // Part Number
     sn: string;                 // Serial Number
+    altSn?: string;             // Alternate Serial Number (optional)
     condition: string;          // Condition Details
     repair: string;             // Repair Details
-    status: string;             // Status (e.g. Active, Removed)
+    status: string;             // Status (e.g. Completed, In Progress)
+    verified?: boolean;          // Whether the repair is verified (optional)
   };
   

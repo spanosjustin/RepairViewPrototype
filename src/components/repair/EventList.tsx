@@ -9,13 +9,18 @@ type EventListProps = {
   events: Event[];
   selected: Event | null;
   onSelect: (e: Event) => void;
+  componentName?: string;
 };
 
-export default function EventList({ events, selected, onSelect }: EventListProps) {
+export default function EventList({ events, selected, onSelect, componentName }: EventListProps) {
   if (!events?.length) {
     return (
       <div className="border rounded-lg p-3 text-sm text-gray-500">
-        No events for this component
+        <h2 className="font-semibold mb-2 text-center">Events</h2>
+        {componentName && (
+          <div className="text-xs text-gray-400 mb-2 text-center">for {componentName}</div>
+        )}
+        <div className="text-center">No events for this component</div>
       </div>
     );
   }
@@ -23,6 +28,9 @@ export default function EventList({ events, selected, onSelect }: EventListProps
   return (
     <div className="border rounded-lg p-3">
       <h2 className="font-semibold mb-2 text-center">Events</h2>
+      {componentName && (
+        <div className="text-xs text-gray-500 mb-3 text-center">for {componentName}</div>
+      )}
 
       <ul className="space-y-2">
         {events.map((evt) => {
