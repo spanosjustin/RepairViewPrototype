@@ -62,7 +62,7 @@ export default function ComponentList({
   };
 
   return (
-    <div className="border rounded-lg p-3 flex flex-col max-h-[500px]">
+    <div className="border rounded-lg p-3 flex flex-col h-full max-h-[380px] min-h-0">
       <div className="flex-shrink-0 mb-2">
         <h2 className="font-semibold text-center mb-2">
           {viewMode === "components" ? "Components" : "Turbines"}
@@ -91,7 +91,7 @@ export default function ComponentList({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 overflow-y-auto min-h-0 pb-2">
         {viewMode === "components" ? (
           <>
             <div className="mb-3">
@@ -148,7 +148,7 @@ export default function ComponentList({
               </ul>
             </div>
 
-            <div>
+            <div className="mb-2">
               <h3 className="text-sm font-medium text-gray-600">Comb Liners</h3>
               <ul className="space-y-1 mt-1">
                 {comb.map((c) => (
@@ -203,7 +203,7 @@ export default function ComponentList({
             </div>
           </>
         ) : (
-          <div>
+          <div className="mb-2">
             <ul className="space-y-1">
               {turbines.length > 0 ? (
                 turbines.map((t) => (

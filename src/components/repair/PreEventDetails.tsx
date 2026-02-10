@@ -8,9 +8,10 @@ export default function PreEventCard({ event }: { event: Event | null }) {
   const pre = event?.preRepair;
 
   return (
-    <div className="border rounded-lg p-4">
-      <h2 className="text-center font-semibold mb-3">Pre-Event</h2>
+    <div className="border rounded-lg p-4 flex flex-col h-full max-h-[380px] min-h-0">
+      <h2 className="text-center font-semibold mb-3 flex-shrink-0">Pre-Event</h2>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
       {!event ? (
         <p className="text-sm text-gray-500">No event selected</p>
       ) : !pre ? (
@@ -30,6 +31,7 @@ export default function PreEventCard({ event }: { event: Event | null }) {
           <Value>{num(pre.intervalTrips)}</Value>
         </div>
       )}
+      </div>
     </div>
   );
 }
