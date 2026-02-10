@@ -70,9 +70,8 @@ export default function RepairLayout({
   return (
     <div className="flex flex-col gap-4 p-4">
       {/* --- Top Row: Components | Events | Pre-Event --- */}
-      <div className="grid gap-4 md:grid-cols-3" style={{ gridTemplateRows: '1fr' }}>
-        <div className="min-h-0">
-          <ComponentList
+      <div className="grid gap-4 md:grid-cols-3" style={{ gridTemplateRows: '380px' }}>
+        <ComponentList
             components={components}
             turbines={turbines}
             selected={selectedComponent}
@@ -82,7 +81,6 @@ export default function RepairLayout({
             viewMode={viewMode}
             onViewModeChange={setViewMode}
           />
-        </div>
 
         {viewMode === "components" && selectedComponent ? (
           <EventList
@@ -92,7 +90,7 @@ export default function RepairLayout({
             componentName={selectedComponent.name}
           />
         ) : viewMode === "turbines" && selectedTurbine ? (
-          <div className="border rounded-lg p-3">
+          <div className="border rounded-lg p-3 h-full max-h-[380px] min-h-0">
             <h3 className="font-semibold mb-2">Turbine: {selectedTurbine.name}</h3>
             <div className="text-sm text-gray-600 space-y-1">
               {selectedTurbine.unit && <div>Unit: {selectedTurbine.unit}</div>}
@@ -102,7 +100,7 @@ export default function RepairLayout({
             </div>
           </div>
         ) : (
-          <div className="border rounded-lg p-3 text-sm text-gray-500">
+          <div className="border rounded-lg p-3 text-sm text-gray-500 h-full max-h-[380px] min-h-0">
             {viewMode === "components" ? "No component selected" : "No turbine selected"}
           </div>
         )}

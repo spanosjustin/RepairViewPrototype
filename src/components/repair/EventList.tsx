@@ -15,7 +15,7 @@ type EventListProps = {
 export default function EventList({ events, selected, onSelect, componentName }: EventListProps) {
   if (!events?.length) {
     return (
-      <div className="border rounded-lg p-3 text-sm text-gray-500">
+      <div className="border rounded-lg p-3 text-sm text-gray-500 flex flex-col h-full max-h-[380px] min-h-0">
         <h2 className="font-semibold mb-2 text-center">Events</h2>
         {componentName && (
           <div className="text-xs text-gray-400 mb-2 text-center">for {componentName}</div>
@@ -26,13 +26,13 @@ export default function EventList({ events, selected, onSelect, componentName }:
   }
 
   return (
-    <div className="border rounded-lg p-3">
-      <h2 className="font-semibold mb-2 text-center">Events</h2>
+    <div className="border rounded-lg p-3 flex flex-col h-full max-h-[380px] min-h-0">
+      <h2 className="font-semibold mb-2 text-center flex-shrink-0">Events</h2>
       {componentName && (
-        <div className="text-xs text-gray-500 mb-3 text-center">for {componentName}</div>
+        <div className="text-xs text-gray-500 mb-3 text-center flex-shrink-0">for {componentName}</div>
       )}
 
-      <ul className="space-y-2">
+      <ul className="space-y-2 flex-1 min-h-0 overflow-y-auto">
         {events.map((evt) => {
           const isSelected = selected?.id === evt.id;
           return (

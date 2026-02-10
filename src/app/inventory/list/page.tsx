@@ -419,8 +419,8 @@ export default function InventoryListPage() {
   const [pieceSortColumn, setPieceSortColumn] = React.useState<SortablePieceColumn | undefined>(undefined);
   const [pieceSortDirection, setPieceSortDirection] = React.useState<SortDirection>(null);
 
-  // Components view: collapse Repair Events panel to give more space to component rows
-  const [repairEventsPanelCollapsed, setRepairEventsPanelCollapsed] = React.useState(false);
+  // Components view: collapse Repair Events panel to give more space to component rows (default collapsed)
+  const [repairEventsPanelCollapsed, setRepairEventsPanelCollapsed] = React.useState(true);
 
   // Load all data from database (consolidated to avoid duplicate getAllInventoryItems calls)
   React.useEffect(() => {
